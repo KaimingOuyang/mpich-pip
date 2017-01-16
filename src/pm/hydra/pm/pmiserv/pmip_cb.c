@@ -473,15 +473,6 @@ static HYD_status launch_procs(void)
 
     HYDU_FUNC_ENTER();
 
-#ifdef AHAH
-#ifdef HAVE_PIP
-    printf("HAVING PIP\n");
-#else
-    printf("NOT having pip\n");
-#endif
-#endif
-
-
 #ifdef HAVE_PIP
     {
         static int pip_initialized = 0;
@@ -489,8 +480,7 @@ static HYD_status launch_procs(void)
         int pip_err;
         if (!pip_initialized) {
             pip_initialized = 1;
-            /* current implementation can run only with the PIP PROCESS mode*/
-            if ((pip_err = pip_init(NULL, NULL, NULL, PIP_MODE_PROCESS)) != 0) {
+            if ((pip_err = pip_init(NULL, NULL, NULL, 0)) != 0) {
                 HYDU_ERR_SETANDJUMP(status, HYD_FAILURE, "pip_init(): %s\n", MPL_strerror(pip_err));
             }
         }

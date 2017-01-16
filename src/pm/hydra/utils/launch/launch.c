@@ -94,13 +94,11 @@ static int HYDU_pip_before(struct pip_task_fds *fds)
             }
         }
     }
-#ifdef AHA
     if (fds->idx >= 0) {
         if (HYDT_topo_bind(fds->idx) != HYD_SUCCESS) {
             fprintf(stderr, "bind process failed\n");
         }
     }
-#endif
     return 0;
 }
 
@@ -119,11 +117,9 @@ static int HYDU_pip_after(struct pip_task_fds *fds)
 HYD_status HYDU_spawn_pip_tasks(char **client_arg, struct HYD_env * env_list,
                                 int *in, int *out, int *err, int *pid, int idx)
 {
-    static int pipid = 0;
+    static pipid = 0;
     struct pip_task_fds *fds;
-    intptr_t pip_id;
     int tpid;
-    int coreno;
     int pip_err;
     HYD_status status = HYD_SUCCESS;
 
@@ -149,25 +145,16 @@ HYD_status HYDU_spawn_pip_tasks(char **client_arg, struct HYD_env * env_list,
     if (err && (pipe(fds->errpipe) < 0))
         HYDU_ERR_SETANDJUMP(status, HYD_SOCK_ERROR, "pipe error (%s)\n", MPL_strerror(errno));
 
-    if (fds->idx >= 0) {
-        coreno = idx;
-    } else {
-        coreno = PIP_CPUCORE_ASIS;
-    }
-
     if ((pip_err = pip_spawn(client_arg[0],
                              client_arg,
                              fds->envv,
-                             coreno,
+                             PIP_CPUCORE_ASIS,
                              &pipid,
                              (pip_spawnhook_t) HYDU_pip_before,
                              (pip_spawnhook_t) HYDU_pip_after, (void *) fds)) != 0) {
         HYDU_ERR_SETANDJUMP(status, HYD_FAILURE, "pip_spawn(): %s\n", MPL_strerror(pip_err));
     }
-    /* AH makes pip_get_pid() obsolete, because pid is not always available */
-    /* depending on PiP execution mode. pip_get_id() returns thread or pid  */
-    pip_get_id(pipid, &pip_id);
-    tpid = (pid_t) pip_id;
+    pip_get_pid(pipid, &tpid);
     pipid++;
 
     if (out)
