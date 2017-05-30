@@ -5,6 +5,7 @@
 #     See COPYRIGHT in top-level directory.
 #
 
+# LDADD       = ../lib/lib@MPILIBNAME@.la -lm
 # FIXME should these be prefixed with AM_ under automake?  Should we cut some or
 # all of these?
 MPICHDIR=..
@@ -14,7 +15,7 @@ CXXFLAGS = $(WRAPPER_CXXFLAGS)
 FFLAGS   = $(WRAPPER_FFLAGS)
 FCFLAGS  = $(WRAPPER_FCFLAGS)
 AM_LDFLAGS  =
-AM_CPPFLAGS = $(WRAPPER_CPPFLAGS)
+AM_CPPFLAGS += $(WRAPPER_CPPFLAGS)
 #DEFS     =
 
 AM_CPPFLAGS += -I$(top_builddir)/src/include -I${top_srcdir}/src/include
