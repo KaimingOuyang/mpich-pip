@@ -1468,6 +1468,8 @@ AC_SUBST([hwloclibdir])
 hwloclib=""
 AC_SUBST([hwloclib])
 
+# xpmemlib="src/mpid/ch4/shm/xpmem/lib/libxpmem.a"
+
 if test "$with_hwloc_prefix" = "embedded" ; then
    # Disable visibility when setting up hwloc
    PAC_PUSH_FLAG([enable_visibility])

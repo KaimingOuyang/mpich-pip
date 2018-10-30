@@ -37,9 +37,9 @@ typedef __s64 xpmem_apid_t;
  * Structure used by xpmem_attach().
  */
 struct xpmem_addr {
-        /** apid that represents memory */
-        xpmem_apid_t apid;
-        /** offset into apid's memory region */
+	/** apid that represents memory */
+	xpmem_apid_t apid;
+	/** offset into apid's memory region */
 	off_t offset;
 };
 
@@ -68,10 +68,10 @@ struct xpmem_addr {
  * Valid permit_type values for xpmem_make().
  */
 enum {
-  /** Permit value are unix-style permissions with mask 0777. Any bit
-   * set outside this range is an error. This is the only valid permit
-   * mode at this time. */
-  XPMEM_PERMIT_MODE = 0x1,
+	/** Permit value are unix-style permissions with mask 0777. Any bit
+	 * set outside this range is an error. This is the only valid permit
+	 * mode at this time. */
+	XPMEM_PERMIT_MODE = 0x1,
 };
 
 #if !defined(__KERNEL__)
@@ -190,5 +190,18 @@ void *xpmem_attach (struct xpmem_addr addr, size_t size, void *vaddr);
 int xpmem_detach (void *vaddr);
 
 #endif /* !defined(__KERNEL__) */
+
+/* XPMEM struct and header file definitions BEGIN */
+
+struct ackHeader {
+	__s64 dataSz; // data count in bytes
+	__s64 pageSz; // page size in bytes
+	xpmem_segid_t dtHandler; // data handler
+	__s64 offset; // data offset
+};
+
+typedef struct ackHeader ackHeader;
+
+/* XPMEM struct and header file definitions END */
 
 #endif /* XPMEM_H */

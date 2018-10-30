@@ -6,7 +6,7 @@
 
 ACLOCAL_AMFLAGS = -I confdb
 AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_builddir)/include
-
+# LDFLAGS = 
 lib@MPLLIBNAME@_la_SOURCES =
 lib@MPLLIBNAME@_la_LDFLAGS = ${lib@MPLLIBNAME@_so_versionflags}
 

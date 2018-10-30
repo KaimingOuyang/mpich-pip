@@ -12,7 +12,8 @@ AM_CFLAGS = @VISIBILITY_CFLAGS@ @HWLOC_EMBEDDED_CFLAGS@
 AM_CPPFLAGS = @HWLOC_EMBEDDED_CPPFLAGS@
 AM_FFLAGS =
 AM_FCFLAGS =
-AM_LDFLAGS =
+# LDFLAGS =
+# LDFLAGS = -L$(HOME)/ANL/mpich/src/mpid/ch4/shm/xpmem/lib -lxpmem -Wl,-rpath=$(HOME)/ANL/mpich/src/mpid/ch4/shm/xpmem/lib
 include_HEADERS =
 nodist_include_HEADERS =
 nodist_noinst_HEADERS =

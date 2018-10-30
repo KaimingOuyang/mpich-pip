@@ -24,7 +24,7 @@ noinst_HEADERS += src/mpid/ch4/shm/xpmem/xpmem_send.h
 #				src/mpid/ch4/shm/xpmem/xpmem_rma.h 		\
 #				src/mpid/ch4/shm/xpmem/xpmem_reduce.h 	\
 # if !AM_LDFLAGS
-AM_LDFLAGS += src/mpid/ch4/shm/xpmem/lib/libxpmem.a
+# LDFLAGS += src/mpid/ch4/shm/xpmem/lib/libxpmem.a
 # else
 # AM_LDFLAGS += src/mpid/ch4/shm/xpmem/lib/libxpmem.a
 # endif 
