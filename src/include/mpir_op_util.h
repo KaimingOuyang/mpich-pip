@@ -49,8 +49,6 @@ MPIR_OP_TYPE_GROUP(FORTRAN_INTEGER)
     case (mpi_type_): {                                       \
         c_type_ * restrict a = (c_type_ *)inoutvec;           \
         /*const*/ c_type_ * restrict b = (c_type_ *)invec;    \
-        printf("I am in the addition function\n");          \
-        fflush(stdout);                                     \
         for (i=0; i<len; i++)                               \
             a[i] = op_macro_(a[i],b[i]);                      \
         break;                                                \

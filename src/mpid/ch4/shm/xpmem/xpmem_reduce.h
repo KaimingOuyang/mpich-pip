@@ -51,23 +51,23 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 
 	size_t dataSz, typesize;
 
-	if (myrank == root) {
-		// printf("rank %d sendbuf: ", myrank);
-		if (sendbuf != MPI_IN_PLACE) {
-			printArray(myrank, sendbuf, count);
-		} else {
-			printArray(myrank, recvbuf, count);
-		}
-		// printf("\n");
-		// fflush(stdout);
-	}
-	COLL_SHMEM_MODULE = POSIX_MODULE;
-	MPIDI_POSIX_mpi_barrier(comm, errflag, NULL);
-	COLL_SHMEM_MODULE = XPMEM_MODULE;
+	// if (myrank == root) {
+	// 	// printf("rank %d sendbuf: ", myrank);
+	// 	if (sendbuf != MPI_IN_PLACE) {
+	// 		printArray(myrank, sendbuf, count);
+	// 	} else {
+	// 		printArray(myrank, recvbuf, count);
+	// 	}
+	// 	// printf("\n");
+	// 	// fflush(stdout);
+	// }
+	// COLL_SHMEM_MODULE = POSIX_MODULE;
+	// MPIDI_POSIX_mpi_barrier(comm, errflag, NULL);
+	// COLL_SHMEM_MODULE = XPMEM_MODULE;
 
-	if (myrank != root) {
-		printArray(myrank, sendbuf, count);
-	}
+	// if (myrank != root) {
+	// 	printArray(myrank, sendbuf, count);
+	// }
 	typesize =  MPIR_Datatype_get_basic_size(datatype);
 	/* Attach destination buffer located on root process */
 	if (myrank == root) {
@@ -108,7 +108,7 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 			errLine = __LINE__;
 			goto fn_fail;
 		}
-		printArray(myrank, destdataBuf, count);
+		// printArray(myrank, destdataBuf, count);
 		// printf("Rank: %d, attach dest buffer with handler %llX\n", myrank, destheader.dtHandler);
 		// fflush(stdout);
 	}
@@ -145,7 +145,7 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 				goto fn_fail;
 			}
 
-			printArray(myrank, srcdataBuf, count);
+			// printArray(myrank, srcdataBuf, count);
 			// printf("rank: %d, I succeed in attaching mem srcdataBuf: %p\n", myrank, srcdataBuf);
 			// fflush(stdout);
 			// printf("rank: %d, test first value: %d\n", myrank, *(int*)srcdataBuf);
@@ -183,8 +183,8 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 			}
 		}
 		// while (1);
-		printf("Rank: %d, detach memory complete\n", myrank);
-		fflush(stdout);
+		// printf("Rank: %d, detach memory complete\n", myrank);
+		// fflush(stdout);
 		/*
 			Maybe I do not need barrier?
 			Assure xpmem_remove can block until receiver processes release handler
@@ -202,14 +202,14 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 		}
 	}
 
-	if (myrank == root) {
-		printf("Final results: ");
-		for (int i = 0; i < count; ++i) {
-			printf("%d ", ((int*)recvbuf)[i]);
-		}
-		printf("\n");
-		fflush(stdout);
-	}
+	// if (myrank == root) {
+	// 	printf("Final results: ");
+	// 	for (int i = 0; i < count; ++i) {
+	// 		printf("%d ", ((int*)recvbuf)[i]);
+	// 	}
+	// 	printf("\n");
+	// 	fflush(stdout);
+	// }
 	if (myrank != root) {
 		mpi_errno = xpmemDetachMem(destrealBuf, &destapid);
 		if (mpi_errno != MPI_SUCCESS) {
