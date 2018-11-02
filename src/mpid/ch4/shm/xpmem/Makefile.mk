@@ -19,10 +19,13 @@ AM_CPPFLAGS += -I$(top_srcdir)/src/mpid/ch4/shm/xpmem/include
 # endif
 
 
-noinst_HEADERS += src/mpid/ch4/shm/xpmem/xpmem_send.h 
-#				src/mpid/ch4/shm/xpmem/xpmem_recv.h 	\
+noinst_HEADERS += src/mpid/ch4/shm/xpmem/xpmem_send.h 	\
+				src/mpid/ch4/shm/xpmem/xpmem_recv.h 	\
+				src/mpid/ch4/shm/xpmem/xpmem_reduce.h 	\
+				src/mpid/ch4/shm/xpmem/xpmem_progress.h \
+				src/mpid/ch4/shm/xpmem/xpmem_inline.h
+
 #				src/mpid/ch4/shm/xpmem/xpmem_rma.h 		\
-#				src/mpid/ch4/shm/xpmem/xpmem_reduce.h 	\
 # if !AM_LDFLAGS
 # LDFLAGS += src/mpid/ch4/shm/xpmem/lib/libxpmem.a
 # else

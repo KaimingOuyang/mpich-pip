@@ -31,7 +31,7 @@
 #define MPIR_OP_TYPE_MACRO(mpi_type_,c_type_,type_name_) case (mpi_type_):
 
 MPIR_OP_TYPE_GROUP(C_INTEGER)
-    MPIR_OP_TYPE_GROUP(FORTRAN_INTEGER)
+MPIR_OP_TYPE_GROUP(FORTRAN_INTEGER)
 #undef MPIR_OP_TYPE_MACRO
 #endif
 /* op_macro_ is a 2-arg macro or function that preforms the reduction
@@ -49,6 +49,8 @@ MPIR_OP_TYPE_GROUP(C_INTEGER)
     case (mpi_type_): {                                       \
         c_type_ * restrict a = (c_type_ *)inoutvec;           \
         /*const*/ c_type_ * restrict b = (c_type_ *)invec;    \
+        printf("I am in the addition function\n");          \
+        fflush(stdout);                                     \
         for (i=0; i<len; i++)                               \
             a[i] = op_macro_(a[i],b[i]);                      \
         break;                                                \
@@ -218,31 +220,31 @@ MPIR_OP_TYPE_GROUP(C_INTEGER)
    FIXME These are a hack in most cases, but they seem to work in practice
    and it's what we were doing prior to the mpir_op_util.h refactoring. */
 typedef struct {
-    float re;
-    float im;
+	float re;
+	float im;
 } s_complex;
 
 #if defined(HAVE_FORTRAN_BINDING)
 typedef struct {
-    MPIR_FC_REAL_CTYPE re;
-    MPIR_FC_REAL_CTYPE im;
+	MPIR_FC_REAL_CTYPE re;
+	MPIR_FC_REAL_CTYPE im;
 } s_fc_complex;
 
 typedef struct {
-    MPIR_FC_DOUBLE_CTYPE re;
-    MPIR_FC_DOUBLE_CTYPE im;
+	MPIR_FC_DOUBLE_CTYPE re;
+	MPIR_FC_DOUBLE_CTYPE im;
 } d_fc_complex;
 #endif
 
 typedef struct {
-    double re;
-    double im;
+	double re;
+	double im;
 } d_complex;
 
 #if defined(HAVE_LONG_DOUBLE)
 typedef struct {
-    long double re;
-    long double im;
+	long double re;
+	long double im;
 } ld_complex;
 #endif
 

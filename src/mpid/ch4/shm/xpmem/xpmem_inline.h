@@ -3,4 +3,5 @@
 #include "xpmem_progress.h"
 #include "xpmem_send.h"
 #include "xpmem_recv.h"
+#include "xpmem_reduce.h"
 #endif
