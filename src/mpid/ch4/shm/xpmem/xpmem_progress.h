@@ -48,6 +48,8 @@ MPL_STATIC_INLINE_PREFIX int xpmemExposeMem(const void *buf, size_t dataSz, ackH
 	header->dataSz = (__s64) dataSz;
 	header->pageSz = (__s64) newSize;
 	header->offset = offset;
+	// printf("lowAddr=%llX, highAddr=%llX, newSize=%lld, offset=%llX, dataSz=%lld\n", lowAddr, highAddr, newSize, offset, dataSz);
+
 	header->dtHandler = xpmem_make((void*) lowAddr, newSize, XPMEM_PERMIT_MODE, permitValue);
 
 	if (header->dtHandler == -1) {

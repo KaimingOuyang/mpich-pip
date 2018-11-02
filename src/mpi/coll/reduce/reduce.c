@@ -264,7 +264,8 @@ int MPIR_Reduce_impl(const void *sendbuf, void *recvbuf, int count,
                      MPI_Datatype datatype, MPI_Op op, int root,
                      MPIR_Comm * comm_ptr, MPIR_Errflag_t * errflag) {
 	int mpi_errno = MPI_SUCCESS;
-
+	// printf("rank: %d fall back MPIR_Reduce_impl\n", comm_ptr->rank);
+	// fflush(stdout);
 	if (comm_ptr->comm_kind == MPIR_COMM_KIND__INTRACOMM) {
 		/* intracommunicator */
 		switch (MPIR_Reduce_intra_algo_choice) {

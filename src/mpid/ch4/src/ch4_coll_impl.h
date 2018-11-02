@@ -466,7 +466,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Reduce_intra_composition_alpha(const void *se
 		/* adjust for potential negative lower bound in datatype */
 		tmp_buf = (void *) ((char *) tmp_buf - true_lb);
 	}
-
+	// printf("Enter MPIDI_Reduce_intra_composition_alpha rank %d\n", comm->rank);
+	// fflush(stdout);
 	/* do the intranode reduce on all nodes other than the root's node */
 	if (comm->node_comm != NULL && MPIR_Get_intranode_rank(comm, root) == -1) {
 		// printf("Rank: %d enter intranode reduce without root %d\n", comm->rank, root);
@@ -492,11 +493,14 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Reduce_intra_composition_alpha(const void *se
 
 	/* do the internode reduce to the root's node */
 	if (comm->node_roots_comm != NULL) {
-		// printf("Rank: %d, Enter inter node reduce to the root's node\n", comm->rank);
+		// printf("Rank: %d, Enter inter node reduce to the root's node inter node rank: %d\n", comm->rank, MPIR_Get_internode_rank(comm, root));
 		// fflush(stdout);
+		// while (1);
 		if (comm->node_roots_comm->rank != MPIR_Get_internode_rank(comm, root)) {
 			/* I am not on root's node.  Use tmp_buf if we
 			 * participated in the first reduce, otherwise use sendbuf */
+			// printf("Rank: %d, comm->node_roots_comm->rank != MPIR_Get_internode_rank(comm, root). \n", comm->rank);
+			// fflush(stdout);
 			const void *buf = (comm->node_comm == NULL ? sendbuf : tmp_buf);
 			mpi_errno =
 			    MPIDI_NM_mpi_reduce(buf, NULL, count, datatype,
@@ -512,7 +516,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Reduce_intra_composition_alpha(const void *se
 			}
 		} else {        /* I am on root's node. I have not participated in the earlier reduce. */
 			if (comm->rank != root) {
-				// printf("Rank: %d, I am not the root though. I don't have a valid recvbuf\n", comm->rank);
+				// printf("Rank: %d, I am not the root though. \n", comm->rank);
 				// fflush(stdout);
 				/* I am not the root though. I don't have a valid recvbuf.
 				 * Use tmp_buf as recvbuf. */

@@ -24,7 +24,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_send(const void *buf, MPI_Aint coun
 	int mpi_errno = MPI_SUCCESS;
 	size_t dataSz;
 	int errLine;
-	printf("xpmem send\n");
+	// printf("xpmem send\n");
 	dataSz = MPIR_Datatype_get_basic_size(datatype) * count;
 
 	/* Expose memory and get handler */

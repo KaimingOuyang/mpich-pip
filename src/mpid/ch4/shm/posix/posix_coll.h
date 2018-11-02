@@ -616,7 +616,7 @@ static inline int MPIDI_POSIX_mpi_reduce(const void *sendbuf, void *recvbuf, int
 	}
 
 	case MPIDI_POSIX_Reduce_intra_binomial_id: {
-		// printf("call MPIR_Reduce_intra_binomial\n");
+		// printf("rank %d call MPIR_Reduce_intra_binomial\n", comm->rank);
 		// fflush(stdout);
 		/* Finalize will call this function */
 		mpi_errno =

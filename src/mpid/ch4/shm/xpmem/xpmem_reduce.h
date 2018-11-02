@@ -29,7 +29,6 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 
 	int mpi_errno = MPI_SUCCESS;
 	int myrank = comm->rank;
-
 	// if (myrank == root) {
 	// 	printf("Rank: %d, enter MPIDI_XPMEM_mpi_reduce with sendbuf[9] %d\n", myrank, ((const int*)sendbuf)[9]);
 	// 	fflush(stdout);
@@ -50,7 +49,8 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 	xpmem_apid_t srcapid;
 
 	size_t dataSz, typesize;
-
+	if (count == 0)
+		goto fn_exit;
 	// if (myrank == root) {
 	// 	// printf("rank %d sendbuf: ", myrank);
 	// 	if (sendbuf != MPI_IN_PLACE) {
@@ -60,6 +60,8 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 	// 	}
 	// 	// printf("\n");
 	// 	// fflush(stdout);
+	// } else {
+	// 	printArray(myrank, sendbuf, count);
 	// }
 	// COLL_SHMEM_MODULE = POSIX_MODULE;
 	// MPIDI_POSIX_mpi_barrier(comm, errflag, NULL);
@@ -69,6 +71,7 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 	// 	printArray(myrank, sendbuf, count);
 	// }
 	typesize =  MPIR_Datatype_get_basic_size(datatype);
+	dataSz = typesize * count;
 	/* Attach destination buffer located on root process */
 	if (myrank == root) {
 		// 	*(__s64*)(destheader + 1) = 1L;
@@ -76,8 +79,6 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 		destdataBuf = recvbuf;
 		// printf("Rank: %d, enter MPIDI_XPMEM_mpi_reduce with recvbuf[9] %d\n", myrank, ((int*)recvbuf)[9]);
 		// fflush(stdout);
-
-		dataSz = typesize * count;
 		// printf("dataSz=%d, typesize=%d\n", dataSz, typesize);
 		mpi_errno = xpmemExposeMem(destdataBuf, dataSz, &destheader);
 		if (mpi_errno != MPI_SUCCESS) {
@@ -97,9 +98,10 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 		errLine = __LINE__;
 		goto fn_fail;
 	}
-// printf("Rank: %d completes bcast\n", myrank);
-// fflush(stdout);
 	COLL_SHMEM_MODULE = XPMEM_MODULE;
+	// printf("Rank: %d completes bcast\n", myrank);
+	// fflush(stdout);
+
 
 
 	if (myrank != root) {
@@ -168,12 +170,12 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 		// }
 		// printf("Rank: %d reduce local add, sindex: %d, len: %d\n", myrank, sindex, len);
 		// fflush(stdout);
-		int *tsrc = (int*) insrc;
-		int *tout = (int*) outdest;
-		for (int i = 0; i < len; ++i) {
-			tout[i] += tsrc[i];
-		}
-		// MPIR_Reduce_local(insrc, outdest, len, datatype, op);
+		// int *tsrc = (int*) insrc;
+		// int *tout = (int*) outdest;
+		// for (int i = 0; i < len; ++i) {
+		// 	tout[i] += tsrc[i];
+		// }
+		MPIR_Reduce_local(insrc, outdest, len, datatype, op);
 
 		if (myrank != i) {
 			mpi_errno = xpmemDetachMem(srcrealBuf, &srcapid);
@@ -192,7 +194,7 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 		// while (1);
 		COLL_SHMEM_MODULE = POSIX_MODULE;
 		MPIDI_POSIX_mpi_barrier(comm, errflag, NULL);
-
+		COLL_SHMEM_MODULE = XPMEM_MODULE;
 		if (myrank == i) {
 			mpi_errno = xpmemRemoveMem(&srcHeader);
 			if (mpi_errno != MPI_SUCCESS) {
