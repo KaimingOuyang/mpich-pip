@@ -29,7 +29,11 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_send(const void *buf, MPI_Aint coun
 
 	/* Expose memory and get handler */
 	ackHeader header;
+	// double time = MPI_Wtime();
 	mpi_errno = xpmemExposeMem(buf, dataSz, &header);
+	// time = MPI_Wtime() - time;
+	// printf("xpmemExposeMem time= %.6lf\n", time);
+	// fflush(stdout);
 	if (mpi_errno != MPI_SUCCESS) {
 		errLine = __LINE__;
 		goto fn_fail;

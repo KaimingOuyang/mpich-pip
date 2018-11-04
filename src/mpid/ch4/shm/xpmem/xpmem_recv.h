@@ -46,14 +46,22 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 	// fflush(stdout);
 	void *dataBuffer, *realBuffer;
 	xpmem_apid_t apid;
+	// double time = MPI_Wtime();
 	mpi_errno = xpmemAttachMem(&header, &dataBuffer, &realBuffer, &apid);
+	// time = MPI_Wtime() - time;
+	// printf("xpmemAttachMem time= %.6lf\n", time);
+	// fflush(stdout);
 	if (mpi_errno != MPI_SUCCESS) {
 		errLine = __LINE__;
 		goto fn_fail;
 	}
 
 	/* Copy data by dataSz bytes */
+	// time = MPI_Wtime();
 	MPIR_Memcpy(buf, dataBuffer, header.dataSz);
+	// time = MPI_Wtime() - time;
+	// printf("copy time= %.6lf\n", time);
+	// fflush(stdout);
 	// printf("Receiver enter infinite loop\n");
 	// fflush(stdout);
 	// sleep(10);
