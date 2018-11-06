@@ -80,11 +80,11 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 	}
 
 	/* Release resources */
-	mpi_errno = xpmemDetachMem(realBuffer, &apid);
-	if (mpi_errno != MPI_SUCCESS) {
-		errLine = __LINE__;
-		goto fn_fail;
-	}
+	// mpi_errno = xpmemDetachMem(realBuffer, &apid);
+	// if (mpi_errno != MPI_SUCCESS) {
+	// 	errLine = __LINE__;
+	// 	goto fn_fail;
+	// }
 
 	int ack;
 	mpi_errno = MPIDI_POSIX_mpi_send(&ack, 1, MPI_INT, rank, tag, comm, context_offset, NULL, request);

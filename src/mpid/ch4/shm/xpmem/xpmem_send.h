@@ -34,6 +34,9 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_send(const void *buf, MPI_Aint coun
 	ackHeader header;
 	// double time = MPI_Wtime();
 	mpi_errno = xpmemExposeMem(buf, dataSz, &header);
+
+	// printf("xpmemExposeMem Handler= %llX\n", header.dtHandler);
+	// fflush(stdout);
 	// time = MPI_Wtime() - time;
 	// printf("xpmemExposeMem time= %.6lf\n", time);
 	// fflush(stdout);
@@ -67,11 +70,11 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_send(const void *buf, MPI_Aint coun
 		}
 	}
 
-	mpi_errno = xpmemRemoveMem(&header);
-	if (mpi_errno != MPI_SUCCESS) {
-		errLine = __LINE__;
-		goto fn_fail;
-	}
+	// mpi_errno = xpmemRemoveMem(&header);
+	// if (mpi_errno != MPI_SUCCESS) {
+	// 	errLine = __LINE__;
+	// 	goto fn_fail;
+	// }
 	// printf("I finish remove mem\n");
 	// fflush(stdout);
 
