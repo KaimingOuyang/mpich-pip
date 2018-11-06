@@ -149,7 +149,7 @@ thread that initialized MPI with either 'MPI_Init' or 'MPI_Init_thread'.
 @*/
 int MPI_Finalize(void) {
 	int mpi_errno = MPI_SUCCESS;
-	COLL_SHMEM_MODULE = POSIX_MODULE;
+	// COLL_SHMEM_MODULE = POSIX_MODULE;
 #if defined(HAVE_USLEEP) && defined(USE_COVERAGE)
 	int rank = 0;
 #endif
