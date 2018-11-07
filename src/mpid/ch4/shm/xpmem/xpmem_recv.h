@@ -1,7 +1,7 @@
 #ifndef XPMEM_RECV_H_INCLUDED
 #define XPMEM_RECV_H_INCLUDED
 
-#include "./include/xpmem.h"
+#include "xpmem.h"
 #include "xpmem_progress.h"
 #include "../posix/posix_send.h"
 #include "../posix/posix_recv.h"
@@ -24,12 +24,18 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 
 	int mpi_errno = MPI_SUCCESS;
 	int errLine;
-
-
-
-
-	/* Get data handler in order to attach memory page from source process */
 	ackHeader header;
+
+#ifdef STAGE_PROFILE
+	int events[2] = {PAPI_L3_TCM, PAPI_TLB_DM};
+	long long values[2];
+	int myrank = comm->rank;
+	char buffer[8];
+	char file[64] = "pip-recv_";
+	double synctime = 0.0, systime = 0.0, copytime = 0.0;
+	synctime -= MPI_Wtime();
+#endif
+	/* Get data handler in order to attach memory page from source process */
 	mpi_errno = MPIDI_POSIX_mpi_recv(&header.dataSz, 4, MPI_LONG_LONG, rank, tag, comm, context_offset, status, request);
 	if (mpi_errno != MPI_SUCCESS) {
 		errLine = __LINE__;
@@ -45,7 +51,15 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 			goto fn_fail;
 		}
 	}
-
+#ifdef STAGE_PROFILE
+	synctime += MPI_Wtime();
+	sprintf(buffer, "%d_", myrank);
+	strcat(file, buffer);
+	sprintf(buffer, "%lld", header.dataSz);
+	strcat(file, buffer);
+	strcat(file, ".log");
+	FILE *fp = fopen(file, "a");
+#endif
 	// printf("Receiver dataSz= %lld\n", header.dataSz);
 	// fflush(stdout);
 	if (header.dataSz == 0) {
@@ -59,7 +73,14 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 	void *dataBuffer, *realBuffer;
 	xpmem_apid_t apid;
 	// double time = MPI_Wtime();
+#ifdef STAGE_PROFILE
+	systime -= MPI_Wtime();
+#endif
 	mpi_errno = xpmemAttachMem(&header, &dataBuffer, &realBuffer, &apid);
+#ifdef STAGE_PROFILE
+	systime += MPI_Wtime();
+#endif
+
 	// time = MPI_Wtime() - time;
 	// printf("xpmemAttachMem time= %.6lf\n", time);
 	// fflush(stdout);
@@ -70,7 +91,13 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 
 	/* Copy data by dataSz bytes */
 	// time = MPI_Wtime();
+#ifdef STAGE_PROFILE
+	copytime -= MPI_Wtime();
+#endif
 	MPIR_Memcpy(buf, dataBuffer, header.dataSz);
+#ifdef STAGE_PROFILE
+	copytime += MPI_Wtime();
+#endif
 	// time = MPI_Wtime() - time;
 	// printf("copy time= %.6lf\n", time);
 	// fflush(stdout);
@@ -91,11 +118,20 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 	// }
 
 	int ack;
+#ifdef STAGE_PROFILE
+	synctime -= MPI_Wtime();
+#endif
 	mpi_errno = MPIDI_POSIX_mpi_send(&ack, 1, MPI_INT, rank, 0, comm, context_offset, NULL, request);
+#ifdef STAGE_PROFILE
+	synctime += MPI_Wtime();
+	fprintf(fp, "%.8lf %.8lf %.8lf %lld %lld\n", synctime, systime, copytime, values[0], values[1]);
+	fclose(fp);
+#endif
 	if (mpi_errno != MPI_SUCCESS) {
 		errLine = __LINE__;
 		goto fn_fail;
 	}
+
 	goto fn_exit;
 
 fn_fail:

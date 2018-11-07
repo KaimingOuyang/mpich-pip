@@ -1,8 +1,9 @@
 #ifndef XPMEM_PROGRESS_INCLUDED
 #define XPMEM_PROGRESS_INCLUDED
 
-#include "./include/xpmem.h"
-
+#include "xpmem.h"
+#include <papi.h>
+#define STAGE_PROFILE
 #define PAGE_SIZE (1L << 12)
 #define PAGE_MASK (PAGE_SIZE - 1L)
 #define PAGE_ALIGN_ADDR_LOW(addr) (addr & (~PAGE_MASK))
