@@ -24,14 +24,23 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_send(const void *buf, MPI_Aint coun
 	int mpi_errno = MPI_SUCCESS;
 	size_t dataSz;
 	int errLine;
+	ackHeader header;
 	// printf("xpmem send\n");
-	if (count == 0)
+	if (count == 0) {
+		header.dataSz = 0;
+		mpi_errno = MPIDI_POSIX_mpi_send(&header.dataSz, 4, MPI_LONG_LONG, rank, tag, comm, context_offset, NULL, request);
+		if (mpi_errno != MPI_SUCCESS) {
+			errLine = __LINE__;
+			goto fn_fail;
+		}
 		return mpi_errno;
+	}
 
 	dataSz = MPIR_Datatype_get_basic_size(datatype) * count;
-
+	// printf("Sender dataSz= %lld\n", dataSz);
+	// fflush(stdout);
 	/* Expose memory and get handler */
-	ackHeader header;
+
 	// double time = MPI_Wtime();
 	mpi_errno = xpmemExposeMem(buf, dataSz, &header);
 
@@ -54,9 +63,9 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_send(const void *buf, MPI_Aint coun
 
 	/* Wait */
 	int ack;
-	MPI_Status ackStatus;
+	// MPI_Status ackStatus;
 	// sleep(5);
-	mpi_errno = MPIDI_POSIX_mpi_recv(&ack, 1, MPI_INT, rank, tag, comm, context_offset, &ackStatus, request);
+	mpi_errno = MPIDI_POSIX_mpi_recv(&ack, 1, MPI_INT, rank, 0, comm, context_offset, MPI_STATUS_IGNORE, request);
 	if (mpi_errno != MPI_SUCCESS) {
 		errLine = __LINE__;
 		goto fn_fail;

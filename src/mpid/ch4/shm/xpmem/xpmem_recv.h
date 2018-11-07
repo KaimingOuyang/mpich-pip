@@ -25,12 +25,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 	int mpi_errno = MPI_SUCCESS;
 	int errLine;
 
-	if (count == 0) {
-		MPIR_STATUS_SET_COUNT(*status, 0);
-		status->MPI_SOURCE = rank;
-		status->MPI_TAG = tag;
-		return mpi_errno;
-	}
+
 
 
 	/* Get data handler in order to attach memory page from source process */
@@ -49,6 +44,15 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 			errLine = __LINE__;
 			goto fn_fail;
 		}
+	}
+
+	// printf("Receiver dataSz= %lld\n", header.dataSz);
+	// fflush(stdout);
+	if (header.dataSz == 0) {
+		MPIR_STATUS_SET_COUNT(*status, 0);
+		status->MPI_SOURCE = rank;
+		status->MPI_TAG = tag;
+		return mpi_errno;
 	}
 	// printf("Recv header.dtHandler %llX\n", header.dtHandler);
 	// fflush(stdout);
@@ -87,7 +91,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 	// }
 
 	int ack;
-	mpi_errno = MPIDI_POSIX_mpi_send(&ack, 1, MPI_INT, rank, tag, comm, context_offset, NULL, request);
+	mpi_errno = MPIDI_POSIX_mpi_send(&ack, 1, MPI_INT, rank, 0, comm, context_offset, NULL, request);
 	if (mpi_errno != MPI_SUCCESS) {
 		errLine = __LINE__;
 		goto fn_fail;
