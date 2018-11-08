@@ -99,9 +99,40 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 // #ifdef XPMEM_PROFILE
 // 	copytime -= MPI_Wtime();
 // #endif
+#ifdef XPMEM_PROFILE_MISS
+	int events[2] = {PAPI_L3_TCM, PAPI_TLB_DM};
+	long long values[2];
+	int myrank = comm->rank;
+	char buffer[8];
+	char file[64] = "xpmem-recv_";
+	// int myrank = comm->rank;
+
+	sprintf(buffer, "%d_", myrank);
+	strcat(file, buffer);
+	sprintf(buffer, "%lld", header.dataSz);
+	strcat(file, buffer);
+	strcat(file, ".log");
+	FILE *fp = fopen(file, "a");
+	if (PAPI_start_counters(events, 2) != PAPI_OK) {
+		mpi_errno = MPI_ERR_OTHER;
+		errLine = __LINE__;
+		goto fn_fail;
+	}
+#endif
+
 #ifndef XPMEM_MEMCOPY
 	// printf("define XPMEM_MEMCOPY\n");
 	MPIR_Memcpy(buf, dataBuffer, header.dataSz);
+#endif
+
+#ifdef XPMEM_PROFILE_MISS
+	if (PAPI_stop_counters(values, 2) != PAPI_OK) {
+		mpi_errno = MPI_ERR_OTHER;
+		errLine = __LINE__;
+		goto fn_fail;
+	}
+	fprintf(fp, "%lld %lld\n", values[0], values[1]);
+	fclose(fp);
 #endif
 // #ifdef XPMEM_PROFILE
 // 	copytime += MPI_Wtime();
