@@ -14,6 +14,11 @@
 #include <mpidimpl.h>
 #include "mpidch4r.h"
 
+// #define POSIX_PROFILE
+
+// #ifdef POSIX_PROFILE
+// extern struct profile profs[2];
+// #endif
 #include "mpidu_shm.h"
 
 /* ---------------------------------------------------- */
@@ -41,20 +46,20 @@
 /* ---------------------------------------------------- */
 /* VCR Table Data */
 typedef struct {
-    unsigned int avt_rank;
+	unsigned int avt_rank;
 } MPIDI_POSIX_vcr_t;
 
 struct MPIDI_POSIX_vcrt_t {
-    MPIR_OBJECT_HEADER;
-    unsigned size;                            /**< Number of entries in the table */
-    MPIDI_POSIX_vcr_t vcr_table[0]; /**< Array of virtual connection references */
+	MPIR_OBJECT_HEADER;
+	unsigned size;                            /**< Number of entries in the table */
+	MPIDI_POSIX_vcr_t vcr_table[0]; /**< Array of virtual connection references */
 };
 /* ---------------------------------------------------- */
 /* general send/recv queue types, macros and objects    */
 /* ---------------------------------------------------- */
 typedef struct {
-    MPIR_Request *head;
-    MPIR_Request *tail;
+	MPIR_Request *head;
+	MPIR_Request *tail;
 } MPIDI_POSIX_request_queue_t;
 
 #define MPIDI_POSIX_REQUEST_COMPLETE(req_)                              \

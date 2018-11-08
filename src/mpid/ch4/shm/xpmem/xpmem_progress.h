@@ -1,9 +1,9 @@
 #ifndef XPMEM_PROGRESS_INCLUDED
 #define XPMEM_PROGRESS_INCLUDED
 
-#include "xpmem.h"
+#include <xpmem.h>
 #include <papi.h>
-#define STAGE_PROFILE
+// #define XPMEM_PROFILE
 #define PAGE_SIZE (1L << 12)
 #define PAGE_MASK (PAGE_SIZE - 1L)
 #define PAGE_ALIGN_ADDR_LOW(addr) (addr & (~PAGE_MASK))
@@ -50,7 +50,7 @@ MPL_STATIC_INLINE_PREFIX int xpmemExposeMem(const void *buf, size_t dataSz, ackH
 	header->pageSz = (__s64) newSize;
 	header->offset = offset;
 	// printf("lowAddr=%llX, highAddr=%llX, newSize=%lld, offset=%llX, dataSz=%lld\n", lowAddr, highAddr, newSize, offset, dataSz);
-
+#ifndef XPMEM_SYSCALL
 	header->dtHandler = xpmem_make((void*) lowAddr, newSize, XPMEM_PERMIT_MODE, permitValue);
 
 	if (header->dtHandler == -1) {
@@ -58,7 +58,7 @@ MPL_STATIC_INLINE_PREFIX int xpmemExposeMem(const void *buf, size_t dataSz, ackH
 		errLine = __LINE__;
 		goto fn_fail;
 	}
-
+#endif
 	goto fn_exit;
 fn_fail:
 	printf("[%s-%d] Error with mpi_errno (%d)\n", __FUNCTION__, errLine, mpi_errno);
@@ -141,11 +141,13 @@ fn_exit:
 MPL_STATIC_INLINE_PREFIX int xpmemRemoveMem(ackHeader *header) {
 	int errLine;
 	int mpi_errno = MPI_SUCCESS;
+#ifndef XPMEM_SYSCALL
 	mpi_errno = xpmem_remove(header->dtHandler);
 	if (mpi_errno != MPI_SUCCESS) {
 		errLine = __LINE__;
 		goto fn_fail;
 	}
+#endif
 	goto fn_exit;
 fn_fail:
 	printf("[%s-%d] Error with mpi_errno (%d)\n", __FUNCTION__, errLine, mpi_errno);

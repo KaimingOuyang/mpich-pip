@@ -3,7 +3,7 @@
 
 #include "mpir_datatype.h"
 #include "xpmem_progress.h"
-#include "xpmem.h"
+#include <xpmem.h>
 #include "../posix/posix_send.h"
 #include "../posix/posix_recv.h"
 
@@ -23,6 +23,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_send(const void *buf, MPI_Aint coun
 	int errLine;
 	ackHeader header;
 	// printf("xpmem send\n");
+
 	if (count == 0) {
 		header.dataSz = 0;
 		mpi_errno = MPIDI_POSIX_mpi_send(&header.dataSz, 4, MPI_LONG_LONG, rank, tag, comm, context_offset, NULL, request);
@@ -37,26 +38,26 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_send(const void *buf, MPI_Aint coun
 	// printf("Sender dataSz= %lld\n", dataSz);
 	// fflush(stdout);
 	/* Expose memory and get handler */
-#ifdef STAGE_PROFILE
-	double synctime = 0.0, systime = 0.0, copytime = 0.0;
-	int events[2] = {PAPI_L3_TCM, PAPI_TLB_DM};
-	long long values[2];
-	int myrank = comm->rank;
-	char buffer[8];
-	char file[64] = "xpmem-send_";
+// #ifdef XPMEM_PROFILE
+// 	double synctime = 0.0, systime = 0.0, copytime = 0.0;
+// 	int events[2] = {PAPI_L3_TCM, PAPI_TLB_DM};
+// 	long long values[2];
+// 	int myrank = comm->rank;
+// 	char buffer[8];
+// 	char file[64] = "xpmem-send_";
 
-	sprintf(buffer, "%d_", myrank);
-	strcat(file, buffer);
-	sprintf(buffer, "%ld", count);
-	strcat(file, buffer);
-	strcat(file, ".log");
-	FILE *fp = fopen(file, "w");
-	systime -= MPI_Wtime();
-#endif
+// 	sprintf(buffer, "%d_", myrank);
+// 	strcat(file, buffer);
+// 	sprintf(buffer, "%ld", count);
+// 	strcat(file, buffer);
+// 	strcat(file, ".log");
+// 	FILE *fp = fopen(file, "a");
+// 	systime -= MPI_Wtime();
+// #endif
 	mpi_errno = xpmemExposeMem(buf, dataSz, &header);
-#ifdef STAGE_PROFILE
-	systime += MPI_Wtime();
-#endif
+// #ifdef XPMEM_PROFILE
+// 	systime += MPI_Wtime();
+// #endif
 	// printf("xpmemExposeMem Handler= %llX\n", header.dtHandler);
 	// fflush(stdout);
 	// time = MPI_Wtime() - time;
@@ -68,24 +69,26 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_send(const void *buf, MPI_Aint coun
 	}
 	// printf("Sender header.dtHandler %llX\n", header.dtHandler);
 	// fflush(stdout);
-#ifdef STAGE_PROFILE
-	synctime -= MPI_Wtime();
-#endif
+// #ifdef XPMEM_PROFILE
+// 	synctime -= MPI_Wtime();
+// #endif
+#ifndef XPMEM_SYNC
 	mpi_errno = MPIDI_POSIX_mpi_send(&header.dataSz, 4, MPI_LONG_LONG, rank, tag, comm, context_offset, NULL, request);
 	if (mpi_errno != MPI_SUCCESS) {
 		errLine = __LINE__;
 		goto fn_fail;
 	}
-#ifdef STAGE_PROFILE
-	synctime += MPI_Wtime();
-#endif
+
+// #ifdef XPMEM_PROFILE
+// 	synctime += MPI_Wtime();
+// #endif
 
 	/* Wait */
 	int ack;
 	// MPI_Status ackStatus;
-#ifdef STAGE_PROFILE
-	synctime -= MPI_Wtime();
-#endif
+// #ifdef XPMEM_PROFILE
+// 	synctime -= MPI_Wtime();
+// #endif
 	mpi_errno = MPIDI_POSIX_mpi_recv(&ack, 1, MPI_INT, rank, 0, comm, context_offset, MPI_STATUS_IGNORE, request);
 	if (mpi_errno != MPI_SUCCESS) {
 		errLine = __LINE__;
@@ -99,17 +102,18 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_send(const void *buf, MPI_Aint coun
 			goto fn_fail;
 		}
 	}
-#ifdef STAGE_PROFILE
-	synctime += MPI_Wtime();
-	fprintf(fp, "dataSz=%lld %.8lf %.8lf 0.0 0 0\n", dataSz, synctime, systime);
-	fclose(fp);
 #endif
+// #ifdef XPMEM_PROFILE
+// 	synctime += MPI_Wtime();
+// 	fprintf(fp, "%.8lf %.8lf 0.0 0 0\n", synctime, systime);
+// 	fclose(fp);
+// #endif
 
-	// mpi_errno = xpmemRemoveMem(&header);
-	// if (mpi_errno != MPI_SUCCESS) {
-	// 	errLine = __LINE__;
-	// 	goto fn_fail;
-	// }
+	mpi_errno = xpmemRemoveMem(&header);
+	if (mpi_errno != MPI_SUCCESS) {
+		errLine = __LINE__;
+		goto fn_fail;
+	}
 	// printf("I finish remove mem\n");
 	// fflush(stdout);
 
