@@ -10,7 +10,7 @@
 #include <strings.h>
 #define STAGE_PROFILE
 
-#ifdef STAGE_PROFILE
+#if defined(POSIX_PROFILE_MISS) || defined(XPMEM_PROFILE_MISS) || defined(TEST_MISS)
 #include <papi.h>
 #endif
 /*
@@ -126,7 +126,7 @@ int MPI_Init(int *argc, char ***argv) {
 	int mpi_errno = MPI_SUCCESS;
 	int rc ATTRIBUTE((unused));
 	int threadLevel, provided;
-#ifdef STAGE_PROFILE
+#if defined(POSIX_PROFILE_MISS) || defined(XPMEM_PROFILE_MISS)|| defined(TEST_MISS)
 	int retval;
 	if ((retval = PAPI_library_init(PAPI_VER_CURRENT)) != PAPI_VER_CURRENT ) {
 		fprintf(stderr, "PAPI Init error: %d\n", retval);

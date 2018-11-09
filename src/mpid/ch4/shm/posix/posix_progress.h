@@ -163,8 +163,28 @@ match_l: {
 						MPIDI_POSIX_REQUEST(req)->segment_first = last;
 				} else
 					/* contig */
-					if (send_buffer)
+					if (send_buffer) {
+#ifdef POSIX_PROFILE_MISS
+						extern long long recvvalues[2];
+						int events[2] = {PAPI_L3_TCM, PAPI_TLB_DM};
+						long long tmp[2];
+						if (PAPI_start_counters(events, 2) != PAPI_OK) {
+							mpi_errno = MPI_ERR_OTHER;
+							// errLine = __LINE__;
+							goto fn_exit;
+						}
+#endif
 						MPIR_Memcpy(recv_buffer, (void *) send_buffer, data_sz);
+#ifdef POSIX_PROFILE_MISS
+						if (PAPI_stop_counters(tmp, 2) != PAPI_OK) {
+							mpi_errno = MPI_ERR_OTHER;
+							// errLine = __LINE__;
+							goto fn_exit;
+						}
+						recvvalues[0] += tmp[0];
+						recvvalues[1] += tmp[1];
+#endif
+					}
 				MPIDI_POSIX_REQUEST(req)->data_sz -= data_sz;
 				MPIDI_POSIX_REQUEST(req)->user_buf += data_sz;
 
@@ -209,8 +229,27 @@ match_l: {
 
 			if (data_sz > 0) {
 				MPIDI_POSIX_REQUEST(rreq)->user_buf = (char *) MPL_malloc(data_sz, MPL_MEM_SHM);
+#ifdef POSIX_PROFILE_MISS
+				extern long long recvvalues[2];
+				int events[2] = {PAPI_L3_TCM, PAPI_TLB_DM};
+				long long tmp[2];
+				if (PAPI_start_counters(events, 2) != PAPI_OK) {
+					mpi_errno = MPI_ERR_OTHER;
+					// errLine = __LINE__;
+					goto fn_exit;
+				}
+#endif
 				MPIR_Memcpy(MPIDI_POSIX_REQUEST(rreq)->user_buf, (void *) cell->pkt.mpich.p.payload,
 				            data_sz);
+#ifdef POSIX_PROFILE_MISS
+				if (PAPI_stop_counters(tmp, 2) != PAPI_OK) {
+					mpi_errno = MPI_ERR_OTHER;
+					// errLine = __LINE__;
+					goto fn_exit;
+				}
+				recvvalues[0] += tmp[0];
+				recvvalues[1] += tmp[1];
+#endif
 			} else {
 				MPIDI_POSIX_REQUEST(rreq)->user_buf = NULL;
 			}
@@ -323,23 +362,26 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking, int *comple
 					MPIR_Segment_free(MPIDI_POSIX_REQUEST(sreq)->segment_ptr);
 				} else {
 					/* contig */
-// #ifdef POSIX_PROFILE
-//                  if (PAPI_start_counters(events, 2) != PAPI_OK) {
-//                      mpi_errno = MPI_ERR_OTHER;
-//                      errLine = __LINE__;
-//                      goto fn_fail;
-//                  }
-//                  profs[myrank].copy -= MPI_Wtime();
-// #endif
+#ifdef POSIX_PROFILE_MISS
+					extern long long sendvalues[2];
+					int events[2] = {PAPI_L3_TCM, PAPI_TLB_DM};
+					long long tmp[2];
+					if (PAPI_start_counters(events, 2) != PAPI_OK) {
+						mpi_errno = MPI_ERR_OTHER;
+						// errLine = __LINE__;
+						goto fn_exit;
+					}
+#endif
 					MPIR_Memcpy((void *) recv_buffer, MPIDI_POSIX_REQUEST(sreq)->user_buf, data_sz);
-// #ifdef POSIX_PROFILE
-//                  profs[myrank].copy += MPI_Wtime();
-//                  if (PAPI_stop_counters(values, 2) != PAPI_OK) {
-//                      mpi_errno = MPI_ERR_OTHER;
-//                      errLine = __LINE__;
-//                      goto fn_fail;
-//                  }
-// #endif
+#ifdef POSIX_PROFILE_MISS
+					if (PAPI_stop_counters(tmp, 2) != PAPI_OK) {
+						mpi_errno = MPI_ERR_OTHER;
+						// errLine = __LINE__;
+						goto fn_exit;
+					}
+					sendvalues[0] += tmp[0];
+					sendvalues[1] += tmp[1];
+#endif
 				}
 
 				cell->pkt.mpich.type = MPIDI_POSIX_TYPEEAGER;
@@ -368,11 +410,29 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking, int *comple
 				MPIDI_POSIX_REQUEST(sreq)->segment_first = last;
 			} else {
 				/* contig */
-// #ifdef POSIX_PROFILE
+#ifdef POSIX_PROFILE_MISS
+				extern long long sendvalues[2];
+				int events[2] = {PAPI_L3_TCM, PAPI_TLB_DM};
+				long long tmp[2];
+				// int errLine;
+				if (PAPI_start_counters(events, 2) != PAPI_OK) {
+					mpi_errno = MPI_ERR_OTHER;
+					// errLine = __LINE__;
+					goto fn_exit;
+				}
 //              profs[myrank].copy -= MPI_Wtime();
-// #endif
+#endif
 				MPIR_Memcpy((void *) recv_buffer, MPIDI_POSIX_REQUEST(sreq)->user_buf,
 				            MPIDI_POSIX_EAGER_THRESHOLD);
+#ifdef POSIX_PROFILE_MISS
+				if (PAPI_stop_counters(tmp, 2) != PAPI_OK) {
+					mpi_errno = MPI_ERR_OTHER;
+					// errLine = __LINE__;
+					goto fn_exit;
+				}
+				sendvalues[0] += tmp[0];
+				sendvalues[1] += tmp[1];
+#endif
 // #ifdef POSIX_PROFILE
 //              profs[myrank].copy -= MPI_Wtime();
 // #endif

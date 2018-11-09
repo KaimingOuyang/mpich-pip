@@ -13,6 +13,7 @@
 #include "../xpmem/xpmem_inline.h"
 #include <stdlib.h>
 
+
 MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_send(const void *buf, MPI_Aint count,
         MPI_Datatype datatype, int rank, int tag,
         MPIR_Comm * comm, int context_offset,

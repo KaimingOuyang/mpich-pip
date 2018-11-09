@@ -103,7 +103,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_mpi_send(const void *buf, MPI_Aint coun
 	MPID_THREAD_CS_ENTER(POBJ, MPIDI_POSIX_SHM_MUTEX);
 	MPIDI_Datatype_get_info(count, datatype, dt_contig, data_sz, dt_ptr, dt_true_lb);
 
-	int myrank = comm->rank;
+	// int myrank = comm->rank;
 	/* try to send immediately, contig, short message */
 	if (dt_contig && data_sz <= MPIDI_POSIX_EAGER_THRESHOLD) {
 		/* eager message */
@@ -117,13 +117,79 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_mpi_send(const void *buf, MPI_Aint coun
 			cell->pkt.mpich.datalen = data_sz;
 			cell->pkt.mpich.type = MPIDI_POSIX_TYPEEAGER;
 
-// #ifdef POSIX_PROFILE
-//          profs[myrank].copy -= MPI_Wtime();
-// #endif
+#ifdef TEST_MISS
+			FILE *fp;
+			if (tag == 777) {
+				int events[2] = {PAPI_L3_TCM, PAPI_TLB_DM};
+				int myrank = comm->rank;
+				char buffer[8];
+				char file[64] = "posix-send_";
+				// int myrank = comm->rank;
+				int dataSz = MPIR_Datatype_get_basic_size(datatype) * count;
+				sprintf(buffer, "%d_", myrank);
+				strcat(file, buffer);
+				sprintf(buffer, "%lld", dataSz);
+				strcat(file, buffer);
+				strcat(file, ".log");
+				fp = fopen(file, "a");
+				if (PAPI_start_counters(events, 2) != PAPI_OK) {
+					mpi_errno = MPI_ERR_OTHER;
+					// errLine = __LINE__;
+					goto fn_exit;
+				}
+			}
+#endif
+
+#ifdef POSIX_PROFILE_MISS
+			FILE *fp;
+			if (tag == 777) {
+				int events[2] = {PAPI_L3_TCM, PAPI_TLB_DM};
+				int myrank = comm->rank;
+				char buffer[8];
+				char file[64] = "posix-send_";
+				// int myrank = comm->rank;
+				int dataSz = MPIR_Datatype_get_basic_size(datatype) * count;
+				sprintf(buffer, "%d_", myrank);
+				strcat(file, buffer);
+				sprintf(buffer, "%lld", dataSz);
+				strcat(file, buffer);
+				strcat(file, ".log");
+				fp = fopen(file, "a");
+				if (PAPI_start_counters(events, 2) != PAPI_OK) {
+					mpi_errno = MPI_ERR_OTHER;
+					// errLine = __LINE__;
+					goto fn_exit;
+				}
+			}
+
+#endif
 			MPIR_Memcpy((void *) cell->pkt.mpich.p.payload, (char *) buf + dt_true_lb, data_sz);
-// #ifdef POSIX_PROFILE
-//          profs[myrank].copy += MPI_Wtime();
-// #endif
+#ifdef POSIX_PROFILE_MISS
+			if (tag == 777) {
+				long long values[2];
+				if (PAPI_stop_counters(values, 2) != PAPI_OK) {
+					mpi_errno = MPI_ERR_OTHER;
+					// errLine = __LINE__;
+					goto fn_exit;
+				}
+				fprintf(fp, "%lld %lld\n", values[0], values[1]);
+				fclose(fp);
+			}
+#endif
+
+#ifdef TEST_MISS
+			if (tag == 777) {
+				long long values[2];
+				if (PAPI_stop_counters(values, 2) != PAPI_OK) {
+					mpi_errno = MPI_ERR_OTHER;
+					// errLine = __LINE__;
+					goto fn_exit;
+				}
+				fprintf(fp, "%lld %lld\n", values[0], values[1]);
+				fclose(fp);
+			}
+#endif
+
 
 			cell->pending = NULL;
 			MPIDI_POSIX_queue_enqueue(MPIDI_POSIX_mem_region.RecvQ[grank], cell);

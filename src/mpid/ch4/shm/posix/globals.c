@@ -21,7 +21,7 @@ MPIDI_POSIX_mem_region_t MPIDI_POSIX_mem_region = { {0}
 char *MPIDI_POSIX_asym_base_addr = 0;
 MPID_Thread_mutex_t MPID_shm_mutex;
 
-// #ifdef POSIX_PROFILE
+#ifdef POSIX_PROFILE_MISS
 
 // struct profile {
 // 	double sync = 0.0;
@@ -31,5 +31,6 @@ MPID_Thread_mutex_t MPID_shm_mutex;
 // };
 
 // struct profile profs[2];
-// long long values[2];
-// #endif
+long long sendvalues[2] = {0, 0};
+long long recvvalues[2] = {0, 0};
+#endif

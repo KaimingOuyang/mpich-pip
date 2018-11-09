@@ -27,7 +27,9 @@
 #include "posix_datatypes.h"    /* MPID_nem datatypes like cell, fastbox defined here */
 #include "posix_defs.h" /* MPID_nem objects like shared memory region defined here */
 #include "posix_queue.h"        /* MPIDI_POSIX_queue functions defined here */
-
+#if defined(POSIX_PROFILE_MISS) || defined(XPMEM_PROFILE_MISS)
+#include <papi.h>
+#endif
 /* ---------------------------------------------------- */
 /* constants                                            */
 /* ---------------------------------------------------- */

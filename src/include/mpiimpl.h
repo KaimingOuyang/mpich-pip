@@ -18,6 +18,9 @@
 
 #include "mpichconfconst.h"
 #include "mpichconf.h"
+#if defined(POSIX_PROFILE_MISS) || defined(XPMEM_PROFILE_MISS) || defined(TEST_MISS)
+#include <papi.h>
+#endif
 
 #include <stdio.h>
 #ifdef STDC_HEADERS

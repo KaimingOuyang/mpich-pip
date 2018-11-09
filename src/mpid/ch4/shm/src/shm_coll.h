@@ -12,6 +12,12 @@
 #include "../posix/shm_inline.h"
 #include "../xpmem/xpmem_inline.h"
 
+#if defined(POSIX_PROFILE_MISS) || defined(XPMEM_PROFILE_MISS) || defined(XPMEM_SYSCALL) || defined(XPMEM_SYNC) || defined(XPMEM_MEMCOPY)
+int PROFILE_FLAG = 1;
+#else
+int PROFILE_FLAG = 0;
+#endif
+
 MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_barrier(MPIR_Comm * comm, MPIR_Errflag_t * errflag,
         const void *algo_parameters_container) {
 	int ret;
@@ -232,7 +238,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_reduce(const void *sendbuf, void *rec
 	MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_SHM_MPI_REDUCE);
 
 	char *SHMEM_MODULE = getenv("SHMEM_MODULE");
-	if (!strcmp(SHMEM_MODULE, "XPMEM") && !strcmp(COLL_SHMEM_MODULE, "XPMEM") && 0) {
+	if (!strcmp(SHMEM_MODULE, "XPMEM") && !strcmp(COLL_SHMEM_MODULE, "XPMEM") && !PROFILE_FLAG) {
 		ret = MPIDI_XPMEM_mpi_reduce(sendbuf, recvbuf, count, datatype, op, root, comm_ptr, errflag,
 		                             algo_parameters_container);
 	} else {
