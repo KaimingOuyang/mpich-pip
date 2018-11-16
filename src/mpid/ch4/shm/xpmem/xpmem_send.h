@@ -54,7 +54,30 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_send(const void *buf, MPI_Aint coun
 // 	FILE *fp = fopen(file, "a");
 // 	systime -= MPI_Wtime();
 // #endif
+#ifdef XPMEM_WO_SYSCALL
+	/* Current reuse is simple, need to deal with more complicated cases */
+	static long long recaddr = -1;
+	static ackHeader recheader = {.dataSz = -1, .dtHandler = -1, .pageSz = -1, .offset = -1};
+	if (recaddr == (long long) buf && recheader.dataSz == dataSz) {
+		// printf("Rank: %d, I am the same\n", comm->rank);
+		// fflush(stdout);
+		header = recheader;
+	} else {
+		mpi_errno = xpmemExposeMem(buf, dataSz, &header);
+		if (mpi_errno != MPI_SUCCESS) {
+			errLine = __LINE__;
+			goto fn_fail;
+		}
+		recaddr = (long long)buf;
+		recheader = header;
+	}
+#else
 	mpi_errno = xpmemExposeMem(buf, dataSz, &header);
+	if (mpi_errno != MPI_SUCCESS) {
+		errLine = __LINE__;
+		goto fn_fail;
+	}
+#endif
 // #ifdef XPMEM_PROFILE
 // 	systime += MPI_Wtime();
 // #endif
@@ -63,10 +86,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_send(const void *buf, MPI_Aint coun
 	// time = MPI_Wtime() - time;
 	// printf("xpmemExposeMem time= %.6lf\n", time);
 	// fflush(stdout);
-	if (mpi_errno != MPI_SUCCESS) {
-		errLine = __LINE__;
-		goto fn_fail;
-	}
+
 	// printf("Sender header.dtHandler %llX\n", header.dtHandler);
 	// fflush(stdout);
 // #ifdef XPMEM_PROFILE
@@ -108,12 +128,13 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_send(const void *buf, MPI_Aint coun
 // 	fprintf(fp, "%.8lf %.8lf 0.0 0 0\n", synctime, systime);
 // 	fclose(fp);
 // #endif
-
-	mpi_errno = xpmemRemoveMem(&header);
-	if (mpi_errno != MPI_SUCCESS) {
-		errLine = __LINE__;
-		goto fn_fail;
-	}
+// #ifndef XPMEM_WO_SYSCALL
+// 	mpi_errno = xpmemRemoveMem(&header);
+// 	if (mpi_errno != MPI_SUCCESS) {
+// 		errLine = __LINE__;
+// 		goto fn_fail;
+// 	}
+// #endif
 	// printf("I finish remove mem\n");
 	// fflush(stdout);
 

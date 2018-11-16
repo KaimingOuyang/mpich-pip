@@ -117,33 +117,37 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_mpi_send(const void *buf, MPI_Aint coun
 			cell->pkt.mpich.datalen = data_sz;
 			cell->pkt.mpich.type = MPIDI_POSIX_TYPEEAGER;
 
-#ifdef TEST_MISS
-			FILE *fp;
-			if (tag == 777) {
-				int events[2] = {PAPI_L3_TCM, PAPI_TLB_DM};
-				int myrank = comm->rank;
-				char buffer[8];
-				char file[64] = "posix-send_";
-				// int myrank = comm->rank;
-				int dataSz = MPIR_Datatype_get_basic_size(datatype) * count;
-				sprintf(buffer, "%d_", myrank);
-				strcat(file, buffer);
-				sprintf(buffer, "%lld", dataSz);
-				strcat(file, buffer);
-				strcat(file, ".log");
-				fp = fopen(file, "a");
-				if (PAPI_start_counters(events, 2) != PAPI_OK) {
-					mpi_errno = MPI_ERR_OTHER;
-					// errLine = __LINE__;
-					goto fn_exit;
-				}
-			}
-#endif
+// #ifdef TEST_MISS
+// 			FILE *fp;
+// 			if (tag == 777) {
+// 				int events[2] = {PAPI_L3_TCM, PAPI_TLB_DM};
+// 				int myrank = comm->rank;
+// 				char buffer[8];
+// 				char file[64] = "posix-send_";
+// 				// int myrank = comm->rank;
+// 				int dataSz = MPIR_Datatype_get_basic_size(datatype) * count;
+// 				sprintf(buffer, "%d_", myrank);
+// 				strcat(file, buffer);
+// 				sprintf(buffer, "%lld", dataSz);
+// 				strcat(file, buffer);
+// 				strcat(file, ".log");
+// 				fp = fopen(file, "a");
+// 				if (PAPI_start_counters(events, 2) != PAPI_OK) {
+// 					mpi_errno = MPI_ERR_OTHER;
+// 					// errLine = __LINE__;
+// 					goto fn_exit;
+// 				}
+// 			}
+// #endif
 
 #ifdef POSIX_PROFILE_MISS
 			FILE *fp;
 			if (tag == 777) {
-				int events[2] = {PAPI_L3_TCM, PAPI_TLB_DM};
+#ifdef TLB_MISS
+				int events[2] = {PAPI_PRF_DM, PAPI_TLB_DM};
+#else
+				int events[2] = {PAPI_PRF_DM, PAPI_L3_TCM};
+#endif
 				int myrank = comm->rank;
 				char buffer[8];
 				char file[64] = "posix-send_";

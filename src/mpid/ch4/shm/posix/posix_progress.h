@@ -166,7 +166,11 @@ match_l: {
 					if (send_buffer) {
 #ifdef POSIX_PROFILE_MISS
 						extern long long recvvalues[2];
-						int events[2] = {PAPI_L3_TCM, PAPI_TLB_DM};
+#ifdef TLB_MISS
+						int events[2] = {PAPI_PRF_DM, PAPI_TLB_DM};
+#else
+						int events[2] = {PAPI_PRF_DM, PAPI_L3_TCM};
+#endif
 						long long tmp[2];
 						if (PAPI_start_counters(events, 2) != PAPI_OK) {
 							mpi_errno = MPI_ERR_OTHER;
@@ -231,7 +235,11 @@ match_l: {
 				MPIDI_POSIX_REQUEST(rreq)->user_buf = (char *) MPL_malloc(data_sz, MPL_MEM_SHM);
 #ifdef POSIX_PROFILE_MISS
 				extern long long recvvalues[2];
-				int events[2] = {PAPI_L3_TCM, PAPI_TLB_DM};
+#ifdef TLB_MISS
+				int events[2] = {PAPI_PRF_DM, PAPI_TLB_DM};
+#else
+				int events[2] = {PAPI_PRF_DM, PAPI_L3_TCM};
+#endif
 				long long tmp[2];
 				if (PAPI_start_counters(events, 2) != PAPI_OK) {
 					mpi_errno = MPI_ERR_OTHER;
@@ -364,7 +372,11 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking, int *comple
 					/* contig */
 #ifdef POSIX_PROFILE_MISS
 					extern long long sendvalues[2];
-					int events[2] = {PAPI_L3_TCM, PAPI_TLB_DM};
+#ifdef TLB_MISS
+					int events[2] = {PAPI_PRF_DM, PAPI_TLB_DM};
+#else
+					int events[2] = {PAPI_PRF_DM, PAPI_L3_TCM};
+#endif
 					long long tmp[2];
 					if (PAPI_start_counters(events, 2) != PAPI_OK) {
 						mpi_errno = MPI_ERR_OTHER;
@@ -412,7 +424,11 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking, int *comple
 				/* contig */
 #ifdef POSIX_PROFILE_MISS
 				extern long long sendvalues[2];
-				int events[2] = {PAPI_L3_TCM, PAPI_TLB_DM};
+#ifdef TLB_MISS
+				int events[2] = {PAPI_PRF_DM, PAPI_TLB_DM};
+#else
+				int events[2] = {PAPI_PRF_DM, PAPI_L3_TCM};
+#endif
 				long long tmp[2];
 				// int errLine;
 				if (PAPI_start_counters(events, 2) != PAPI_OK) {

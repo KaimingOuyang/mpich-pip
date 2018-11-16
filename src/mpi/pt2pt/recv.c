@@ -144,42 +144,42 @@ int MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag,
 	if (request_ptr == NULL) {
 		goto fn_exit;
 	}
-#ifdef TEST_MISS
-	FILE* fp;
-	if (tag == 777) {
-		int dataSz = MPIR_Datatype_get_basic_size(datatype) * count;
-		int events[2] = {PAPI_L3_TCM, PAPI_TLB_DM};
-		int myrank = comm_ptr->rank;
-		char buffer[8];
-		char file[64] = "posix-recv_";
-		// int myrank = comm->rank;
+// #ifdef TEST_MISS
+// 	FILE* fp;
+// 	if (tag == 777) {
+// 		int dataSz = MPIR_Datatype_get_basic_size(datatype) * count;
+// 		int events[2] = {PAPI_L3_TCM, PAPI_TLB_DM};
+// 		int myrank = comm_ptr->rank;
+// 		char buffer[8];
+// 		char file[64] = "posix-recv_";
+// 		// int myrank = comm->rank;
 
-		sprintf(buffer, "%d_", myrank);
-		strcat(file, buffer);
-		sprintf(buffer, "%d", dataSz);
-		strcat(file, buffer);
-		strcat(file, ".log");
-		fp = fopen(file, "a");
-		if (PAPI_start_counters(events, 2) != PAPI_OK) {
-			mpi_errno = MPI_ERR_OTHER;
-			// errLine = __LINE__;
-			goto fn_exit;
-		}
-	}
-#endif
+// 		sprintf(buffer, "%d_", myrank);
+// 		strcat(file, buffer);
+// 		sprintf(buffer, "%d", dataSz);
+// 		strcat(file, buffer);
+// 		strcat(file, ".log");
+// 		fp = fopen(file, "a");
+// 		if (PAPI_start_counters(events, 2) != PAPI_OK) {
+// 			mpi_errno = MPI_ERR_OTHER;
+// 			// errLine = __LINE__;
+// 			goto fn_exit;
+// 		}
+// 	}
+// #endif
 	mpi_errno = MPID_Wait(request_ptr, MPI_STATUS_IGNORE);
-#ifdef TEST_MISS
-	if (tag == 777) {
-		long long values[2];
-		if (PAPI_stop_counters(values, 2) != PAPI_OK) {
-			mpi_errno = MPI_ERR_OTHER;
-			// errLine = __LINE__;
-			goto fn_exit;
-		}
-		fprintf(fp, "%lld %lld\n", values[0], values[1]);
-		fclose(fp);
-	}
-#endif
+// #ifdef TEST_MISS
+// 	if (tag == 777) {
+// 		long long values[2];
+// 		if (PAPI_stop_counters(values, 2) != PAPI_OK) {
+// 			mpi_errno = MPI_ERR_OTHER;
+// 			// errLine = __LINE__;
+// 			goto fn_exit;
+// 		}
+// 		fprintf(fp, "%lld %lld\n", values[0], values[1]);
+// 		fclose(fp);
+// 	}
+// #endif
 #ifdef POSIX_PROFILE_MISS
 	if (tag == 777) {
 		extern long long recvvalues[2];

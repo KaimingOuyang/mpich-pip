@@ -78,9 +78,39 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 // #ifdef XPMEM_PROFILE
 // 	systime -= MPI_Wtime();
 // #endif
+#ifdef XPMEM_WO_SYSCALL
+	static ackHeader recheader = {.dataSz = -1, .dtHandler = -1, .pageSz = -1, .offset = -1};
+	static void *recdatabuf = NULL;
+	static void *recrealbuf = NULL;
+	static xpmem_apid_t recapid = -1;
+	if (recheader.dtHandler == header.dtHandler) {
+		// printf("Rank: %d, recv the same handler size= %lld, handler= %lld\n", comm->rank, header.dataSz, header.dtHandler);
+		// fflush(stdout);
+		dataBuffer = recdatabuf;
+		realBuffer = recrealbuf;
+		apid = recapid;
+	} else {
+#ifndef XPMEM_SYSCALL
+		mpi_errno = xpmemAttachMem(&header, &dataBuffer, &realBuffer, &apid);
+		if (mpi_errno != MPI_SUCCESS) {
+			errLine = __LINE__;
+			goto fn_fail;
+		}
+#endif
+		recheader = header;
+		recdatabuf = dataBuffer;
+		recrealbuf = realBuffer;
+		recapid = apid;
+	}
+#else
 #ifndef XPMEM_SYSCALL
 	// printf("define XPMEM_SYSCALL\n");
 	mpi_errno = xpmemAttachMem(&header, &dataBuffer, &realBuffer, &apid);
+	if (mpi_errno != MPI_SUCCESS) {
+		errLine = __LINE__;
+		goto fn_fail;
+	}
+#endif
 #endif
 // #ifdef XPMEM_PROFILE
 // 	systime += MPI_Wtime();
@@ -89,10 +119,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 	// time = MPI_Wtime() - time;
 	// printf("xpmemAttachMem time= %.6lf\n", time);
 	// fflush(stdout);
-	if (mpi_errno != MPI_SUCCESS) {
-		errLine = __LINE__;
-		goto fn_fail;
-	}
+
 
 	/* Copy data by dataSz bytes */
 	// time = MPI_Wtime();
@@ -100,21 +127,15 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 // 	copytime -= MPI_Wtime();
 // #endif
 #ifdef XPMEM_PROFILE_MISS
-	int events[2] = {PAPI_L3_TCM, PAPI_TLB_DM};
-	long long values[2];
-	int myrank = comm->rank;
-	char buffer[8];
-	char file[64] = "xpmem-recv_";
-	// int myrank = comm->rank;
-
-	sprintf(buffer, "%d_", myrank);
-	strcat(file, buffer);
-	sprintf(buffer, "%lld", header.dataSz);
-	strcat(file, buffer);
-	strcat(file, ".log");
-	FILE *fp = fopen(file, "a");
-	if (PAPI_start_counters(events, 2) != PAPI_OK) {
-		mpi_errno = MPI_ERR_OTHER;
+#ifdef TLB_MISS
+	int events[2] = {PAPI_PRF_DM, PAPI_TLB_DM};
+#else
+	int events[2] = {PAPI_PRF_DM, PAPI_L3_TCM};
+#endif
+	long long values[2] = {0, 0};
+	FILE *fp;
+	mpi_errno = papiStart(events, "xpmem-recv_", comm->rank, header.dataSz, &fp);
+	if (mpi_errno != MPI_SUCCESS) {
 		errLine = __LINE__;
 		goto fn_fail;
 	}
@@ -122,7 +143,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 
 #ifndef XPMEM_MEMCOPY
 	// printf("define XPMEM_MEMCOPY\n");
-	MPIR_Memcpy(buf, dataBuffer, header.dataSz);
+	memcpy(buf, dataBuffer, header.dataSz);
 #endif
 
 #ifdef XPMEM_PROFILE_MISS
@@ -148,14 +169,16 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 		status->MPI_SOURCE = rank;
 		status->MPI_TAG = tag;
 	}
-#ifndef XPMEM_SYSCALL
-	/* Release resources */
-	mpi_errno = xpmemDetachMem(realBuffer, &apid);
-	if (mpi_errno != MPI_SUCCESS) {
-		errLine = __LINE__;
-		goto fn_fail;
-	}
-#endif
+// #ifndef XPMEM_WO_SYSCALL
+// #ifndef XPMEM_SYSCALL
+// 	/* Release resources */
+// 	mpi_errno = xpmemDetachMem(realBuffer, &apid);
+// 	if (mpi_errno != MPI_SUCCESS) {
+// 		errLine = __LINE__;
+// 		goto fn_fail;
+// 	}
+// #endif
+// #endif
 
 #ifndef XPMEM_SYNC
 	int ack;

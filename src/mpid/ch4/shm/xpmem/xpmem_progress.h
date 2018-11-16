@@ -38,7 +38,7 @@ fn_exit:
 
 
 MPL_STATIC_INLINE_PREFIX int xpmemExposeMem(const void *buf, size_t dataSz, ackHeader *header) {
-	void *permitValue = (void*) 00666;
+	void *permitValue = (void*) 0600;
 	long long lowAddr = PAGE_ALIGN_ADDR_LOW((long long) buf);
 	long long highAddr = PAGE_ALIGN_ADDR_HIGH((long long) buf + dataSz);
 	size_t newSize = highAddr - lowAddr;
@@ -50,6 +50,7 @@ MPL_STATIC_INLINE_PREFIX int xpmemExposeMem(const void *buf, size_t dataSz, ackH
 	header->pageSz = (__s64) newSize;
 	header->offset = offset;
 	// printf("lowAddr=%llX, highAddr=%llX, newSize=%lld, offset=%llX, dataSz=%lld\n", lowAddr, highAddr, newSize, offset, dataSz);
+	// fflush(stdout);
 #ifndef XPMEM_SYSCALL
 	header->dtHandler = xpmem_make((void*) lowAddr, newSize, XPMEM_PERMIT_MODE, permitValue);
 
@@ -71,35 +72,35 @@ MPL_STATIC_INLINE_PREFIX int xpmemAttachMem(ackHeader *header, void **dtbuf, voi
 	int mpi_errno = MPI_SUCCESS;
 	int errLine;
 	/* Attach memory page */
-	void *permitValue = (void*) 00666;
+	// void *permitValue = (void*) 0600;
 	struct xpmem_addr addr;
 	char *realdata;
-	do {
-		*apid = xpmem_get(header->dtHandler, XPMEM_RDWR, XPMEM_PERMIT_MODE, permitValue);
+	// do {
+	*apid = xpmem_get(header->dtHandler, XPMEM_RDWR, XPMEM_PERMIT_MODE, NULL);
 
-		if (*apid == -1) {
-			mpi_errno = MPI_ERR_OTHER;
-			errLine = __LINE__;
-			goto fn_fail;
-		}
-		// printf("Get apid: %lld\n", *apid);
+	if (*apid == -1) {
+		mpi_errno = MPI_ERR_OTHER;
+		errLine = __LINE__;
+		goto fn_fail;
+	}
+	// printf("Get apid: %lld\n", *apid);
+	// fflush(stdout);
+	addr.apid = *apid;
+	addr.offset = 0;
 
-		addr.apid = *apid;
-		addr.offset = 0;
-
-		int times = 0;
-		// do {
-		realdata = (char*) xpmem_attach(addr, header->pageSz, NULL);
-		// times++;
-		// } while ((long long)realdata == -1L && times < 100000);
-		if ((long long)realdata == -1L) {
-			mpi_errno = xpmem_release(*apid);
-			if (mpi_errno == -1) {
-				errLine = __LINE__;
-				goto fn_fail;
-			}
-		}
-	} while ((long long)realdata == -1L);
+	// int times = 0;
+	// do {
+	realdata = (char*) xpmem_attach(addr, header->pageSz, NULL);
+	// times++;
+	// } while ((long long)realdata == -1L && times < 100000);
+	// if ((long long)realdata == -1L) {
+	// 	mpi_errno = xpmem_release(*apid);
+	// 	if (mpi_errno == -1) {
+	// 		errLine = __LINE__;
+	// 		goto fn_fail;
+	// 	}
+	// }
+	// } while ((long long)realdata == -1L);
 	if ((long long)realdata == -1L) {
 		mpi_errno = MPI_ERR_OTHER;
 		errLine = __LINE__;
@@ -155,4 +156,33 @@ fn_exit:
 	return mpi_errno;
 }
 
+
+#ifdef XPMEM_PROFILE_MISS
+MPL_STATIC_INLINE_PREFIX int papiStart(int events[], char *prefix, int myrank, int dataSz, FILE **fp) {
+	char buffer[8];
+	char file[64];
+	int errLine, mpi_errno = MPI_SUCCESS;
+
+	strcpy(file, prefix);
+	sprintf(buffer, "%d_", myrank);
+	strcat(file, buffer);
+	sprintf(buffer, "%ld", dataSz);
+	strcat(file, buffer);
+	strcat(file, ".log");
+	*fp = fopen(file, "a");
+	if (PAPI_start_counters(events, 2) != PAPI_OK) {
+		mpi_errno = MPI_ERR_OTHER;
+		errLine = __LINE__;
+		goto fn_fail;
+	}
+	goto fn_exit;
+fn_fail:
+	printf("[%s-%d] Error with mpi_errno (%d)\n", __FUNCTION__, errLine, mpi_errno);
+fn_exit:
+	return mpi_errno;
+}
 #endif
+
+#endif
+
+
