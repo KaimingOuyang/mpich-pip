@@ -2,7 +2,17 @@
 #define XPMEM_PROGRESS_INCLUDED
 
 #include <xpmem.h>
+#ifdef XPMEM_PROFILE_MISS
 #include <papi.h>
+#endif
+
+typedef struct ackHeader {
+	__s64 dataSz;
+	xpmem_segid_t dtHandler;
+	__s64 pageSz;
+	__s64 offset;
+} ackHeader;
+
 // #define XPMEM_PROFILE
 #define PAGE_SIZE (1L << 12)
 #define PAGE_MASK (PAGE_SIZE - 1L)
