@@ -134,7 +134,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 #endif
 	long long values[2] = {0, 0};
 	FILE *fp;
-	mpi_errno = papiStart(events, "xpmem-recv_", comm->rank, header.dataSz, &fp);
+	mpi_errno = papiStart(events, "XPMEM-recv_", comm->rank, header.dataSz, &fp);
 	if (mpi_errno != MPI_SUCCESS) {
 		errLine = __LINE__;
 		goto fn_fail;

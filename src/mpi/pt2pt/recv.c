@@ -186,7 +186,7 @@ int MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag,
 		int dataSz = MPIR_Datatype_get_basic_size(datatype) * count;
 		int myrank = comm_ptr->rank;
 		char buffer[8];
-		char file[64] = "posix-recv_";
+		char file[64] = "POSIX-recv_";
 		// int myrank = comm->rank;
 
 		sprintf(buffer, "%d_", myrank);

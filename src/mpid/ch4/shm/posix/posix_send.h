@@ -150,7 +150,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_mpi_send(const void *buf, MPI_Aint coun
 #endif
 				int myrank = comm->rank;
 				char buffer[8];
-				char file[64] = "posix-send_";
+				char file[64] = "POSIX-send_";
 				// int myrank = comm->rank;
 				int dataSz = MPIR_Datatype_get_basic_size(datatype) * count;
 				sprintf(buffer, "%d_", myrank);

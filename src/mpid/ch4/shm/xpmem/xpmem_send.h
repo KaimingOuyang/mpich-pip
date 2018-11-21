@@ -78,20 +78,24 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_send(const void *buf, MPI_Aint coun
 		goto fn_fail;
 	}
 #endif
-// #ifdef XPMEM_PROFILE
-// 	systime += MPI_Wtime();
-// #endif
-	// printf("xpmemExposeMem Handler= %llX\n", header.dtHandler);
-	// fflush(stdout);
-	// time = MPI_Wtime() - time;
-	// printf("xpmemExposeMem time= %.6lf\n", time);
-	// fflush(stdout);
 
-	// printf("Sender header.dtHandler %llX\n", header.dtHandler);
-	// fflush(stdout);
-// #ifdef XPMEM_PROFILE
-// 	synctime -= MPI_Wtime();
-// #endif
+
+#ifdef XPMEM_PROFILE_MISS
+	int myrank = comm->rank;
+	char buffer[8];
+	char file[64] = "XPMEM-send_";
+
+	sprintf(buffer, "%d_", myrank);
+	strcat(file, buffer);
+	sprintf(buffer, "%d", dataSz);
+	strcat(file, buffer);
+	strcat(file, ".log");
+	FILE *fp = fopen(file, "a");
+	fprintf(fp, "0 0\n");
+	fclose(fp);
+#endif
+
+
 #ifndef XPMEM_SYNC
 	mpi_errno = MPIDI_POSIX_mpi_send(&header.dataSz, 4, MPI_LONG_LONG, rank, tag, comm, context_offset, NULL, request);
 	if (mpi_errno != MPI_SUCCESS) {

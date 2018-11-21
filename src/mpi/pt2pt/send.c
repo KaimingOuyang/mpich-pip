@@ -178,7 +178,7 @@ int MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest, int ta
 		int dataSz = MPIR_Datatype_get_basic_size(datatype) * count;
 		int myrank = comm_ptr->rank;
 		char buffer[8];
-		char file[64] = "posix-send_";
+		char file[64] = "POSIX-send_";
 		// int myrank = comm->rank;
 
 		sprintf(buffer, "%d_", myrank);
