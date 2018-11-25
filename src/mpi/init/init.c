@@ -132,6 +132,8 @@ int MPI_Init(int *argc, char ***argv) {
 		fprintf(stderr, "PAPI Init error: %d\n", retval);
 		exit(1);
 	}
+	printf("init papi\n");
+	fflush(stdout);
 #endif
 	MPIR_FUNC_TERSE_INIT_STATE_DECL(MPID_STATE_MPI_INIT);
 
