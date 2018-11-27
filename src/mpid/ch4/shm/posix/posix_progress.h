@@ -13,6 +13,7 @@
 
 #include "posix_impl.h"
 
+
 /* ----------------------------------------------------- */
 /* MPIDI_POSIX_progress_recv                     */
 /* ----------------------------------------------------- */
@@ -166,27 +167,84 @@ match_l: {
 					if (send_buffer) {
 #ifdef POSIX_PROFILE_MISS
 						extern long long recvvalues[2];
+						long long values[4] = {0, 0, 0, 0};
+						int sumv[2];
+#ifdef POSIX_COMBINE_MISS
+						int EventSet = PAPI_NULL;
+						int *events = NULL;
+
+						int retval;
+						if ((retval = PAPI_create_eventset(&EventSet)) != PAPI_OK) {
+							fprintf(stderr, "PAPI_create_eventset error %d\n", retval);
+							exit(1);
+						}
+						retval = PAPI_add_named_event( EventSet, "PAGE_WALKER_LOADS:DTLB_L1" );
+						if ( retval != PAPI_OK ) {
+							printf("Error : %s\n", PAPI_strerror(retval));
+							return -1;
+						}
+
+						retval = PAPI_add_named_event( EventSet, "PAGE_WALKER_LOADS:DTLB_L2" );
+						if ( retval != PAPI_OK ) {
+							printf("Error : %s\n", PAPI_strerror(retval));
+							return -1;
+						}
+
+						retval = PAPI_add_named_event( EventSet, "PAGE_WALKER_LOADS:DTLB_MEMORY" );
+						if ( retval != PAPI_OK ) {
+							printf("Error : %s\n", PAPI_strerror(retval));
+							return -1;
+						}
+
+						retval = PAPI_add_named_event( EventSet, "OFFCORE_RESPONSE_0:L3_MISS" );
+						if ( retval != PAPI_OK ) {
+							printf("Error : %s\n", PAPI_strerror(retval));
+							return -1;
+						}
+						if (PAPI_start(EventSet) != PAPI_OK) {
+							printf("Error PAPI_start\n");
+							return -1;
+						}
+#else
 #ifdef TLB_MISS
 						int events[2] = {PAPI_PRF_DM, PAPI_TLB_DM};
 #else
 						int events[2] = {PAPI_PRF_DM, PAPI_L3_TCM};
 #endif
-						long long tmp[2];
+
 						if (PAPI_start_counters(events, 2) != PAPI_OK) {
 							mpi_errno = MPI_ERR_OTHER;
 							// errLine = __LINE__;
 							goto fn_exit;
 						}
 #endif
+
+#endif
 						MPIR_Memcpy(recv_buffer, (void *) send_buffer, data_sz);
 #ifdef POSIX_PROFILE_MISS
-						if (PAPI_stop_counters(tmp, 2) != PAPI_OK) {
+#ifdef POSIX_COMBINE_MISS
+						int errLine;
+						if ((retval = PAPI_stop(EventSet, values)) != PAPI_OK) {
+							printf("Error : %s\n", PAPI_strerror(retval));
+							errLine = __LINE__;
+							goto fn_fail;
+						}
+						sumv[0] = values[0] + values[1] + values[2];
+						// sumv[0] = values[0];
+						sumv[1] = values[3];
+						PAPI_cleanup_eventset(EventSet);
+						PAPI_destroy_eventset(&EventSet);
+#else
+						if (PAPI_stop_counters(values, 2) != PAPI_OK) {
 							mpi_errno = MPI_ERR_OTHER;
 							// errLine = __LINE__;
 							goto fn_exit;
 						}
-						recvvalues[0] += tmp[0];
-						recvvalues[1] += tmp[1];
+						sumv[0] = values[0];
+						sumv[1] = values[1];
+#endif
+						recvvalues[0] += sumv[0];
+						recvvalues[1] += sumv[1];
 #endif
 					}
 				MPIDI_POSIX_REQUEST(req)->data_sz -= data_sz;
@@ -235,28 +293,84 @@ match_l: {
 				MPIDI_POSIX_REQUEST(rreq)->user_buf = (char *) MPL_malloc(data_sz, MPL_MEM_SHM);
 #ifdef POSIX_PROFILE_MISS
 				extern long long recvvalues[2];
+				long long values[4] = {0, 0, 0, 0};
+				int sumv[2];
+#ifdef POSIX_COMBINE_MISS
+				int EventSet = PAPI_NULL;
+				int *events = NULL;
+
+				int retval;
+				if ((retval = PAPI_create_eventset(&EventSet)) != PAPI_OK) {
+					fprintf(stderr, "PAPI_create_eventset error %d\n", retval);
+					exit(1);
+				}
+				retval = PAPI_add_named_event( EventSet, "PAGE_WALKER_LOADS:DTLB_L1" );
+				if ( retval != PAPI_OK ) {
+					printf("Error : %s\n", PAPI_strerror(retval));
+					return -1;
+				}
+
+				retval = PAPI_add_named_event( EventSet, "PAGE_WALKER_LOADS:DTLB_L2" );
+				if ( retval != PAPI_OK ) {
+					printf("Error : %s\n", PAPI_strerror(retval));
+					return -1;
+				}
+
+				retval = PAPI_add_named_event( EventSet, "PAGE_WALKER_LOADS:DTLB_MEMORY" );
+				if ( retval != PAPI_OK ) {
+					printf("Error : %s\n", PAPI_strerror(retval));
+					return -1;
+				}
+
+				retval = PAPI_add_named_event( EventSet, "OFFCORE_RESPONSE_0:L3_MISS" );
+				if ( retval != PAPI_OK ) {
+					printf("Error : %s\n", PAPI_strerror(retval));
+					return -1;
+				}
+				if (PAPI_start(EventSet) != PAPI_OK) {
+					printf("Error PAPI_start\n");
+					return -1;
+				}
+
+#else
 #ifdef TLB_MISS
 				int events[2] = {PAPI_PRF_DM, PAPI_TLB_DM};
 #else
 				int events[2] = {PAPI_PRF_DM, PAPI_L3_TCM};
 #endif
-				long long tmp[2];
 				if (PAPI_start_counters(events, 2) != PAPI_OK) {
 					mpi_errno = MPI_ERR_OTHER;
 					// errLine = __LINE__;
 					goto fn_exit;
 				}
 #endif
+
+#endif
 				MPIR_Memcpy(MPIDI_POSIX_REQUEST(rreq)->user_buf, (void *) cell->pkt.mpich.p.payload,
 				            data_sz);
 #ifdef POSIX_PROFILE_MISS
-				if (PAPI_stop_counters(tmp, 2) != PAPI_OK) {
+#ifdef POSIX_COMBINE_MISS
+				int errLine;
+				if ((retval = PAPI_stop(EventSet, values)) != PAPI_OK) {
+					printf("Error : %s\n", PAPI_strerror(retval));
+					errLine = __LINE__;
+					// goto fn_fail;
+				}
+				sumv[0] = values[0] + values[1] + values[2];
+				sumv[1] = values[3];
+				PAPI_cleanup_eventset(EventSet);
+				PAPI_destroy_eventset(&EventSet);
+#else
+				if (PAPI_stop_counters(values, 2) != PAPI_OK) {
 					mpi_errno = MPI_ERR_OTHER;
 					// errLine = __LINE__;
 					goto fn_exit;
 				}
-				recvvalues[0] += tmp[0];
-				recvvalues[1] += tmp[1];
+				sumv[0] = values[0];
+				sumv[1] = values[1];
+#endif
+				recvvalues[0] += sumv[0];
+				recvvalues[1] += sumv[1];
 #endif
 			} else {
 				MPIDI_POSIX_REQUEST(rreq)->user_buf = NULL;
@@ -372,27 +486,84 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking, int *comple
 					/* contig */
 #ifdef POSIX_PROFILE_MISS
 					extern long long sendvalues[2];
+					long long values[4] = {0, 0, 0, 0};
+					int sumv[2];
+#ifdef POSIX_COMBINE_MISS
+					int EventSet = PAPI_NULL;
+					int *events = NULL;
+
+					int retval;
+					if ((retval = PAPI_create_eventset(&EventSet)) != PAPI_OK) {
+						fprintf(stderr, "PAPI_create_eventset error %d\n", retval);
+						exit(1);
+					}
+					retval = PAPI_add_named_event( EventSet, "PAGE_WALKER_LOADS:DTLB_L1" );
+					if ( retval != PAPI_OK ) {
+						printf("Error : %s\n", PAPI_strerror(retval));
+						return -1;
+					}
+
+					retval = PAPI_add_named_event( EventSet, "PAGE_WALKER_LOADS:DTLB_L2" );
+					if ( retval != PAPI_OK ) {
+						printf("Error : %s\n", PAPI_strerror(retval));
+						return -1;
+					}
+
+					retval = PAPI_add_named_event( EventSet, "PAGE_WALKER_LOADS:DTLB_MEMORY" );
+					if ( retval != PAPI_OK ) {
+						printf("Error : %s\n", PAPI_strerror(retval));
+						return -1;
+					}
+
+					retval = PAPI_add_named_event( EventSet, "OFFCORE_RESPONSE_0:L3_MISS" );
+					if ( retval != PAPI_OK ) {
+						printf("Error : %s\n", PAPI_strerror(retval));
+						return -1;
+					}
+					if (PAPI_start(EventSet) != PAPI_OK) {
+						printf("Error PAPI_start\n");
+						return -1;
+					}
+
+#else
 #ifdef TLB_MISS
 					int events[2] = {PAPI_PRF_DM, PAPI_TLB_DM};
 #else
 					int events[2] = {PAPI_PRF_DM, PAPI_L3_TCM};
 #endif
-					long long tmp[2];
+
 					if (PAPI_start_counters(events, 2) != PAPI_OK) {
 						mpi_errno = MPI_ERR_OTHER;
 						// errLine = __LINE__;
 						goto fn_exit;
 					}
 #endif
+
+#endif
 					MPIR_Memcpy((void *) recv_buffer, MPIDI_POSIX_REQUEST(sreq)->user_buf, data_sz);
 #ifdef POSIX_PROFILE_MISS
-					if (PAPI_stop_counters(tmp, 2) != PAPI_OK) {
+#ifdef POSIX_COMBINE_MISS
+					int errLine;
+					if ((retval = PAPI_stop(EventSet, values)) != PAPI_OK) {
+						printf("Error : %s\n", PAPI_strerror(retval));
+						errLine = __LINE__;
+						// goto fn_fail;
+					}
+					sumv[0] = values[0] + values[1] + values[2];
+					sumv[1] = values[3];
+					PAPI_cleanup_eventset(EventSet);
+					PAPI_destroy_eventset(&EventSet);
+#else
+					if (PAPI_stop_counters(values, 2) != PAPI_OK) {
 						mpi_errno = MPI_ERR_OTHER;
 						// errLine = __LINE__;
 						goto fn_exit;
 					}
-					sendvalues[0] += tmp[0];
-					sendvalues[1] += tmp[1];
+					sumv[0] = values[0];
+					sumv[1] = values[1];
+#endif
+					sendvalues[0] += sumv[0];
+					sendvalues[1] += sumv[1];
 #endif
 				}
 
@@ -424,30 +595,84 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking, int *comple
 				/* contig */
 #ifdef POSIX_PROFILE_MISS
 				extern long long sendvalues[2];
+				long long values[4] = {0, 0, 0, 0};
+				int sumv[2];
+#ifdef POSIX_COMBINE_MISS
+				int EventSet = PAPI_NULL;
+				int *events = NULL;
+
+				int retval;
+				if ((retval = PAPI_create_eventset(&EventSet)) != PAPI_OK) {
+					fprintf(stderr, "PAPI_create_eventset error %d\n", retval);
+					exit(1);
+				}
+				retval = PAPI_add_named_event( EventSet, "PAGE_WALKER_LOADS:DTLB_L1" );
+				if ( retval != PAPI_OK ) {
+					printf("Error : %s\n", PAPI_strerror(retval));
+					return -1;
+				}
+
+				retval = PAPI_add_named_event( EventSet, "PAGE_WALKER_LOADS:DTLB_L2" );
+				if ( retval != PAPI_OK ) {
+					printf("Error : %s\n", PAPI_strerror(retval));
+					return -1;
+				}
+
+				retval = PAPI_add_named_event( EventSet, "PAGE_WALKER_LOADS:DTLB_MEMORY" );
+				if ( retval != PAPI_OK ) {
+					printf("Error : %s\n", PAPI_strerror(retval));
+					return -1;
+				}
+
+				retval = PAPI_add_named_event( EventSet, "OFFCORE_RESPONSE_0:L3_MISS" );
+				if ( retval != PAPI_OK ) {
+					printf("Error : %s\n", PAPI_strerror(retval));
+					return -1;
+				}
+				if (PAPI_start(EventSet) != PAPI_OK) {
+					printf("Error PAPI_start\n");
+					return -1;
+				}
+#else
 #ifdef TLB_MISS
 				int events[2] = {PAPI_PRF_DM, PAPI_TLB_DM};
 #else
 				int events[2] = {PAPI_PRF_DM, PAPI_L3_TCM};
 #endif
-				long long tmp[2];
+
 				// int errLine;
 				if (PAPI_start_counters(events, 2) != PAPI_OK) {
 					mpi_errno = MPI_ERR_OTHER;
 					// errLine = __LINE__;
 					goto fn_exit;
 				}
+#endif
 //              profs[myrank].copy -= MPI_Wtime();
 #endif
 				MPIR_Memcpy((void *) recv_buffer, MPIDI_POSIX_REQUEST(sreq)->user_buf,
 				            MPIDI_POSIX_EAGER_THRESHOLD);
 #ifdef POSIX_PROFILE_MISS
-				if (PAPI_stop_counters(tmp, 2) != PAPI_OK) {
+#ifdef POSIX_COMBINE_MISS
+				int errLine;
+				if ((retval = PAPI_stop(EventSet, values)) != PAPI_OK) {
+					printf("Error : %s\n", PAPI_strerror(retval));
+					errLine = __LINE__;
+				}
+				sumv[0] = values[0] + values[1] + values[2];
+				sumv[1] = values[3];
+				PAPI_cleanup_eventset(EventSet);
+				PAPI_destroy_eventset(&EventSet);
+#else
+				if (PAPI_stop_counters(values, 2) != PAPI_OK) {
 					mpi_errno = MPI_ERR_OTHER;
 					// errLine = __LINE__;
 					goto fn_exit;
 				}
-				sendvalues[0] += tmp[0];
-				sendvalues[1] += tmp[1];
+				sumv[0] = values[0];
+				sumv[1] = values[1];
+#endif
+				sendvalues[0] += sumv[0];
+				sendvalues[1] += sumv[1];
 #endif
 // #ifdef POSIX_PROFILE
 //              profs[myrank].copy -= MPI_Wtime();

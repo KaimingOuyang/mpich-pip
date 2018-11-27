@@ -22,6 +22,43 @@
  * escape earlier than this check. */
 #define MPIDI_POSIX_fbox_is_full(pbox_) (OPA_load_acquire_int(&(pbox_)->flag.value))
 
+#ifdef POSIX_PROFILE_MISS
+#include <papi.h>
+#undef FCNAME
+#define FCNAME MPL_QUOTE(papiStart)
+MPL_STATIC_INLINE_PREFIX int papiStart(int *events, char *prefix, int myrank, int dataSz, FILE **fp, int *eventset) {
+	char buffer[8];
+	char file[64];
+	int errLine, mpi_errno = MPI_SUCCESS;
+
+	strcpy(file, prefix);
+	sprintf(buffer, "%d_", myrank);
+	strcat(file, buffer);
+	sprintf(buffer, "%d", dataSz);
+	strcat(file, buffer);
+	strcat(file, ".log");
+	*fp = fopen(file, "a");
+	if (events != NULL) {
+		if (PAPI_start_counters(events, 2) != PAPI_OK) {
+			mpi_errno = MPI_ERR_OTHER;
+			errLine = __LINE__;
+			goto fn_fail;
+		}
+	} else {
+		if (PAPI_start(*eventset) != PAPI_OK) {
+			printf("Error PAPI_start\n");
+			exit(1);
+		}
+	}
+
+	goto fn_exit;
+fn_fail:
+	printf("[%s-%d] Error with mpi_errno (%d)\n", __FUNCTION__, errLine, mpi_errno);
+fn_exit:
+	return mpi_errno;
+}
+#endif
+
 /* ---------------------------------------------------- */
 /* MPIDI_POSIX_do_isend                                             */
 /* ---------------------------------------------------- */
@@ -117,79 +154,82 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_mpi_send(const void *buf, MPI_Aint coun
 			cell->pkt.mpich.datalen = data_sz;
 			cell->pkt.mpich.type = MPIDI_POSIX_TYPEEAGER;
 
-// #ifdef TEST_MISS
-// 			FILE *fp;
-// 			if (tag == 777) {
-// 				int events[2] = {PAPI_L3_TCM, PAPI_TLB_DM};
-// 				int myrank = comm->rank;
-// 				char buffer[8];
-// 				char file[64] = "posix-send_";
-// 				// int myrank = comm->rank;
-// 				int dataSz = MPIR_Datatype_get_basic_size(datatype) * count;
-// 				sprintf(buffer, "%d_", myrank);
-// 				strcat(file, buffer);
-// 				sprintf(buffer, "%lld", dataSz);
-// 				strcat(file, buffer);
-// 				strcat(file, ".log");
-// 				fp = fopen(file, "a");
-// 				if (PAPI_start_counters(events, 2) != PAPI_OK) {
-// 					mpi_errno = MPI_ERR_OTHER;
-// 					// errLine = __LINE__;
-// 					goto fn_exit;
-// 				}
-// 			}
-// #endif
 
 #ifdef POSIX_PROFILE_MISS
 			FILE *fp;
+			long long sumv[2] = {0, 0};
+			long long values[4] = {0, 0, 0, 0};
+			int EventSet = PAPI_NULL;
+			int retval;
 			if (tag == 777) {
+#ifdef POSIX_COMBINE_MISS
+				int *events = NULL;
+
+				int retval;
+				if ((retval = PAPI_create_eventset(&EventSet)) != PAPI_OK) {
+					fprintf(stderr, "PAPI_create_eventset error %d\n", retval);
+					exit(1);
+				}
+				retval = PAPI_add_named_event( EventSet, "PAGE_WALKER_LOADS:DTLB_L1" );
+				if ( retval != PAPI_OK ) {
+					printf("Error : %s\n", PAPI_strerror(retval));
+					return -1;
+				}
+
+				retval = PAPI_add_named_event( EventSet, "PAGE_WALKER_LOADS:DTLB_L2" );
+				if ( retval != PAPI_OK ) {
+					printf("Error : %s\n", PAPI_strerror(retval));
+					return -1;
+				}
+
+				retval = PAPI_add_named_event( EventSet, "PAGE_WALKER_LOADS:DTLB_MEMORY" );
+				if ( retval != PAPI_OK ) {
+					printf("Error : %s\n", PAPI_strerror(retval));
+					return -1;
+				}
+
+				retval = PAPI_add_named_event( EventSet, "OFFCORE_RESPONSE_0:L3_MISS" );
+				if ( retval != PAPI_OK ) {
+					printf("Error : %s\n", PAPI_strerror(retval));
+					return -1;
+				}
+#else
 #ifdef TLB_MISS
 				int events[2] = {PAPI_PRF_DM, PAPI_TLB_DM};
 #else
 				int events[2] = {PAPI_PRF_DM, PAPI_L3_TCM};
 #endif
-				int myrank = comm->rank;
-				char buffer[8];
-				char file[64] = "POSIX-send_";
-				// int myrank = comm->rank;
+#endif
 				int dataSz = MPIR_Datatype_get_basic_size(datatype) * count;
-				sprintf(buffer, "%d_", myrank);
-				strcat(file, buffer);
-				sprintf(buffer, "%lld", dataSz);
-				strcat(file, buffer);
-				strcat(file, ".log");
-				fp = fopen(file, "a");
-				if (PAPI_start_counters(events, 2) != PAPI_OK) {
-					mpi_errno = MPI_ERR_OTHER;
-					// errLine = __LINE__;
-					goto fn_exit;
-				}
+				mpi_errno = papiStart(events, "POSIX-send_", comm->rank, dataSz, &fp, &EventSet);
 			}
 
 #endif
 			MPIR_Memcpy((void *) cell->pkt.mpich.p.payload, (char *) buf + dt_true_lb, data_sz);
 #ifdef POSIX_PROFILE_MISS
 			if (tag == 777) {
-				long long values[2];
-				if (PAPI_stop_counters(values, 2) != PAPI_OK) {
-					mpi_errno = MPI_ERR_OTHER;
-					// errLine = __LINE__;
-					goto fn_exit;
-				}
-				fprintf(fp, "%lld %lld\n", values[0], values[1]);
-				fclose(fp);
-			}
-#endif
+#ifdef POSIX_COMBINE_MISS
+				int errLine;
+				if ((retval = PAPI_stop(EventSet, values)) != PAPI_OK) {
+					printf("Error : %s\n", PAPI_strerror(retval));
+					errLine = __LINE__;
 
-#ifdef TEST_MISS
-			if (tag == 777) {
-				long long values[2];
+				}
+				sumv[0] = values[0] + values[1] + values[2];
+				// sumv[0] = values[0];
+				sumv[1] = values[3];
+				PAPI_cleanup_eventset(EventSet);
+				PAPI_destroy_eventset(&EventSet);
+#else
 				if (PAPI_stop_counters(values, 2) != PAPI_OK) {
 					mpi_errno = MPI_ERR_OTHER;
-					// errLine = __LINE__;
-					goto fn_exit;
+					errLine = __LINE__;
+					goto fn_fail;
 				}
-				fprintf(fp, "%lld %lld\n", values[0], values[1]);
+				sumv[0] = values[0];
+				sumv[1] = values[1];
+#endif
+				fprintf(fp, "%lld %lld\n", sumv[0], sumv[1]);
 				fclose(fp);
 			}
 #endif
