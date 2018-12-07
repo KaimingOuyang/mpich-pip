@@ -11,6 +11,7 @@ typedef struct ackHeader {
 	xpmem_segid_t dtHandler;
 	__s64 pageSz;
 	__s64 offset;
+	__s64 attoffset;
 } ackHeader;
 
 // #define XPMEM_PROFILE
@@ -48,6 +49,7 @@ fn_exit:
 
 
 MPL_STATIC_INLINE_PREFIX int xpmemExposeMem(const void *buf, size_t dataSz, ackHeader *header) {
+	extern xpmem_segid_t dtHandler;
 	void *permitValue = (void*) 0600;
 	long long lowAddr = PAGE_ALIGN_ADDR_LOW((long long) buf);
 	long long highAddr = PAGE_ALIGN_ADDR_HIGH((long long) buf + dataSz);
@@ -59,17 +61,10 @@ MPL_STATIC_INLINE_PREFIX int xpmemExposeMem(const void *buf, size_t dataSz, ackH
 	header->dataSz = (__s64) dataSz;
 	header->pageSz = (__s64) newSize;
 	header->offset = offset;
+	header->attoffset = (long long) lowAddr;
+	header->dtHandler = dtHandler;
 	// printf("lowAddr=%llX, highAddr=%llX, newSize=%lld, offset=%llX, dataSz=%lld\n", lowAddr, highAddr, newSize, offset, dataSz);
 	// fflush(stdout);
-#ifndef XPMEM_SYSCALL
-	header->dtHandler = xpmem_make((void*) lowAddr, newSize, XPMEM_PERMIT_MODE, permitValue);
-
-	if (header->dtHandler == -1) {
-		mpi_errno = MPI_ERR_UNKNOWN;
-		errLine = __LINE__;
-		goto fn_fail;
-	}
-#endif
 	goto fn_exit;
 fn_fail:
 	printf("[%s-%d] Error with mpi_errno (%d)\n", __FUNCTION__, errLine, mpi_errno);
@@ -96,7 +91,7 @@ MPL_STATIC_INLINE_PREFIX int xpmemAttachMem(ackHeader *header, void **dtbuf, voi
 	// printf("Get apid: %lld\n", *apid);
 	// fflush(stdout);
 	addr.apid = *apid;
-	addr.offset = 0;
+	addr.offset = header->attoffset;
 
 	// int times = 0;
 	// do {

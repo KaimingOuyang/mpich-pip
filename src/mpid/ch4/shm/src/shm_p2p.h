@@ -23,7 +23,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_send(const void *buf, MPI_Aint count,
 	MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_SHM_MPI_SEND);
 	MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_SHM_MPI_SEND);
 	char *SHMEM_MODULE = getenv("SHMEM_MODULE");
-	if (!strcmp(SHMEM_MODULE, "XPMEM") && !strcmp(COLL_SHMEM_MODULE, "XPMEM") && tag == 777) {
+	if (!strcmp(SHMEM_MODULE, "XPMEM") && !strcmp(COLL_SHMEM_MODULE, "XPMEM") /*&& tag == 777*/) {
 		ret = MPIDI_XPMEM_mpi_send(buf, count, datatype, rank, tag, comm, context_offset, addr, request);
 	} else {
 		ret = MPIDI_POSIX_mpi_send(buf, count, datatype, rank, tag, comm, context_offset, addr, request);
@@ -181,7 +181,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_recv(void *buf, MPI_Aint count, MPI_D
 	MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_SHM_MPI_RECV);
 
 	char *SHMEM_MODULE = getenv("SHMEM_MODULE");
-	if (!strcmp(SHMEM_MODULE, "XPMEM") && !strcmp(COLL_SHMEM_MODULE, "XPMEM") && tag == 777) {
+	if (!strcmp(SHMEM_MODULE, "XPMEM") && !strcmp(COLL_SHMEM_MODULE, "XPMEM") /*&& tag == 777*/) {
 		ret = MPIDI_XPMEM_mpi_recv(buf, count, datatype, rank, tag, comm, context_offset,
 		                           status, request);
 	} else {

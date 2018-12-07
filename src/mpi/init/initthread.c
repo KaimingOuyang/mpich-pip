@@ -26,6 +26,10 @@
 #if defined(POSIX_PROFILE_MISS) || defined(XPMEM_PROFILE_MISS) || defined(TEST_MISS)
 #include <papi.h>
 #endif
+
+#include <xpmem.h>
+xpmem_segid_t dtHandler;
+
 /*
 === BEGIN_MPI_T_CVAR_INFO_BLOCK ===
 
@@ -345,7 +349,12 @@ int MPIR_Init_thread(int *argc, char ***argv, int required, int *provided) {
 		goto fn_fail;
 	}
 #endif
-
+	dtHandler = xpmem_make(0, XPMEM_MAXADDR_SIZE, XPMEM_PERMIT_MODE, (void*) 0666);
+	if(dtHandler == -1){
+		printf("XPMEM init error: expose memory fails\n");
+		fflush(stdout);
+		exit(1);
+	}
 #ifdef HAVE_HWLOC
 	MPIR_Process.bindset = hwloc_bitmap_alloc();
 	hwloc_topology_init(&MPIR_Process.hwloc_topology);

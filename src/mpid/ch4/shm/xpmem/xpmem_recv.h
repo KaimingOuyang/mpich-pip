@@ -37,7 +37,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 // #endif
 	/* Get data handler in order to attach memory page from source process */
 #ifndef XPMEM_SYNC
-	mpi_errno = MPIDI_POSIX_mpi_recv(&header.dataSz, 4, MPI_LONG_LONG, rank, tag, comm, context_offset, status, request);
+	mpi_errno = MPIDI_POSIX_mpi_recv(&header.dataSz, 5, MPI_LONG_LONG, rank, tag, comm, context_offset, status, request);
 	if (mpi_errno != MPI_SUCCESS) {
 		errLine = __LINE__;
 		goto fn_fail;
@@ -62,7 +62,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 // 	strcat(file, ".log");
 // 	FILE *fp = fopen(file, "a");
 // #endif
-	// printf("Receiver dataSz= %lld\n", header.dataSz);
+	// printf("Receiver dataSz= %lld, pageSz= %lld, offset= %lld, attoffset= %lld\n", header.dataSz, header.pageSz, header.offset, header.attoffset);
 	// fflush(stdout);
 	if (header.dataSz == 0) {
 		MPIR_STATUS_SET_COUNT(*status, 0);

@@ -26,7 +26,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_send(const void *buf, MPI_Aint coun
 
 	if (count == 0) {
 		header.dataSz = 0;
-		mpi_errno = MPIDI_POSIX_mpi_send(&header.dataSz, 4, MPI_LONG_LONG, rank, tag, comm, context_offset, NULL, request);
+		mpi_errno = MPIDI_POSIX_mpi_send(&header.dataSz, 5, MPI_LONG_LONG, rank, tag, comm, context_offset, NULL, request);
 		if (mpi_errno != MPI_SUCCESS) {
 			errLine = __LINE__;
 			goto fn_fail;
@@ -97,7 +97,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_send(const void *buf, MPI_Aint coun
 
 
 #ifndef XPMEM_SYNC
-	mpi_errno = MPIDI_POSIX_mpi_send(&header.dataSz, 4, MPI_LONG_LONG, rank, tag, comm, context_offset, NULL, request);
+	mpi_errno = MPIDI_POSIX_mpi_send(&header.dataSz, 5, MPI_LONG_LONG, rank, tag, comm, context_offset, NULL, request);
 	if (mpi_errno != MPI_SUCCESS) {
 		errLine = __LINE__;
 		goto fn_fail;

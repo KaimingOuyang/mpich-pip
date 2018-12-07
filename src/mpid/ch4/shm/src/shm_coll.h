@@ -237,11 +237,12 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_reduce(const void *sendbuf, void *rec
 	MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_SHM_MPI_REDUCE);
 	MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_SHM_MPI_REDUCE);
 
-	char *SHMEM_MODULE = getenv("SHMEM_MODULE");
-	if (!strcmp(SHMEM_MODULE, "XPMEM") && !strcmp(COLL_SHMEM_MODULE, "XPMEM") && !PROFILE_FLAG) {
-		ret = MPIDI_XPMEM_mpi_reduce(sendbuf, recvbuf, count, datatype, op, root, comm_ptr, errflag,
-		                             algo_parameters_container);
-	} else {
+	// char *SHMEM_MODULE = getenv("SHMEM_MODULE");
+	// if (!strcmp(SHMEM_MODULE, "XPMEM") && !strcmp(COLL_SHMEM_MODULE, "XPMEM") && !PROFILE_FLAG) {
+	// 	ret = MPIDI_XPMEM_mpi_reduce(sendbuf, recvbuf, count, datatype, op, root, comm_ptr, errflag,
+	// 	                             algo_parameters_container);
+	// } else 
+	{
 		ret = MPIDI_POSIX_mpi_reduce(sendbuf, recvbuf, count, datatype, op, root, comm_ptr, errflag,
 		                             algo_parameters_container);
 	}
