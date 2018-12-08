@@ -83,7 +83,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 	static void *recdatabuf = NULL;
 	static void *recrealbuf = NULL;
 	static xpmem_apid_t recapid = -1;
-	if (recheader.dtHandler == header.dtHandler && recheader.attoffset == header.attoffset) {
+	if (recheader.dtHandler == header.dtHandler && recheader.dataSz == ackHeader.dataSz) {
 		// printf("Rank: %d, recv the same handler size= %lld, handler= %lld\n", comm->rank, header.dataSz, header.dtHandler);
 		// fflush(stdout);
 		dataBuffer = recdatabuf;
