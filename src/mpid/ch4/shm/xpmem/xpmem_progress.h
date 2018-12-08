@@ -50,7 +50,6 @@ fn_exit:
 
 MPL_STATIC_INLINE_PREFIX int xpmemExposeMem(const void *buf, size_t dataSz, ackHeader *header) {
 	extern xpmem_segid_t dtHandler;
-	void *permitValue = (void*) 0600;
 	long long lowAddr = PAGE_ALIGN_ADDR_LOW((long long) buf);
 	long long highAddr = PAGE_ALIGN_ADDR_HIGH((long long) buf + dataSz);
 	size_t newSize = highAddr - lowAddr;

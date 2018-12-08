@@ -83,7 +83,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 	static void *recdatabuf = NULL;
 	static void *recrealbuf = NULL;
 	static xpmem_apid_t recapid = -1;
-	if (recheader.dtHandler == header.dtHandler) {
+	if (recheader.dtHandler == header.dtHandler && recheader.attoffset == header.attoffset) {
 		// printf("Rank: %d, recv the same handler size= %lld, handler= %lld\n", comm->rank, header.dataSz, header.dtHandler);
 		// fflush(stdout);
 		dataBuffer = recdatabuf;
@@ -223,16 +223,16 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 		status->MPI_SOURCE = rank;
 		status->MPI_TAG = tag;
 	}
-// #ifndef XPMEM_WO_SYSCALL
-// #ifndef XPMEM_SYSCALL
-// 	/* Release resources */
-// 	mpi_errno = xpmemDetachMem(realBuffer, &apid);
-// 	if (mpi_errno != MPI_SUCCESS) {
-// 		errLine = __LINE__;
-// 		goto fn_fail;
-// 	}
-// #endif
-// #endif
+#ifndef XPMEM_WO_SYSCALL
+#ifndef XPMEM_SYSCALL
+	/* Release resources */
+	mpi_errno = xpmemDetachMem(realBuffer, &apid);
+	if (mpi_errno != MPI_SUCCESS) {
+		errLine = __LINE__;
+		goto fn_fail;
+	}
+#endif
+#endif
 
 #ifndef XPMEM_SYNC
 	int ack;
