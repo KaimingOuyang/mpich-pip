@@ -20,7 +20,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
         int tag,
         MPIR_Comm * comm,
         int context_offset, MPI_Status * status,
-        MPIR_Request ** request) {
+        MPIR_Request ** request)
+{
 
 	int mpi_errno = MPI_SUCCESS;
 	int errLine;
@@ -43,15 +44,15 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 		goto fn_fail;
 	}
 
-	if (*request != NULL) {
-		// printf("Recv wait\n");
-		// fflush(stdout);
-		mpi_errno = MPID_XPMEM_Wait(*request);
-		if (mpi_errno != MPI_SUCCESS) {
-			errLine = __LINE__;
-			goto fn_fail;
-		}
+	// if (*request != NULL) {
+	// printf("Recv wait\n");
+	// fflush(stdout);
+	mpi_errno = MPID_XPMEM_Wait(*request);
+	if (mpi_errno != MPI_SUCCESS) {
+		errLine = __LINE__;
+		goto fn_fail;
 	}
+	// }
 #endif
 // #ifdef XPMEM_PROFILE
 // 	synctime += MPI_Wtime();
@@ -245,6 +246,11 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 // 	fprintf(fp, "%.8lf %.8lf %.8lf %lld %lld\n", synctime, systime, copytime, values[0], values[1]);
 // 	fclose(fp);
 // #endif
+	if (mpi_errno != MPI_SUCCESS) {
+		errLine = __LINE__;
+		goto fn_fail;
+	}
+	mpi_errno = MPID_XPMEM_Wait(*request);
 	if (mpi_errno != MPI_SUCCESS) {
 		errLine = __LINE__;
 		goto fn_fail;

@@ -17,17 +17,31 @@
 MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_send(const void *buf, MPI_Aint count,
         MPI_Datatype datatype, int rank, int tag,
         MPIR_Comm * comm, int context_offset,
-        MPIDI_av_entry_t * addr, MPIR_Request ** request) {
+        MPIDI_av_entry_t * addr, MPIR_Request ** request)
+{
 	int ret;
 
 	MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_SHM_MPI_SEND);
 	MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_SHM_MPI_SEND);
-	char *SHMEM_MODULE = getenv("SHMEM_MODULE");
-	if (!strcmp(SHMEM_MODULE, "XPMEM") && !strcmp(COLL_SHMEM_MODULE, "XPMEM") /*&& tag == 777*/) {
-		ret = MPIDI_XPMEM_mpi_send(buf, count, datatype, rank, tag, comm, context_offset, addr, request);
-	} else {
-		ret = MPIDI_POSIX_mpi_send(buf, count, datatype, rank, tag, comm, context_offset, addr, request);
+#ifdef SHMEM_MODULE_XPMEM
+	// char *SHMEM_MODULE = getenv("SHMEM_MODULE");
+	// if (!strcmp(SHMEM_MODULE, "XPMEM") && !strcmp(COLL_SHMEM_MODULE, "XPMEM") /*&& tag == 777*/) {
+	static int flag = 0;
+	if (!flag) {
+		if (comm->rank == 0) {
+			printf("XPMEM call\n");
+			fflush(stdout);
+		}
+
+		flag = 1;
 	}
+
+	if (context_offset != MPIR_CONTEXT_INTRA_COLL) {
+		ret = MPIDI_XPMEM_mpi_send(buf, count, datatype, rank, tag, comm, context_offset, addr, request);
+
+	} else
+#endif
+		ret = MPIDI_POSIX_mpi_send(buf, count, datatype, rank, tag, comm, context_offset, addr, request);
 
 	MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_SHM_MPI_SEND);
 	return ret;
@@ -36,7 +50,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_send(const void *buf, MPI_Aint count,
 MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_ssend(const void *buf, MPI_Aint count,
         MPI_Datatype datatype, int rank, int tag,
         MPIR_Comm * comm, int context_offset,
-        MPIDI_av_entry_t * addr, MPIR_Request ** request) {
+        MPIDI_av_entry_t * addr, MPIR_Request ** request)
+{
 	int ret;
 
 	MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_SHM_MPI_SSEND);
@@ -52,7 +67,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_ssend(const void *buf, MPI_Aint count
 MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_send_init(const void *buf, int count,
         MPI_Datatype datatype, int rank, int tag,
         MPIR_Comm * comm, int context_offset,
-        MPIR_Request ** request) {
+        MPIR_Request ** request)
+{
 	int ret;
 
 	MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_SHM_MPI_SEND_INIT);
@@ -67,7 +83,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_send_init(const void *buf, int count,
 MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_ssend_init(const void *buf, int count,
         MPI_Datatype datatype, int rank, int tag,
         MPIR_Comm * comm, int context_offset,
-        MPIR_Request ** request) {
+        MPIR_Request ** request)
+{
 	int ret;
 
 	MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_SHM_MPI_SSEND_INIT);
@@ -83,7 +100,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_ssend_init(const void *buf, int count
 MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_rsend_init(const void *buf, int count,
         MPI_Datatype datatype, int rank, int tag,
         MPIR_Comm * comm, int context_offset,
-        MPIR_Request ** request) {
+        MPIR_Request ** request)
+{
 	int ret;
 
 	MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_SHM_MPI_RSEND_INIT);
@@ -99,7 +117,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_rsend_init(const void *buf, int count
 MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_bsend_init(const void *buf, int count,
         MPI_Datatype datatype, int rank, int tag,
         MPIR_Comm * comm, int context_offset,
-        MPIR_Request ** request) {
+        MPIR_Request ** request)
+{
 	int ret;
 
 	MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_SHM_MPI_BSEND_INIT);
@@ -115,7 +134,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_bsend_init(const void *buf, int count
 MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_isend(const void *buf, MPI_Aint count,
         MPI_Datatype datatype, int rank, int tag,
         MPIR_Comm * comm, int context_offset,
-        MPIDI_av_entry_t * addr, MPIR_Request ** request) {
+        MPIDI_av_entry_t * addr, MPIR_Request ** request)
+{
 	int ret;
 
 	MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_SHM_MPI_ISEND);
@@ -131,7 +151,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_isend(const void *buf, MPI_Aint count
 MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_issend(const void *buf, MPI_Aint count,
         MPI_Datatype datatype, int rank, int tag,
         MPIR_Comm * comm, int context_offset,
-        MPIDI_av_entry_t * addr, MPIR_Request ** request) {
+        MPIDI_av_entry_t * addr, MPIR_Request ** request)
+{
 	int ret;
 
 	MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_SHM_MPI_ISSEND);
@@ -145,7 +166,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_issend(const void *buf, MPI_Aint coun
 	return ret;
 }
 
-MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_cancel_send(MPIR_Request * sreq) {
+MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_cancel_send(MPIR_Request * sreq)
+{
 	int ret;
 
 	MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_SHM_MPI_CANCEL_SEND);
@@ -159,7 +181,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_cancel_send(MPIR_Request * sreq) {
 
 MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_recv_init(void *buf, int count, MPI_Datatype datatype,
         int rank, int tag, MPIR_Comm * comm,
-        int context_offset, MPIR_Request ** request) {
+        int context_offset, MPIR_Request ** request)
+{
 	int ret;
 
 	MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_SHM_MPI_RECV_INIT);
@@ -174,20 +197,24 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_recv_init(void *buf, int count, MPI_D
 MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_recv(void *buf, MPI_Aint count, MPI_Datatype datatype,
         int rank, int tag, MPIR_Comm * comm,
         int context_offset, MPI_Status * status,
-        MPIR_Request ** request) {
+        MPIR_Request ** request)
+{
 	int ret;
 
 	MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_SHM_MPI_RECV);
 	MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_SHM_MPI_RECV);
+#ifdef SHMEM_MODULE_XPMEM
+	// 	char *SHMEM_MODULE = getenv("SHMEM_MODULE");
+	// if (!strcmp(SHMEM_MODULE, "XPMEM") && !strcmp(COLL_SHMEM_MODULE, "XPMEM") /*&& tag == 777*/) {
 
-	char *SHMEM_MODULE = getenv("SHMEM_MODULE");
-	if (!strcmp(SHMEM_MODULE, "XPMEM") && !strcmp(COLL_SHMEM_MODULE, "XPMEM") /*&& tag == 777*/) {
+	if (context_offset != MPIR_CONTEXT_INTRA_COLL)
 		ret = MPIDI_XPMEM_mpi_recv(buf, count, datatype, rank, tag, comm, context_offset,
 		                           status, request);
-	} else {
+	else
+#endif
 		ret = MPIDI_POSIX_mpi_recv(buf, count, datatype, rank, tag, comm, context_offset,
 		                           status, request);
-	}
+
 
 	MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_SHM_MPI_RECV);
 	return ret;
@@ -195,7 +222,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_recv(void *buf, MPI_Aint count, MPI_D
 
 MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_irecv(void *buf, MPI_Aint count, MPI_Datatype datatype,
         int rank, int tag, MPIR_Comm * comm,
-        int context_offset, MPIR_Request ** request) {
+        int context_offset, MPIR_Request ** request)
+{
 	int ret;
 
 	MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_SHM_MPI_IRECV);
@@ -208,7 +236,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_irecv(void *buf, MPI_Aint count, MPI_
 }
 
 MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_imrecv(void *buf, MPI_Aint count, MPI_Datatype datatype,
-        MPIR_Request * message, MPIR_Request ** rreqp) {
+        MPIR_Request * message, MPIR_Request ** rreqp)
+{
 	int ret;
 
 	MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_SHM_MPI_IMRECV);
@@ -220,7 +249,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_imrecv(void *buf, MPI_Aint count, MPI
 	return ret;
 }
 
-MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_cancel_recv(MPIR_Request * rreq) {
+MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_cancel_recv(MPIR_Request * rreq)
+{
 	int ret;
 
 	MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_SHM_MPI_CANCEL_RECV);
@@ -234,7 +264,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_cancel_recv(MPIR_Request * rreq) {
 
 MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_improbe(int source, int tag, MPIR_Comm * comm,
         int context_offset, int *flag,
-        MPIR_Request ** message, MPI_Status * status) {
+        MPIR_Request ** message, MPI_Status * status)
+{
 	int ret;
 
 	MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_SHM_MPI_IMPROBE);
@@ -248,7 +279,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_improbe(int source, int tag, MPIR_Com
 
 MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_iprobe(int source, int tag, MPIR_Comm * comm,
         int context_offset, int *flag,
-        MPI_Status * status) {
+        MPI_Status * status)
+{
 	int ret;
 
 	MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_SHM_MPI_IPROBE);
