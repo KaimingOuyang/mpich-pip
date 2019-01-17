@@ -92,7 +92,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 		apid = recapid;
 	} else {
 #ifndef XPMEM_SYSCALL
-		mpi_errno = xpmemAttachMem(&header, &dataBuffer, &realBuffer, &apid);
+		mpi_errno = xpmemAttachMem(&header, &dataBuffer, &realBuffer);
 		if (mpi_errno != MPI_SUCCESS) {
 			errLine = __LINE__;
 			goto fn_fail;
@@ -106,7 +106,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 #else
 #ifndef XPMEM_SYSCALL
 	// printf("define XPMEM_SYSCALL\n");
-	mpi_errno = xpmemAttachMem(&header, &dataBuffer, &realBuffer, &apid);
+	mpi_errno = xpmemAttachMem(&header, &dataBuffer, &realBuffer);
 	if (mpi_errno != MPI_SUCCESS) {
 		errLine = __LINE__;
 		goto fn_fail;
@@ -227,7 +227,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 #ifndef XPMEM_WO_SYSCALL
 #ifndef XPMEM_SYSCALL
 	/* Release resources */
-	mpi_errno = xpmemDetachMem(realBuffer, &apid);
+	mpi_errno = xpmemDetachMem(realBuffer);
 	if (mpi_errno != MPI_SUCCESS) {
 		errLine = __LINE__;
 		goto fn_fail;

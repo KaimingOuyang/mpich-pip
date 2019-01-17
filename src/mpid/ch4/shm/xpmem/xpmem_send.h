@@ -7,6 +7,7 @@
 #include "../posix/posix_send.h"
 #include "../posix/posix_recv.h"
 
+extern int xpmem_local_rank;
 /* ---------------------------------------------------- */
 /* MPIDI_XPMEM_do_send                                  */
 /* ---------------------------------------------------- */
@@ -69,7 +70,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_send(const void *buf, MPI_Aint coun
 		// fflush(stdout);
 		header = recheader;
 	} else {
-		mpi_errno = xpmemExposeMem(buf, dataSz, &header, comm->rank);
+		mpi_errno = xpmemExposeMem(buf, dataSz, &header, xpmem_local_rank);
 		if (mpi_errno != MPI_SUCCESS) {
 			errLine = __LINE__;
 			goto fn_fail;
@@ -78,7 +79,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_send(const void *buf, MPI_Aint coun
 		recheader = header;
 	}
 #else
-	mpi_errno = xpmemExposeMem(buf, dataSz, &header, comm->rank);
+	mpi_errno = xpmemExposeMem(buf, dataSz, &header, xpmem_local_rank);
 	if (mpi_errno != MPI_SUCCESS) {
 		errLine = __LINE__;
 		goto fn_fail;

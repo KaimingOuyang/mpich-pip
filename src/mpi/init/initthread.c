@@ -28,6 +28,7 @@
 #endif
 
 #include <xpmem.h>
+int xpmem_local_rank;
 xpmem_segid_t dtHandler;
 xpmem_segid_t *xpmem_handler_array;
 xpmem_apid_t *xpmem_apid_array;
@@ -832,6 +833,7 @@ void xpmem_intra_node_init()
 	MPIR_Comm *comm = MPIR_Process.comm_world->node_comm;
 	int size = comm->local_size;
 	if (size > 1) {
+		xpmem_local_rank = comm->rank;
 		MPIR_Errflag_t errflag = MPIR_ERR_NONE;
 		xpmem_handler_array = (xpmem_segid_t*) MPL_malloc(sizeof(xpmem_segid_t) * size, MPL_MEM_OTHER);
 		xpmem_apid_array = (xpmem_apid_t*) MPL_malloc(sizeof(xpmem_apid_t) * size, MPL_MEM_OTHER);

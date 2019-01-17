@@ -6,6 +6,7 @@
 #include <papi.h>
 #endif
 
+
 extern xpmem_segid_t *xpmem_handler_array;
 extern xpmem_apid_t *xpmem_apid_array;
 
@@ -77,39 +78,21 @@ fn_exit:
 }
 
 
-MPL_STATIC_INLINE_PREFIX int xpmemAttachMem(ackHeader *header, void **dtbuf, void **realbuf, xpmem_apid_t *apid) {
+MPL_STATIC_INLINE_PREFIX int xpmemAttachMem(ackHeader *header, void **dtbuf, void **realbuf) {
 	int mpi_errno = MPI_SUCCESS;
 	int errLine;
 	/* Attach memory page */
 	// void *permitValue = (void*) 0600;
 	struct xpmem_addr addr;
 	char *realdata;
-	// do {
-	*apid = xpmem_apid_array[header->local_rank];
+	xpmem_apid_t apid;
+	apid = xpmem_apid_array[header->local_rank];
 
-	// if (*apid == -1) {
-	// 	mpi_errno = MPI_ERR_OTHER;
-	// 	errLine = __LINE__;
-	// 	goto fn_fail;
-	// }
-	// printf("Get apid: %lld\n", *apid);
-	// fflush(stdout);
-	addr.apid = *apid;
+	addr.apid = apid;
 	addr.offset = header->exp_offset;
 
-	// int times = 0;
-	// do {
 	realdata = (char*) xpmem_attach(addr, header->page_size, NULL);
-	// times++;
-	// } while ((long long)realdata == -1L && times < 100000);
-	// if ((long long)realdata == -1L) {
-	// 	mpi_errno = xpmem_release(*apid);
-	// 	if (mpi_errno == -1) {
-	// 		errLine = __LINE__;
-	// 		goto fn_fail;
-	// 	}
-	// }
-	// } while ((long long)realdata == -1L);
+
 	if ((long long)realdata == -1L) {
 		mpi_errno = MPI_ERR_OTHER;
 		errLine = __LINE__;
@@ -126,7 +109,7 @@ fn_exit:
 }
 
 
-MPL_STATIC_INLINE_PREFIX int xpmemDetachMem(void *realbuf, xpmem_apid_t *apid) {
+MPL_STATIC_INLINE_PREFIX int xpmemDetachMem(void *realbuf) {
 	int errLine;
 	int mpi_errno = MPI_SUCCESS;
 	mpi_errno = xpmem_detach(realbuf);

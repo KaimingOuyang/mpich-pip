@@ -19,6 +19,7 @@
 #define POSIX_MODULE "POSIX"
 #define XPMEM_MODULE "XPMEM"
 extern const char *COLL_SHMEM_MODULE;
+extern int xpmem_local_rank;
 
 typedef int (*MPIDI_SHM_mpi_init_hook_t) (int rank, int size, int *n_vnis_provided, int *tag_bits);
 typedef int (*MPIDI_SHM_mpi_finalize_hook_t) (void);
