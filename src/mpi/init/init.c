@@ -13,6 +13,8 @@
 #if defined(POSIX_PROFILE_MISS) || defined(XPMEM_PROFILE_MISS) || defined(TEST_MISS)
 #include <papi.h>
 #endif
+
+void xpmem_intra_node_init();
 /*
 === BEGIN_MPI_T_CVAR_INFO_BLOCK ===
 
@@ -209,7 +211,7 @@ int MPI_Init(int *argc, char ***argv) {
 		}
 #endif
 	}
-
+	xpmem_intra_node_init();
 	/* ... end of body of routine ... */
 	MPIR_FUNC_TERSE_INIT_EXIT(MPID_STATE_MPI_INIT);
 	return mpi_errno;

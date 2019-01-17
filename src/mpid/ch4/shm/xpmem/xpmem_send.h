@@ -16,7 +16,8 @@
 MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_send(const void *buf, MPI_Aint count,
         MPI_Datatype datatype, int rank, int tag,
         MPIR_Comm * comm, int context_offset,
-        MPIDI_av_entry_t * addr, MPIR_Request ** request) {
+        MPIDI_av_entry_t * addr, MPIR_Request ** request)
+{
 
 	int mpi_errno = MPI_SUCCESS;
 	size_t dataSz;
@@ -25,8 +26,13 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_send(const void *buf, MPI_Aint coun
 	// printf("xpmem send\n");
 
 	if (count == 0) {
-		header.dataSz = 0;
-		mpi_errno = MPIDI_POSIX_mpi_send(&header.dataSz, 5, MPI_LONG_LONG, rank, tag, comm, context_offset, NULL, request);
+		header.data_size = 0;
+		mpi_errno = MPIDI_POSIX_mpi_send(&header.data_size, sizeof(struct ackHeader), MPI_BYTE, rank, tag, comm, context_offset, NULL, request);
+		if (mpi_errno != MPI_SUCCESS) {
+			errLine = __LINE__;
+			goto fn_fail;
+		}
+		mpi_errno = MPID_XPMEM_Wait(*request);
 		if (mpi_errno != MPI_SUCCESS) {
 			errLine = __LINE__;
 			goto fn_fail;
@@ -57,13 +63,13 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_send(const void *buf, MPI_Aint coun
 #ifdef XPMEM_WO_SYSCALL
 	/* Current reuse is simple, need to deal with more complicated cases */
 	static long long recaddr = -1;
-	static ackHeader recheader = {.dataSz = -1, .dtHandler = -1, .pageSz = -1, .offset = -1};
-	if (recaddr == (long long) buf && recheader.dataSz == dataSz) {
+	static ackHeader recheader = {.data_size = -1};
+	if (recaddr == (long long) buf && recheader.data_size == dataSz) {
 		// printf("Rank: %d, I am the same\n", comm->rank);
 		// fflush(stdout);
 		header = recheader;
 	} else {
-		mpi_errno = xpmemExposeMem(buf, dataSz, &header);
+		mpi_errno = xpmemExposeMem(buf, dataSz, &header, comm->rank);
 		if (mpi_errno != MPI_SUCCESS) {
 			errLine = __LINE__;
 			goto fn_fail;
@@ -72,7 +78,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_send(const void *buf, MPI_Aint coun
 		recheader = header;
 	}
 #else
-	mpi_errno = xpmemExposeMem(buf, dataSz, &header);
+	mpi_errno = xpmemExposeMem(buf, dataSz, &header, comm->rank);
 	if (mpi_errno != MPI_SUCCESS) {
 		errLine = __LINE__;
 		goto fn_fail;
@@ -97,12 +103,16 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_send(const void *buf, MPI_Aint coun
 
 
 #ifndef XPMEM_SYNC
-	mpi_errno = MPIDI_POSIX_mpi_send(&header.dataSz, 5, MPI_LONG_LONG, rank, tag, comm, context_offset, NULL, request);
+	mpi_errno = MPIDI_POSIX_mpi_send(&header, sizeof(ackHeader), MPI_BYTE, rank, tag, comm, context_offset, NULL, request);
 	if (mpi_errno != MPI_SUCCESS) {
 		errLine = __LINE__;
 		goto fn_fail;
 	}
-
+	mpi_errno = MPID_XPMEM_Wait(*request);
+	if (mpi_errno != MPI_SUCCESS) {
+		errLine = __LINE__;
+		goto fn_fail;
+	}
 // #ifdef XPMEM_PROFILE
 // 	synctime += MPI_Wtime();
 // #endif
@@ -119,13 +129,13 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_send(const void *buf, MPI_Aint coun
 		goto fn_fail;
 	}
 
-	if (*request != NULL) {
-		mpi_errno = MPID_XPMEM_Wait(*request);
-		if (mpi_errno != MPI_SUCCESS) {
-			errLine = __LINE__;
-			goto fn_fail;
-		}
+	// if (*request != NULL) {
+	mpi_errno = MPID_XPMEM_Wait(*request);
+	if (mpi_errno != MPI_SUCCESS) {
+		errLine = __LINE__;
+		goto fn_fail;
 	}
+	// }
 #endif
 // #ifdef XPMEM_PROFILE
 // 	synctime += MPI_Wtime();

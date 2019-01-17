@@ -29,7 +29,9 @@
 
 #include <xpmem.h>
 xpmem_segid_t dtHandler;
-
+xpmem_segid_t *xpmem_handler_array;
+xpmem_apid_t *xpmem_apid_array;
+void xpmem_intra_node_init();
 /*
 === BEGIN_MPI_T_CVAR_INFO_BLOCK ===
 
@@ -153,7 +155,8 @@ void mpirinitf_(void);
  * bringing up an error dialog box.
  */
 /* style: allow:fprintf:1 sig:0 */
-static int assert_hook(int reportType, char *message, int *returnValue) {
+static int assert_hook(int reportType, char *message, int *returnValue)
+{
 	MPL_UNREFERENCED_ARG(reportType);
 	fprintf(stderr, "%s", message);
 	if (returnValue != NULL)
@@ -163,7 +166,8 @@ static int assert_hook(int reportType, char *message, int *returnValue) {
 }
 
 /* MPICH dll entry point */
-BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved) {
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved)
+{
 	BOOL result = TRUE;
 	hinstDLL;
 	lpReserved;
@@ -207,7 +211,8 @@ MPID_Thread_mutex_t MPIR_THREAD_POBJ_PMI_MUTEX;
 #define FUNCNAME thread_cs_init
 #undef FCNAME
 #define FCNAME MPL_QUOTE(FUNCNAME)
-static int thread_cs_init(void) {
+static int thread_cs_init(void)
+{
 	int err;
 
 #if MPICH_THREAD_GRANULARITY == MPICH_THREAD_GRANULARITY__GLOBAL
@@ -252,7 +257,8 @@ static int thread_cs_init(void) {
 #define FUNCNAME MPIR_Thread_CS_Finalize
 #undef FCNAME
 #define FCNAME MPL_QUOTE(FUNCNAME)
-int MPIR_Thread_CS_Finalize(void) {
+int MPIR_Thread_CS_Finalize(void)
+{
 	int err;
 
 	MPL_DBG_MSG(MPIR_DBG_INIT, TYPICAL, "Freeing global mutex and private storage");
@@ -332,7 +338,8 @@ MPL_dbg_class MPIR_DBG_STRING;
 #define FUNCNAME MPIR_Init_thread
 #undef FCNAME
 #define FCNAME MPL_QUOTE(FUNCNAME)
-int MPIR_Init_thread(int *argc, char ***argv, int required, int *provided) {
+int MPIR_Init_thread(int *argc, char ***argv, int required, int *provided)
+{
 	int mpi_errno = MPI_SUCCESS;
 	int has_args;
 	int has_env;
@@ -350,7 +357,7 @@ int MPIR_Init_thread(int *argc, char ***argv, int required, int *provided) {
 	}
 #endif
 	dtHandler = xpmem_make(0, XPMEM_MAXADDR_SIZE, XPMEM_PERMIT_MODE, (void*) 0666);
-	if(dtHandler == -1){
+	if (dtHandler == -1) {
 		printf("XPMEM init error: expose memory fails\n");
 		fflush(stdout);
 		exit(1);
@@ -718,7 +725,8 @@ Notes for Fortran:
 
 .seealso: MPI_Init, MPI_Finalize
 @*/
-int MPI_Init_thread(int *argc, char ***argv, int required, int *provided) {
+int MPI_Init_thread(int *argc, char ***argv, int required, int *provided)
+{
 	int mpi_errno = MPI_SUCCESS;
 	int rc ATTRIBUTE((unused)), reqd = required;
 	MPIR_FUNC_TERSE_INIT_STATE_DECL(MPID_STATE_MPI_INIT_THREAD);
@@ -792,6 +800,8 @@ int MPI_Init_thread(int *argc, char ***argv, int required, int *provided) {
 #endif
 	}
 
+	xpmem_intra_node_init();
+
 	/* ... end of body of routine ... */
 
 	MPIR_FUNC_TERSE_INIT_EXIT(MPID_STATE_MPI_INIT_THREAD);
@@ -814,4 +824,27 @@ fn_fail:
 
 	return mpi_errno;
 	/* --END ERROR HANDLING-- */
+}
+
+
+void xpmem_intra_node_init()
+{
+	MPIR_Comm *comm = MPIR_Process.comm_world->node_comm;
+	int size = comm->local_size;
+	if (size > 1) {
+		MPIR_Errflag_t errflag = MPIR_ERR_NONE;
+		xpmem_handler_array = (xpmem_segid_t*) MPL_malloc(sizeof(xpmem_segid_t) * size, MPL_MEM_OTHER);
+		xpmem_apid_array = (xpmem_apid_t*) MPL_malloc(sizeof(xpmem_apid_t) * size, MPL_MEM_OTHER);
+		MPIR_Allgather(&dtHandler, 1, MPI_LONG_LONG, xpmem_handler_array, 1, MPI_LONG_LONG, comm, &errflag);
+		for (int i = 0; i < size; ++i) {
+			xpmem_apid_array[i] = xpmem_get(xpmem_handler_array[i], XPMEM_RDWR, XPMEM_PERMIT_MODE, NULL);
+			if (xpmem_apid_array[i] == -1) {
+				printf("xpmem fet apid error\n");
+				fflush(stdout);
+				exit(1);
+			}
+		}
+	}
+
+	return;
 }

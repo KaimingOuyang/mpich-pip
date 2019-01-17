@@ -21,9 +21,9 @@ AM_CPPFLAGS += -I$(top_srcdir)/src/mpid/ch4/shm/xpmem/include
 
 noinst_HEADERS += src/mpid/ch4/shm/xpmem/xpmem_send.h 	\
 				src/mpid/ch4/shm/xpmem/xpmem_recv.h 	\
-				src/mpid/ch4/shm/xpmem/xpmem_reduce.h 	\
 				src/mpid/ch4/shm/xpmem/xpmem_progress.h \
 				src/mpid/ch4/shm/xpmem/xpmem_inline.h
+				
 
 #				src/mpid/ch4/shm/xpmem/xpmem_rma.h 		\
 # if !AM_LDFLAGS

@@ -6,12 +6,16 @@
 #include <papi.h>
 #endif
 
+extern xpmem_segid_t *xpmem_handler_array;
+extern xpmem_apid_t *xpmem_apid_array;
+
+
 typedef struct ackHeader {
-	__s64 dataSz;
-	xpmem_segid_t dtHandler;
-	__s64 pageSz;
-	__s64 offset;
-	__s64 attoffset;
+	__s64 local_rank;
+	__s64 data_size;
+	__s64 page_size;
+	__s64 data_offset;
+	__s64 exp_offset;
 } ackHeader;
 
 // #define XPMEM_PROFILE
@@ -49,8 +53,7 @@ fn_exit:
 }
 
 
-MPL_STATIC_INLINE_PREFIX int xpmemExposeMem(const void *buf, size_t dataSz, ackHeader *header) {
-	extern xpmem_segid_t dtHandler;
+MPL_STATIC_INLINE_PREFIX int xpmemExposeMem(const void *buf, size_t dataSz, ackHeader *header, int local_rank) {
 	long long lowAddr = PAGE_ALIGN_ADDR_LOW((long long) buf);
 	long long highAddr = PAGE_ALIGN_ADDR_HIGH((long long) buf + dataSz);
 	size_t newSize = highAddr - lowAddr;
@@ -58,11 +61,12 @@ MPL_STATIC_INLINE_PREFIX int xpmemExposeMem(const void *buf, size_t dataSz, ackH
 	int errLine;
 	int mpi_errno = MPI_SUCCESS;
 	/* Expose memory and get handler */
-	header->dataSz = (__s64) dataSz;
-	header->pageSz = (__s64) newSize;
-	header->offset = offset;
-	header->attoffset = (long long) lowAddr;
-	header->dtHandler = dtHandler;
+	header->local_rank = local_rank;
+	header->data_size = (__s64) dataSz;
+	header->page_size = (__s64) newSize;
+	header->data_offset = offset;
+	header->exp_offset = (long long) lowAddr;
+	// header->dtHandler = dtHandler;
 	// printf("lowAddr=%llX, highAddr=%llX, newSize=%lld, offset=%llX, dataSz=%lld\n", lowAddr, highAddr, newSize, offset, dataSz);
 	// fflush(stdout);
 	goto fn_exit;
@@ -81,21 +85,21 @@ MPL_STATIC_INLINE_PREFIX int xpmemAttachMem(ackHeader *header, void **dtbuf, voi
 	struct xpmem_addr addr;
 	char *realdata;
 	// do {
-	*apid = xpmem_get(header->dtHandler, XPMEM_RDWR, XPMEM_PERMIT_MODE, NULL);
+	*apid = xpmem_apid_array[header->local_rank];
 
-	if (*apid == -1) {
-		mpi_errno = MPI_ERR_OTHER;
-		errLine = __LINE__;
-		goto fn_fail;
-	}
+	// if (*apid == -1) {
+	// 	mpi_errno = MPI_ERR_OTHER;
+	// 	errLine = __LINE__;
+	// 	goto fn_fail;
+	// }
 	// printf("Get apid: %lld\n", *apid);
 	// fflush(stdout);
 	addr.apid = *apid;
-	addr.offset = header->attoffset;
+	addr.offset = header->exp_offset;
 
 	// int times = 0;
 	// do {
-	realdata = (char*) xpmem_attach(addr, header->pageSz, NULL);
+	realdata = (char*) xpmem_attach(addr, header->page_size, NULL);
 	// times++;
 	// } while ((long long)realdata == -1L && times < 100000);
 	// if ((long long)realdata == -1L) {
@@ -112,7 +116,7 @@ MPL_STATIC_INLINE_PREFIX int xpmemAttachMem(ackHeader *header, void **dtbuf, voi
 		goto fn_fail;
 	}
 
-	*dtbuf = realdata + header->offset;
+	*dtbuf = realdata + header->data_offset;
 	*realbuf = realdata;
 	goto fn_exit;
 fn_fail:
@@ -131,11 +135,11 @@ MPL_STATIC_INLINE_PREFIX int xpmemDetachMem(void *realbuf, xpmem_apid_t *apid) {
 		goto fn_fail;
 	}
 
-	mpi_errno = xpmem_release(*apid);
-	if (mpi_errno == -1) {
-		errLine = __LINE__;
-		goto fn_fail;
-	}
+	// mpi_errno = xpmem_release(*apid);
+	// if (mpi_errno == -1) {
+	// 	errLine = __LINE__;
+	// 	goto fn_fail;
+	// }
 	goto fn_exit;
 fn_fail:
 	printf("[%s-%d] Error with mpi_errno (%d)\n", __FUNCTION__, errLine, mpi_errno);
@@ -144,22 +148,22 @@ fn_exit:
 }
 
 
-MPL_STATIC_INLINE_PREFIX int xpmemRemoveMem(ackHeader *header) {
-	int errLine;
-	int mpi_errno = MPI_SUCCESS;
-#ifndef XPMEM_SYSCALL
-	mpi_errno = xpmem_remove(header->dtHandler);
-	if (mpi_errno != MPI_SUCCESS) {
-		errLine = __LINE__;
-		goto fn_fail;
-	}
-#endif
-	goto fn_exit;
-fn_fail:
-	printf("[%s-%d] Error with mpi_errno (%d)\n", __FUNCTION__, errLine, mpi_errno);
-fn_exit:
-	return mpi_errno;
-}
+// MPL_STATIC_INLINE_PREFIX int xpmemRemoveMem(ackHeader *header) {
+// 	int errLine;
+// 	int mpi_errno = MPI_SUCCESS;
+// #ifndef XPMEM_SYSCALL
+// 	mpi_errno = xpmem_remove(header->dtHandler);
+// 	if (mpi_errno != MPI_SUCCESS) {
+// 		errLine = __LINE__;
+// 		goto fn_fail;
+// 	}
+// #endif
+// 	goto fn_exit;
+// fn_fail:
+// 	printf("[%s-%d] Error with mpi_errno (%d)\n", __FUNCTION__, errLine, mpi_errno);
+// fn_exit:
+// 	return mpi_errno;
+// }
 
 
 #ifdef XPMEM_PROFILE_MISS

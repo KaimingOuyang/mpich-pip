@@ -24,9 +24,9 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_barrier(MPIR_Comm * comm, MPIR_Errfla
 
 	MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_SHM_MPI_BARRIER);
 	MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_SHM_MPI_BARRIER);
-	COLL_SHMEM_MODULE = POSIX_MODULE;
+	// COLL_SHMEM_MODULE = POSIX_MODULE;
 	ret = MPIDI_POSIX_mpi_barrier(comm, errflag, algo_parameters_container);
-	COLL_SHMEM_MODULE = XPMEM_MODULE;
+	// COLL_SHMEM_MODULE = XPMEM_MODULE;
 	MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_SHM_MPI_BARRIER);
 	return ret;
 }
@@ -39,11 +39,11 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_bcast(void *buffer, int count, MPI_Da
 
 	MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_SHM_MPI_BCAST);
 	MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_SHM_MPI_BCAST);
-	COLL_SHMEM_MODULE = POSIX_MODULE;
+	// COLL_SHMEM_MODULE = POSIX_MODULE;
 	ret =
 	    MPIDI_POSIX_mpi_bcast(buffer, count, datatype, root, comm, errflag,
 	                          algo_parameters_container);
-	COLL_SHMEM_MODULE = XPMEM_MODULE;
+	// COLL_SHMEM_MODULE = XPMEM_MODULE;
 	MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_SHM_MPI_BCAST);
 	return ret;
 }
@@ -53,14 +53,14 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_allreduce(const void *sendbuf, void *
         MPIR_Comm * comm, MPIR_Errflag_t * errflag,
         const void *algo_parameters_container) {
 	int ret;
-	COLL_SHMEM_MODULE = POSIX_MODULE;
+	// COLL_SHMEM_MODULE = POSIX_MODULE;
 	MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_SHM_MPI_ALLREDUCE);
 	MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_SHM_MPI_ALLREDUCE);
 
 	ret =
 	    MPIDI_POSIX_mpi_allreduce(sendbuf, recvbuf, count, datatype, op, comm, errflag,
 	                              algo_parameters_container);
-	COLL_SHMEM_MODULE = XPMEM_MODULE;
+	// COLL_SHMEM_MODULE = XPMEM_MODULE;
 	MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_SHM_MPI_ALLREDUCE);
 	return ret;
 }
@@ -242,10 +242,10 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_reduce(const void *sendbuf, void *rec
 	// 	ret = MPIDI_XPMEM_mpi_reduce(sendbuf, recvbuf, count, datatype, op, root, comm_ptr, errflag,
 	// 	                             algo_parameters_container);
 	// } else 
-	{
+	// {
 		ret = MPIDI_POSIX_mpi_reduce(sendbuf, recvbuf, count, datatype, op, root, comm_ptr, errflag,
 		                             algo_parameters_container);
-	}
+	// }
 
 	MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_SHM_MPI_REDUCE);
 	return ret;

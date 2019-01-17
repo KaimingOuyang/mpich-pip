@@ -38,7 +38,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 // #endif
 	/* Get data handler in order to attach memory page from source process */
 #ifndef XPMEM_SYNC
-	mpi_errno = MPIDI_POSIX_mpi_recv(&header.dataSz, 5, MPI_LONG_LONG, rank, tag, comm, context_offset, status, request);
+	mpi_errno = MPIDI_POSIX_mpi_recv(&header, sizeof(ackHeader), MPI_BYTE, rank, tag, comm, context_offset, status, request);
 	if (mpi_errno != MPI_SUCCESS) {
 		errLine = __LINE__;
 		goto fn_fail;
@@ -58,14 +58,14 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 // 	synctime += MPI_Wtime();
 // 	sprintf(buffer, "%d_", myrank);
 // 	strcat(file, buffer);
-// 	sprintf(buffer, "%lld", header.dataSz);
+// 	sprintf(buffer, "%lld", header.data_size);
 // 	strcat(file, buffer);
 // 	strcat(file, ".log");
 // 	FILE *fp = fopen(file, "a");
 // #endif
-	// printf("Receiver dataSz= %lld, pageSz= %lld, offset= %lld, attoffset= %lld\n", header.dataSz, header.pageSz, header.offset, header.attoffset);
+	// printf("Receiver dataSz= %lld, pageSz= %lld, offset= %lld, attoffset= %lld\n", header.data_size, header.pageSz, header.offset, header.attoffset);
 	// fflush(stdout);
-	if (header.dataSz == 0) {
+	if (header.data_size == 0) {
 		MPIR_STATUS_SET_COUNT(*status, 0);
 		status->MPI_SOURCE = rank;
 		status->MPI_TAG = tag;
@@ -80,12 +80,12 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 // 	systime -= MPI_Wtime();
 // #endif
 #ifdef XPMEM_WO_SYSCALL
-	static ackHeader recheader = {.dataSz = -1, .dtHandler = -1, .pageSz = -1, .offset = -1};
+	static ackHeader recheader = {.data_size = -1};
 	static void *recdatabuf = NULL;
 	static void *recrealbuf = NULL;
 	static xpmem_apid_t recapid = -1;
-	if (recheader.dtHandler == header.dtHandler && recheader.dataSz == header.dataSz) {
-		// printf("Rank: %d, recv the same handler size= %lld, handler= %lld\n", comm->rank, header.dataSz, header.dtHandler);
+	if (recheader.exp_offset == header.exp_offset && recheader.data_size == header.data_size) {
+		// printf("Rank: %d, recv the same handler size= %lld, handler= %lld\n", comm->rank, header.data_size, header.dtHandler);
 		// fflush(stdout);
 		dataBuffer = recdatabuf;
 		realBuffer = recrealbuf;
@@ -172,7 +172,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 #endif
 
 	FILE *fp;
-	mpi_errno = papiStart(events, "XPMEM-recv_", comm->rank, header.dataSz, &fp, &EventSet);
+	mpi_errno = papiStart(events, "XPMEM-recv_", comm->rank, header.data_size, &fp, &EventSet);
 	if (mpi_errno != MPI_SUCCESS) {
 		errLine = __LINE__;
 		goto fn_fail;
@@ -182,7 +182,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 
 #ifndef XPMEM_MEMCOPY
 	// printf("define XPMEM_MEMCOPY\n");
-	memcpy(buf, dataBuffer, header.dataSz);
+	memcpy(buf, dataBuffer, header.data_size);
 #endif
 
 #ifdef XPMEM_PROFILE_MISS
@@ -220,7 +220,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 	// fflush(stdout);
 	// sleep(10);
 	if (status != MPI_STATUS_IGNORE) {
-		MPIR_STATUS_SET_COUNT(*status, header.dataSz);
+		MPIR_STATUS_SET_COUNT(*status, header.data_size);
 		status->MPI_SOURCE = rank;
 		status->MPI_TAG = tag;
 	}

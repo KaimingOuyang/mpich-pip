@@ -80,7 +80,7 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 		// printf("Rank: %d, enter MPIDI_XPMEM_mpi_reduce with recvbuf[9] %d\n", myrank, ((int*)recvbuf)[9]);
 		// fflush(stdout);
 		// printf("dataSz=%d, typesize=%d\n", dataSz, typesize);
-		mpi_errno = xpmemExposeMem(destdataBuf, dataSz, &destheader);
+		mpi_errno = xpmemExposeMem(destdataBuf, dataSz, &destheader, comm->rank);
 		if (mpi_errno != MPI_SUCCESS) {
 			errLine = __LINE__;
 			goto fn_fail;
@@ -125,7 +125,7 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 
 		if (myrank == i) {
 			srcdataBuf = (void*) sendbuf;
-			mpi_errno = xpmemExposeMem(sendbuf, dataSz, &srcHeader);
+			mpi_errno = xpmemExposeMem(sendbuf, dataSz, &srcHeader, comm->rank);
 			if (mpi_errno != MPI_SUCCESS) {
 				errLine = __LINE__;
 				goto fn_fail;
@@ -195,13 +195,13 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 		COLL_SHMEM_MODULE = POSIX_MODULE;
 		MPIDI_POSIX_mpi_barrier(comm, errflag, NULL);
 		COLL_SHMEM_MODULE = XPMEM_MODULE;
-		if (myrank == i) {
-			mpi_errno = xpmemRemoveMem(&srcHeader);
-			if (mpi_errno != MPI_SUCCESS) {
-				errLine = __LINE__;
-				goto fn_fail;
-			}
-		}
+		// if (myrank == i) {
+		// 	mpi_errno = xpmemRemoveMem(&srcHeader);
+		// 	if (mpi_errno != MPI_SUCCESS) {
+		// 		errLine = __LINE__;
+		// 		goto fn_fail;
+		// 	}
+		// }
 	}
 
 	// if (myrank == root) {
@@ -222,13 +222,13 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 	COLL_SHMEM_MODULE = POSIX_MODULE;
 	MPIDI_POSIX_mpi_barrier(comm, errflag, NULL);
 	COLL_SHMEM_MODULE = XPMEM_MODULE;
-	if (myrank == root) {
-		mpi_errno = xpmemRemoveMem(&destheader);
-		if (mpi_errno != MPI_SUCCESS) {
-			errLine = __LINE__;
-			goto fn_fail;
-		}
-	}
+	// if (myrank == root) {
+	// 	mpi_errno = xpmemRemoveMem(&destheader);
+	// 	if (mpi_errno != MPI_SUCCESS) {
+	// 		errLine = __LINE__;
+	// 		goto fn_fail;
+	// 	}
+	// }
 
 	// free(destheader);
 
