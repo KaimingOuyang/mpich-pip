@@ -22,7 +22,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Barrier_intra_composition_alpha(MPIR_Comm * c
         MPIR_Errflag_t * errflag,
         const
         MPIDI_coll_algo_container_t
-        * ch4_algo_parameters_container) {
+        * ch4_algo_parameters_container)
+{
 	int mpi_errno = MPI_SUCCESS;
 	const void *barrier_node_container =
 	    MPIDI_coll_get_next_container(ch4_algo_parameters_container);
@@ -81,7 +82,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Barrier_intra_composition_beta(MPIR_Comm * co
         MPIR_Errflag_t * errflag,
         const
         MPIDI_coll_algo_container_t
-        * ch4_algo_parameters_container) {
+        * ch4_algo_parameters_container)
+{
 	int mpi_errno = MPI_SUCCESS;
 	const void *barrier_container = MPIDI_coll_get_next_container(ch4_algo_parameters_container);
 
@@ -105,7 +107,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Barrier_inter_composition_alpha(MPIR_Comm * c
         MPIDI_coll_algo_container_t
         *
         ch4_algo_parameters_container
-        ATTRIBUTE((unused))) {
+        ATTRIBUTE((unused)))
+{
 	int mpi_errno = MPI_SUCCESS;
 
 	mpi_errno = MPIR_Barrier_inter_auto(comm, errflag);
@@ -128,7 +131,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Bcast_intra_composition_alpha(void *buffer, i
         MPIR_Errflag_t * errflag,
         const
         MPIDI_coll_algo_container_t
-        * ch4_algo_parameters_container) {
+        * ch4_algo_parameters_container)
+{
 	int mpi_errno = MPI_SUCCESS;
 	const void *bcast_roots_container =
 	    MPIDI_coll_get_next_container(ch4_algo_parameters_container);
@@ -139,7 +143,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Bcast_intra_composition_alpha(void *buffer, i
 	}
 
 	if (comm->node_roots_comm != NULL && comm->rank != root &&
-	        MPIR_Get_intranode_rank(comm, root) != -1) {
+	    MPIR_Get_intranode_rank(comm, root) != -1) {
 		mpi_errno =
 		    MPIC_Recv(buffer, count, datatype, MPIR_Get_intranode_rank(comm, root), MPIR_BCAST_TAG,
 		              comm->node_comm, MPI_STATUS_IGNORE, errflag);
@@ -184,7 +188,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Bcast_intra_composition_beta(void *buffer, in
         MPIR_Errflag_t * errflag,
         const
         MPIDI_coll_algo_container_t
-        * ch4_algo_parameters_container) {
+        * ch4_algo_parameters_container)
+{
 	int mpi_errno = MPI_SUCCESS;
 	const void *bcast_roots_container =
 	    MPIDI_coll_get_next_container(ch4_algo_parameters_container);
@@ -247,7 +252,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Bcast_intra_composition_gamma(void *buffer, i
         MPIR_Errflag_t * errflag,
         const
         MPIDI_coll_algo_container_t
-        * ch4_algo_parameters_container) {
+        * ch4_algo_parameters_container)
+{
 	int mpi_errno = MPI_SUCCESS;
 	const void *bcast_container = MPIDI_coll_get_next_container(ch4_algo_parameters_container);
 
@@ -273,7 +279,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Bcast_inter_composition_alpha(void *buffer, i
         MPIDI_coll_algo_container_t
         *
         ch4_algo_parameters_container
-        ATTRIBUTE((unused))) {
+        ATTRIBUTE((unused)))
+{
 	int mpi_errno = MPI_SUCCESS;
 
 	mpi_errno = MPIR_Bcast_inter_auto(buffer, count, datatype, root, comm, errflag);
@@ -299,7 +306,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Allreduce_intra_composition_alpha(const void 
         const
         MPIDI_coll_algo_container_t
         *
-        ch4_algo_parameters_container) {
+        ch4_algo_parameters_container)
+{
 	int mpi_errno = MPI_SUCCESS;
 	const void *reduce_node_container =
 	    MPIDI_coll_get_next_container(ch4_algo_parameters_container);
@@ -384,7 +392,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Allreduce_intra_composition_beta(const void *
         MPIR_Errflag_t * errflag,
         const
         MPIDI_coll_algo_container_t
-        * ch4_algo_parameters_container) {
+        * ch4_algo_parameters_container)
+{
 	int mpi_errno = MPI_SUCCESS;
 	const void *allred_container = MPIDI_coll_get_next_container(ch4_algo_parameters_container);
 
@@ -414,7 +423,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Allreduce_inter_composition_alpha(const void 
         MPIDI_coll_algo_container_t
         *
         ch4_algo_parameters_container
-        ATTRIBUTE((unused))) {
+        ATTRIBUTE((unused)))
+{
 	int mpi_errno = MPI_SUCCESS;
 
 	mpi_errno = MPIR_Allreduce_inter_auto(sendbuf, recvbuf, count, datatype, op, comm, errflag);
@@ -439,7 +449,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Reduce_intra_composition_alpha(const void *se
         MPIR_Errflag_t * errflag,
         const
         MPIDI_coll_algo_container_t
-        * ch4_algo_parameters_container) {
+        * ch4_algo_parameters_container)
+{
 	int mpi_errno = MPI_SUCCESS;
 	int mpi_errno_ret = MPI_SUCCESS;
 	MPI_Aint true_lb = 0;
@@ -455,7 +466,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Reduce_intra_composition_alpha(const void *se
 
 	/* Create a temporary buffer on local roots of all nodes */
 	if (comm->node_roots_comm != NULL) {
-
+		// printf("Allocate node_roots_comm memory\n");
+		// fflush(stdout);
 		MPIR_Type_get_true_extent_impl(datatype, &true_lb, &true_extent);
 		MPIR_Datatype_get_extent_macro(datatype, extent);
 
@@ -540,10 +552,12 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Reduce_intra_composition_alpha(const void *se
 				// printf("Rank: %d, I am the root. in_place is automatically handled.\n", comm->rank);
 				// fflush(stdout);
 				/* I am the root. in_place is automatically handled. */
+#ifndef NO_XPMEM_REDUCE_LOCAL
 				mpi_errno =
 				    MPIDI_NM_mpi_reduce(sendbuf, recvbuf, count, datatype,
 				                        op, MPIR_Get_internode_rank(comm, root),
 				                        comm->node_roots_comm, errflag, reduce_roots_container);
+#endif
 				if (mpi_errno) {
 					/* for communication errors, just record the error but continue */
 					*errflag =
@@ -552,9 +566,10 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Reduce_intra_composition_alpha(const void *se
 					MPIR_ERR_SET(mpi_errno, *errflag, "**fail");
 					MPIR_ERR_ADD(mpi_errno_ret, mpi_errno);
 				}
-
+#ifndef NO_XPMEM_REDUCE_LOCAL
 				/* set sendbuf to MPI_IN_PLACE to make final intranode reduce easy. */
 				sendbuf = MPI_IN_PLACE;
+#endif
 			}
 		}
 
@@ -606,7 +621,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Reduce_intra_composition_beta(const void *sen
         MPIR_Errflag_t * errflag,
         const
         MPIDI_coll_algo_container_t
-        * ch4_algo_parameters_container) {
+        * ch4_algo_parameters_container)
+{
 	int mpi_errno = MPI_SUCCESS;
 	const void *reduce_container = MPIDI_coll_get_next_container(ch4_algo_parameters_container);
 
@@ -636,7 +652,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Reduce_inter_composition_alpha(const void *se
         MPIDI_coll_algo_container_t
         *
         ch4_algo_parameters_container
-        ATTRIBUTE((unused))) {
+        ATTRIBUTE((unused)))
+{
 	int mpi_errno = MPI_SUCCESS;
 
 	mpi_errno = MPIR_Reduce_inter_auto(sendbuf, recvbuf, count, datatype, op, root, comm, errflag);
@@ -663,7 +680,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Alltoall_intra_composition_alpha(const void *
         MPIR_Errflag_t * errflag,
         const
         MPIDI_coll_algo_container_t
-        * ch4_algo_parameters_container) {
+        * ch4_algo_parameters_container)
+{
 	int mpi_errno = MPI_SUCCESS;
 	const void *alltoall_container = MPIDI_coll_get_next_container(ch4_algo_parameters_container);
 
@@ -695,7 +713,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Alltoall_inter_composition_alpha(const void *
         MPIDI_coll_algo_container_t
         *
         ch4_algo_parameters_container
-        ATTRIBUTE((unused))) {
+        ATTRIBUTE((unused)))
+{
 	int mpi_errno = MPI_SUCCESS;
 
 	mpi_errno = MPIR_Alltoall_inter_auto(sendbuf, sendcount, sendtype, recvbuf,
@@ -726,7 +745,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Alltoallv_intra_composition_alpha(const void 
         const
         MPIDI_coll_algo_container_t
         *
-        ch4_algo_parameters_container) {
+        ch4_algo_parameters_container)
+{
 	int mpi_errno = MPI_SUCCESS;
 	const void *alltoallv_container = MPIDI_coll_get_next_container(ch4_algo_parameters_container);
 
@@ -761,7 +781,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Alltoallv_inter_composition_alpha(const void 
         MPIDI_coll_algo_container_t
         *
         ch4_algo_parameters_container
-        ATTRIBUTE((unused))) {
+        ATTRIBUTE((unused)))
+{
 	int mpi_errno = MPI_SUCCESS;
 
 	mpi_errno = MPIR_Alltoallv_inter_auto(sendbuf, sendcounts, sdispls,
@@ -795,7 +816,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Alltoallw_intra_composition_alpha(const void 
         const
         MPIDI_coll_algo_container_t
         *
-        ch4_algo_parameters_container) {
+        ch4_algo_parameters_container)
+{
 	int mpi_errno = MPI_SUCCESS;
 	const void *alltoallw_container = MPIDI_coll_get_next_container(ch4_algo_parameters_container);
 
@@ -832,7 +854,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Alltoallw_inter_composition_alpha(const void 
         MPIDI_coll_algo_container_t
         *
         ch4_algo_parameters_container
-        ATTRIBUTE((unused))) {
+        ATTRIBUTE((unused)))
+{
 	int mpi_errno = MPI_SUCCESS;
 
 	mpi_errno = MPIR_Alltoallw_inter_auto(sendbuf, sendcounts, sdispls,
@@ -862,7 +885,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Allgather_intra_composition_alpha(const void 
         const
         MPIDI_coll_algo_container_t
         *
-        ch4_algo_parameters_container) {
+        ch4_algo_parameters_container)
+{
 	int mpi_errno = MPI_SUCCESS;
 	const void *allgather_container = MPIDI_coll_get_next_container(ch4_algo_parameters_container);
 
@@ -895,7 +919,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Allgather_inter_composition_alpha(const void 
         MPIDI_coll_algo_container_t
         *
         ch4_algo_parameters_container
-        ATTRIBUTE((unused))) {
+        ATTRIBUTE((unused)))
+{
 	int mpi_errno = MPI_SUCCESS;
 
 	mpi_errno = MPIR_Allgather_inter_auto(sendbuf, sendcount, sendtype,
@@ -925,7 +950,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Allgatherv_intra_composition_alpha(const void
         const
         MPIDI_coll_algo_container_t
         *
-        ch4_algo_parameters_container) {
+        ch4_algo_parameters_container)
+{
 	int mpi_errno = MPI_SUCCESS;
 	const void *allgatherv_container = MPIDI_coll_get_next_container(ch4_algo_parameters_container);
 
@@ -959,7 +985,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Allgatherv_inter_composition_alpha(const void
         MPIDI_coll_algo_container_t
         *
         ch4_algo_parameters_container
-        ATTRIBUTE((unused))) {
+        ATTRIBUTE((unused)))
+{
 	int mpi_errno = MPI_SUCCESS;
 
 	mpi_errno = MPIR_Allgatherv_inter_auto(sendbuf, sendcount, sendtype,
@@ -987,7 +1014,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Gather_intra_composition_alpha(const void *se
         MPIR_Errflag_t * errflag,
         const
         MPIDI_coll_algo_container_t
-        * ch4_algo_parameters_container) {
+        * ch4_algo_parameters_container)
+{
 	int mpi_errno = MPI_SUCCESS;
 	const void *gather_container = MPIDI_coll_get_next_container(ch4_algo_parameters_container);
 
@@ -1018,7 +1046,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Gather_inter_composition_alpha(const void *se
         MPIDI_coll_algo_container_t
         *
         ch4_algo_parameters_container
-        ATTRIBUTE((unused))) {
+        ATTRIBUTE((unused)))
+{
 	int mpi_errno = MPI_SUCCESS;
 
 	mpi_errno = MPIR_Gather_inter_auto(sendbuf, sendcount, sendtype, recvbuf,
@@ -1047,7 +1076,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Gatherv_intra_composition_alpha(const void *s
         MPIR_Errflag_t * errflag,
         const
         MPIDI_coll_algo_container_t
-        * ch4_algo_parameters_container) {
+        * ch4_algo_parameters_container)
+{
 	int mpi_errno = MPI_SUCCESS;
 	const void *gatherv_container = MPIDI_coll_get_next_container(ch4_algo_parameters_container);
 
@@ -1080,7 +1110,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Gatherv_inter_composition_alpha(const void *s
         MPIDI_coll_algo_container_t
         *
         ch4_algo_parameters_container
-        ATTRIBUTE((unused))) {
+        ATTRIBUTE((unused)))
+{
 	int mpi_errno = MPI_SUCCESS;
 
 	mpi_errno = MPIR_Gatherv_inter_auto(sendbuf, sendcount, sendtype, recvbuf,
@@ -1108,7 +1139,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Scatter_intra_composition_alpha(const void *s
         MPIR_Errflag_t * errflag,
         const
         MPIDI_coll_algo_container_t
-        * ch4_algo_parameters_container) {
+        * ch4_algo_parameters_container)
+{
 	int mpi_errno = MPI_SUCCESS;
 	const void *scatter_container = MPIDI_coll_get_next_container(ch4_algo_parameters_container);
 
@@ -1141,7 +1173,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Scatter_inter_composition_alpha(const void *s
         MPIDI_coll_algo_container_t
         *
         ch4_algo_parameters_container
-        ATTRIBUTE((unused))) {
+        ATTRIBUTE((unused)))
+{
 	int mpi_errno = MPI_SUCCESS;
 
 	mpi_errno = MPIR_Scatter_inter_auto(sendbuf, sendcount, sendtype, recvbuf,
@@ -1170,7 +1203,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Scatterv_intra_composition_alpha(const void *
         MPIR_Errflag_t * errflag,
         const
         MPIDI_coll_algo_container_t
-        * ch4_algo_parameters_container) {
+        * ch4_algo_parameters_container)
+{
 	int mpi_errno = MPI_SUCCESS;
 	const void *scatterv_container = MPIDI_coll_get_next_container(ch4_algo_parameters_container);
 
@@ -1203,7 +1237,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Scatterv_inter_composition_alpha(const void *
         MPIDI_coll_algo_container_t
         *
         ch4_algo_parameters_container
-        ATTRIBUTE((unused))) {
+        ATTRIBUTE((unused)))
+{
 	int mpi_errno = MPI_SUCCESS;
 
 	mpi_errno = MPIR_Scatterv_inter_auto(sendbuf, sendcounts, displs, sendtype, recvbuf,
@@ -1234,7 +1269,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Reduce_scatter_inter_composition_alpha(const 
         MPIDI_coll_algo_container_t
         *
         ch4_algo_parameters_container
-        ATTRIBUTE((unused))) {
+        ATTRIBUTE((unused)))
+{
 	int mpi_errno = MPI_SUCCESS;
 
 	mpi_errno = MPIR_Reduce_scatter_inter_auto(sendbuf, recvbuf, recvcounts, datatype,
@@ -1264,7 +1300,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Reduce_scatter_intra_composition_alpha(const 
         const
         MPIDI_coll_algo_container_t
         *
-        ch4_algo_parameters_container) {
+        ch4_algo_parameters_container)
+{
 	int mpi_errno = MPI_SUCCESS;
 	const void *reduce_scatter_container =
 	    MPIDI_coll_get_next_container(ch4_algo_parameters_container);
@@ -1300,7 +1337,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Reduce_scatter_block_inter_composition_alpha(
         MPIDI_coll_algo_container_t
         *
         ch4_algo_parameters_container
-        ATTRIBUTE((unused))) {
+        ATTRIBUTE((unused)))
+{
 	int mpi_errno = MPI_SUCCESS;
 
 	mpi_errno = MPIR_Reduce_scatter_block_inter_auto(sendbuf, recvbuf, recvcount, datatype,
@@ -1332,7 +1370,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Reduce_scatter_block_intra_composition_alpha(
         const
         MPIDI_coll_algo_container_t
         *
-        ch4_algo_parameters_container) {
+        ch4_algo_parameters_container)
+{
 	int mpi_errno = MPI_SUCCESS;
 	const void *reduce_scatter_block_container =
 	    MPIDI_coll_get_next_container(ch4_algo_parameters_container);
@@ -1362,7 +1401,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Scan_intra_composition_alpha(const void *send
         MPIR_Errflag_t * errflag,
         const
         MPIDI_coll_algo_container_t
-        * ch4_algo_parameters_container) {
+        * ch4_algo_parameters_container)
+{
 	int mpi_errno = MPI_SUCCESS;
 	int rank = comm_ptr->rank;
 	MPI_Status status;
@@ -1536,7 +1576,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Scan_intra_composition_beta(const void *sendb
         MPIR_Errflag_t * errflag,
         const
         MPIDI_coll_algo_container_t
-        * ch4_algo_parameters_container) {
+        * ch4_algo_parameters_container)
+{
 	int mpi_errno = MPI_SUCCESS;
 	const void *scan_container = MPIDI_coll_get_next_container(ch4_algo_parameters_container);
 
@@ -1564,7 +1605,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Exscan_intra_composition_alpha(const void *se
         MPIR_Errflag_t * errflag,
         const
         MPIDI_coll_algo_container_t
-        * ch4_algo_parameters_container) {
+        * ch4_algo_parameters_container)
+{
 	int mpi_errno = MPI_SUCCESS;
 	const void *exscan_container = MPIDI_coll_get_next_container(ch4_algo_parameters_container);
 

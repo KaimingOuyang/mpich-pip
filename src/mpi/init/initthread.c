@@ -12,7 +12,9 @@
  * excludes the implied warranties of merchantability, fitness for a
  * particular purpose and non-infringement.
  */
-
+#define _GNU_SOURCE
+#include <sched.h>
+#include <numa.h>
 #include "mpiimpl.h"
 #include "mpir_info.h"
 #include "datatype.h"
@@ -28,6 +30,7 @@
 #endif
 
 #include <xpmem.h>
+void *global_buffer;
 int xpmem_local_rank;
 xpmem_segid_t dtHandler;
 xpmem_segid_t *xpmem_handler_array;
@@ -830,14 +833,16 @@ fn_fail:
 
 void xpmem_intra_node_init()
 {
-	MPIR_Comm *comm = MPIR_Process.comm_world->node_comm;
-	int size = comm->local_size;
+	MPIR_Comm *comm_ptr = MPIR_Process.comm_world->node_comm;
+	MPIR_Comm *intra_socket_comm = NULL;
+	MPIR_Comm *inter_socket_comm = NULL;
+	int size = comm_ptr->local_size;
 	if (size > 1) {
-		xpmem_local_rank = comm->rank;
+		xpmem_local_rank = comm_ptr->rank;
 		MPIR_Errflag_t errflag = MPIR_ERR_NONE;
 		xpmem_handler_array = (xpmem_segid_t*) MPL_malloc(sizeof(xpmem_segid_t) * size, MPL_MEM_OTHER);
 		xpmem_apid_array = (xpmem_apid_t*) MPL_malloc(sizeof(xpmem_apid_t) * size, MPL_MEM_OTHER);
-		MPIR_Allgather(&dtHandler, 1, MPI_LONG_LONG, xpmem_handler_array, 1, MPI_LONG_LONG, comm, &errflag);
+		MPIR_Allgather(&dtHandler, 1, MPI_LONG_LONG, xpmem_handler_array, 1, MPI_LONG_LONG, comm_ptr, &errflag);
 		for (int i = 0; i < size; ++i) {
 			xpmem_apid_array[i] = xpmem_get(xpmem_handler_array[i], XPMEM_RDWR, XPMEM_PERMIT_MODE, NULL);
 			if (xpmem_apid_array[i] == -1) {
@@ -846,6 +851,35 @@ void xpmem_intra_node_init()
 				exit(1);
 			}
 		}
+		int socket_id;
+		/* Get socket information */
+		int cpu = sched_getcpu();
+		int node = numa_node_of_cpu(cpu);
+		socket_id = node;
+
+		// MPIR_create_shared_addr(MPIR_Process.comm_world);
+		// MPIR_create_shared_addr(comm_ptr);
+		MPIR_Comm_split_impl(MPIR_Process.comm_world, socket_id, 0, &intra_socket_comm);
+		comm_ptr->socket_comm = intra_socket_comm;
+		// printf("MPIR_create_shared_addr comm_ptr->socket_comm %p rank %d, \n", intra_socket_comm, MPIR_Process.comm_world->rank);
+		// fflush(stdout);
+		// MPIR_create_shared_addr(comm_ptr->socket_comm);
+		// if(MPIR_Process.socket_id == 0)
+
+		if (comm_ptr->local_size != intra_socket_comm->local_size) {
+
+			if (intra_socket_comm->rank == 0) {
+				// printf("Intersplit rank %d, newrank %d\n", comm_ptr->rank, intra_socket_comm->rank);
+				// fflush(stdout);
+				MPIR_Comm_split_impl(comm_ptr, 0, 0, &inter_socket_comm);
+				comm_ptr->socket_roots_comm = inter_socket_comm;
+			} else {
+				MPIR_Comm_split_impl(comm_ptr, 1, 0, &inter_socket_comm);
+			}
+		}
+		
+		global_buffer = malloc(16 * 1024 * 1024);
+		memset(global_buffer, 0, 16 * 1024 * 1024);
 	}
 
 	return;

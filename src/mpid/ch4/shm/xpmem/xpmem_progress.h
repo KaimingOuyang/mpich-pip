@@ -5,7 +5,7 @@
 #ifdef XPMEM_PROFILE_MISS
 #include <papi.h>
 #endif
-
+#include <shm.h>
 
 extern xpmem_segid_t *xpmem_handler_array;
 extern xpmem_apid_t *xpmem_apid_array;

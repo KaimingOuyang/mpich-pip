@@ -11,7 +11,7 @@
 #include <shm.h>
 #include "../posix/shm_inline.h"
 #include "../xpmem/xpmem_inline.h"
-
+extern void *global_buffer;
 #if defined(POSIX_PROFILE_MISS) || defined(XPMEM_PROFILE_MISS) || defined(XPMEM_SYSCALL) || defined(XPMEM_SYNC) || defined(XPMEM_MEMCOPY)
 int PROFILE_FLAG = 1;
 #else
@@ -245,22 +245,73 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_reduce(const void *sendbuf, void *rec
         MPIR_Comm * comm_ptr, MPIR_Errflag_t * errflag,
         const void *algo_parameters_container)
 {
-	int ret;
+	int ret = MPI_SUCCESS;
 
 	MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_SHM_MPI_REDUCE);
 	MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_SHM_MPI_REDUCE);
 #ifdef SHMEM_MODULE_XPMEM
-	// char *SHMEM_MODULE = getenv("SHMEM_MODULE");
-	// if (!strcmp(SHMEM_MODULE, "XPMEM") && !strcmp(COLL_SHMEM_MODULE, "XPMEM") && !PROFILE_FLAG) {
+	void* rank0_tmp_buffer = NULL;
+
+	if (comm_ptr->socket_comm != NULL) {
+		if (root != 0) {
+			if (comm_ptr->socket_comm->rank == 0)
+				rank0_tmp_buffer = MPL_malloc(MPIR_Datatype_get_basic_size(datatype) * count, MPL_MEM_OTHER);
+		} else {
+			if (comm_ptr->rank != 0 && comm_ptr->socket_comm->rank == 0)
+				rank0_tmp_buffer = global_buffer;	
+				// rank0_tmp_buffer = MPL_malloc(MPIR_Datatype_get_basic_size(datatype) * count, MPL_MEM_OTHER);
+			else
+				rank0_tmp_buffer = recvbuf;
+		}
+		// printf("First stage pip reduce rank %d\n", comm_ptr->socket_comm->rank);
+		// fflush(stdout);
+		ret = MPIDI_XPMEM_mpi_reduce(sendbuf, rank0_tmp_buffer, count, datatype, op, 0, comm_ptr->socket_comm, errflag, algo_parameters_container);
+		if (ret != MPI_SUCCESS)
+			goto fn_exit;
+
+		if (comm_ptr->socket_roots_comm != NULL) {
+			// printf("Second stage pip reduce rank %d\n", comm_ptr->socket_roots_comm->rank);
+			// fflush(stdout);
+			// printf("Inter socket comm, my rank %d\n", comm_ptr->rank);
+			// fflush(stdout);
+			if (comm_ptr->socket_roots_comm->rank == 0)
+				ret = MPIDI_XPMEM_mpi_tree_based_reduce(MPI_IN_PLACE, rank0_tmp_buffer, count, datatype, op, 0, comm_ptr->socket_roots_comm, errflag, algo_parameters_container);
+			else
+				ret = MPIDI_XPMEM_mpi_tree_based_reduce(rank0_tmp_buffer, NULL, count, datatype, op, 0, comm_ptr->socket_roots_comm, errflag, algo_parameters_container);
+			if (ret != MPI_SUCCESS)
+				goto fn_exit;
+		}
+
+		if (root != 0) {
+			MPIR_Request *request = NULL;
+			if (comm_ptr->rank == 0) {
+				ret = MPIDI_POSIX_mpi_send(rank0_tmp_buffer, count, datatype, root, 0, comm_ptr, MPIR_CONTEXT_INTRA_COLL, NULL, &request);
+				if (ret != MPI_SUCCESS)
+					goto fn_exit;
+
+			} else if (comm_ptr->rank == root) {
+				ret = MPIDI_POSIX_mpi_recv(recvbuf, count, datatype, 0, 0, comm_ptr, MPIR_CONTEXT_INTRA_COLL,
+				                         MPI_STATUS_IGNORE, &request);
+				if (ret != MPI_SUCCESS)
+					goto fn_exit;
+			}
+			if (comm_ptr->socket_comm->rank == 0)
+				MPL_free(rank0_tmp_buffer);
+		} else {
+			// if (comm_ptr->rank != 0 && comm_ptr->socket_comm->rank == 0)
+			// 	MPL_free(rank0_tmp_buffer);
+		}
+	} else {
+		ret = MPIDI_XPMEM_mpi_reduce(sendbuf, recvbuf, count, datatype, op, root, comm_ptr, errflag, algo_parameters_container);
+		if (ret != MPI_SUCCESS)
+			goto fn_exit;
+	}
+#else
 	ret = MPIDI_XPMEM_mpi_reduce(sendbuf, recvbuf, count, datatype, op, root, comm_ptr, errflag,
 	                             algo_parameters_container);
-	// } else
-	// {
-#else
-	ret = MPIDI_POSIX_mpi_reduce(sendbuf, recvbuf, count, datatype, op, root, comm_ptr, errflag,
-	                             algo_parameters_container);
-	// }
+
 #endif
+fn_exit:
 	MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_SHM_MPI_REDUCE);
 	return ret;
 }

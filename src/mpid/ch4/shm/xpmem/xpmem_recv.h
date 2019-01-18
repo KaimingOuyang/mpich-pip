@@ -91,7 +91,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 		realBuffer = recrealbuf;
 		apid = recapid;
 	} else {
-#ifndef XPMEM_SYSCALL
+#ifndef NO_XPMEM_SYSCALL
 		mpi_errno = xpmemAttachMem(&header, &dataBuffer, &realBuffer);
 		if (mpi_errno != MPI_SUCCESS) {
 			errLine = __LINE__;
@@ -104,8 +104,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 		recapid = apid;
 	}
 #else
-#ifndef XPMEM_SYSCALL
-	// printf("define XPMEM_SYSCALL\n");
+#ifndef NO_XPMEM_SYSCALL
+	// printf("define NO_XPMEM_SYSCALL\n");
 	mpi_errno = xpmemAttachMem(&header, &dataBuffer, &realBuffer);
 	if (mpi_errno != MPI_SUCCESS) {
 		errLine = __LINE__;
@@ -180,9 +180,9 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 
 #endif
 
-#ifndef XPMEM_MEMCOPY
-	// printf("define XPMEM_MEMCOPY\n");
-	memcpy(buf, dataBuffer, header.data_size);
+#ifndef NO_XPMEM_MEMCOPY
+	// printf("define NO_XPMEM_MEMCOPY\n");
+	MPIR_Memcpy(buf, dataBuffer, header.data_size);
 #endif
 
 #ifdef XPMEM_PROFILE_MISS
@@ -225,7 +225,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 		status->MPI_TAG = tag;
 	}
 #ifndef XPMEM_WO_SYSCALL
-#ifndef XPMEM_SYSCALL
+#ifndef NO_XPMEM_SYSCALL
 	/* Release resources */
 	mpi_errno = xpmemDetachMem(realBuffer);
 	if (mpi_errno != MPI_SUCCESS) {
