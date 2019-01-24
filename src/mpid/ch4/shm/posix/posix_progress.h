@@ -12,11 +12,10 @@
 #define POSIX_PROGRESS_H_INCLUDED
 
 #include "posix_impl.h"
-#include "posix_am_impl.h"
-#include <posix_eager.h>
-
-#undef FUNCNAME
-#define FUNCNAME MPIDI_POSIX_progress_recv
+extern char unexpected_buffer[16][8388608];
+/* ----------------------------------------------------- */
+/* MPIDI_POSIX_progress_recv                     */
+/* ----------------------------------------------------- */
 #undef FCNAME
 #define FCNAME MPL_QUOTE(FUNCNAME)
 MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_recv(int blocking)
@@ -154,10 +153,29 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_recv(int blocking)
                 curr_rreq_hdr->iov_num = p_data_sz;
             }
 
-            /* Set final request status */
+        /* unexpected message, no posted matching req */
+        if (in_cell) {
+            /* free the cell, move to unexpected queue */
+            MPIR_Request *rreq;
+            MPIDI_POSIX_REQUEST_CREATE_RREQ(rreq);
+            MPIR_Object_set_ref(rreq, 1);
+            /* set status */
+            rreq->status.MPI_SOURCE = cell->rank;
+            rreq->status.MPI_TAG = cell->tag;
+            MPIR_STATUS_SET_COUNT(rreq->status, cell->pkt.mpich.datalen);
+            MPIDI_POSIX_ENVELOPE_SET(MPIDI_POSIX_REQUEST(rreq), cell->rank, cell->tag,
+                                     cell->context_id);
+            data_sz = cell->pkt.mpich.datalen;
+            MPIDI_POSIX_REQUEST(rreq)->data_sz = data_sz;
+            MPIDI_POSIX_REQUEST(rreq)->type = cell->pkt.mpich.type;
 
-            if (in_total_data_sz > recv_data_sz) {
-                rreq->status.MPI_ERROR = MPI_ERR_TRUNCATE;
+            if (data_sz > 0) {
+                // MPIDI_POSIX_REQUEST(rreq)->user_buf = (char *) MPL_malloc(data_sz, MPL_MEM_SHM);
+                static int buffer_id = 0;
+                MPIDI_POSIX_REQUEST(rreq)->user_buf = unexpected_buffer[buffer_id];
+                buffer_id = (buffer_id + 1) % 16;
+                MPIR_Memcpy(MPIDI_POSIX_REQUEST(rreq)->user_buf, (void *) cell->pkt.mpich.p.payload,
+                            data_sz);
             } else {
                 rreq->status.MPI_ERROR = MPI_SUCCESS;
             }
@@ -228,6 +246,12 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_recv(int blocking)
         if (curr_rreq_hdr->cmpl_handler_fn) {
             curr_rreq_hdr->cmpl_handler_fn(rreq);
         }
+    } else {
+        /* destroy unexpected req */
+        MPIDI_POSIX_REQUEST(sreq)->pending = NULL;
+        // MPL_free(MPIDI_POSIX_REQUEST(sreq)->user_buf);
+        MPIDI_POSIX_REQUEST_DEQUEUE_AND_SET_ERROR(&sreq, prev_sreq, MPIDI_POSIX_recvq_unexpected,
+                                                  mpi_errno);
     }
 
     MPIDI_POSIX_eager_recv_commit(&transaction);
