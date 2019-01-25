@@ -259,7 +259,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_reduce(const void *sendbuf, void *rec
 		} else {
 			if (comm_ptr->rank != 0 && comm_ptr->socket_comm->rank == 0)
 				rank0_tmp_buffer = global_buffer;	
-				// rank0_tmp_buffer = MPL_malloc(MPIR_Datatype_get_basic_size(datatype) * count, MPL_MEM_OTHER);
+				//rank0_tmp_buffer = MPL_malloc(MPIR_Datatype_get_basic_size(datatype) * count, MPL_MEM_OTHER);
 			else
 				rank0_tmp_buffer = recvbuf;
 		}
@@ -307,7 +307,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_reduce(const void *sendbuf, void *rec
 			goto fn_exit;
 	}
 #else
-	ret = MPIDI_XPMEM_mpi_reduce(sendbuf, recvbuf, count, datatype, op, root, comm_ptr, errflag,
+	ret = MPIDI_POSIX_mpi_reduce(sendbuf, recvbuf, count, datatype, op, root, comm_ptr, errflag,
 	                             algo_parameters_container);
 
 #endif

@@ -40,35 +40,26 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 		goto fn_exit;
 
 	ackHeader *header_array = (ackHeader*) MPL_malloc(sizeof(ackHeader) * psize, MPL_MEM_OTHER);
-	// if (myrank == root) {
-	// 	// printf("rank %d sendbuf: ", myrank);
-	// 	if (sendbuf != MPI_IN_PLACE) {
-	// 		printArray(myrank, sendbuf, count);
-	// 	} else {
-	// 		printArray(myrank, recvbuf, count);
-	// 	}
-	// 	// printf("\n");
-	// 	// fflush(stdout);
-	// } else {
-	// 	printArray(myrank, sendbuf, count);
-	// }
-	// COLL_SHMEM_MODULE = POSIX_MODULE;
-	// MPIDI_POSIX_mpi_barrier(comm, errflag, NULL);
-	// COLL_SHMEM_MODULE = XPMEM_MODULE;
+#ifdef XPMEM_REUSE
+	// static ackHeader *header_reuse = NULL;
+	static uint64_t *src_addr = NULL;
+	static ackHeader *prev_header = NULL;
+	if (src_addr == NULL) {
+		// header_reuse = (ackHeader*) MPL_malloc(sizeof(ackHeader) * psize, MPL_MEM_OTHER);
+		src_addr = MPL_malloc(sizeof(uint64_t) * psize, MPL_MEM_OTHER);
+		prev_header = MPL_malloc(sizeof(ackHeader) * psize, MPL_MEM_OTHER);
+		memset(src_addr, 0, sizeof(uint64_t) * psize);
+		memset(prev_header, 0, sizeof(ackHeader) * psize);
+		// printf("psize %d\n", psize);
+	}
+#endif
 
-	// if (myrank != root) {
-	// 	printArray(myrank, sendbuf, count);
-	// }
+
 	typesize =  MPIR_Datatype_get_basic_size(datatype);
 	dataSz = typesize * count;
 	/* Attach destination buffer located on root process */
 	if (myrank == root) {
-		// 	*(__s64*)(destheader + 1) = 1L;
-		// 	*(__s64*)(destheader + 1) = 0L;
-		// destdataBuf = recvbuf;
-		// printf("Rank: %d, enter MPIDI_XPMEM_mpi_reduce with recvbuf[9] %d\n", myrank, ((int*)recvbuf)[9]);
-		// fflush(stdout);
-		// printf("dataSz=%d, typesize=%d\n", dataSz, typesize);
+
 #ifndef NO_XPMEM_REDUCE_LOCAL
 		if (sendbuf != MPI_IN_PLACE) {
 			memcpy(recvbuf, sendbuf, dataSz);
@@ -123,6 +114,35 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 	// }
 	// printf("Rank: %d, attach dest buffer with handler %llX, and %d\n", myrank, destheader.dtHandler, ((int*)destdataBuf)[0]);
 	// fflush(stdout);
+#ifdef XPMEM_REUSE
+
+
+	if (prev_header[root].data_size == header_array[root].data_size && prev_header[root].exp_offset == header_array[root].exp_offset && prev_header[root].data_offset == header_array[root].data_offset) {
+
+		dest_dataBuf = (void*) src_addr[root];
+		// if (comm->rank == 0) {
+		// printf("Rank %d - DEST Reuse exp_offset %X, data_offset %X, data_size %lld, attached addr %X\n", comm->rank, header_array[root].exp_offset, header_array[root].data_offset, header_array[root].data_size, dest_dataBuf);
+		// fflush(stdout);
+		// }
+	} else {
+
+#ifndef NO_XPMEM_SYSCALL
+		mpi_errno = xpmemAttachMem(&header_array[root], &dest_dataBuf, &dest_realBuf);
+		if (mpi_errno != MPI_SUCCESS) {
+			errLine = __LINE__;
+			goto fn_fail;
+		}
+		// if (comm->rank == 0) {
+
+		// }
+		src_addr[root] = (uint64_t) dest_dataBuf;
+		prev_header[root] = header_array[root];
+		// printf("Rank %d - DEST First attach exp_offset %X, data_offset %X, data_size %lld, attached addr %X\n", comm->rank, prev_header[root].exp_offset, prev_header[root].data_offset, prev_header[root].data_size, src_addr[root]);
+		// fflush(stdout);
+#endif
+	}
+
+#else // Root XPMEM_REUSE
 
 #ifndef NO_XPMEM_SYSCALL
 	mpi_errno = xpmemAttachMem(&header_array[root], &dest_dataBuf, &dest_realBuf);
@@ -131,6 +151,8 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 		goto fn_fail;
 	}
 #endif
+
+#endif // Root XPMEM_REUSE
 	size_t sindex = (size_t) (myrank * count / psize);
 	size_t len = (size_t) ((myrank + 1) * count / psize) - sindex;
 	void *insrc;
@@ -141,22 +163,62 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 		if (i == root) {
 			continue;
 		}
+
+#ifdef XPMEM_REUSE
+		// if (comm->rank == 0) {
+		// 	printf("Ready to attach src mem %X\n", header_array[i].exp_offset);
+		// 	fflush(stdout);
+		// }
+
+		if (prev_header[i].data_size == header_array[i].data_size && prev_header[i].exp_offset == header_array[i].exp_offset && prev_header[i].data_offset == header_array[i].data_offset) {
+			srcdataBuf = (void*) src_addr[i];
+			// if (comm->rank == 0) {
+			// printf("Rank %d - SRC Reuse exp_offset %X, data_offset %X, data_size %lld, attached addr %X\n", comm->rank, header_array[i].exp_offset, header_array[i].data_offset, header_array[i].data_size, srcdataBuf);
+			// fflush(stdout);
+			// }
+		} else {
+
+#ifndef NO_XPMEM_SYSCALL
+			mpi_errno = xpmemAttachMem(&header_array[i], &srcdataBuf, &srcrealBuf);
+			if (mpi_errno != MPI_SUCCESS) {
+				errLine = __LINE__;
+				goto fn_fail;
+			}
+			src_addr[i] = (uint64_t) srcdataBuf;
+			prev_header[i] = header_array[i];
+#endif
+			// if (comm->rank == 0) {
+			// printf("Rank %d - SRC First attach exp_offset %X, data_offset %X, data_size %lld, attached addr %X\n", comm->rank, prev_header[i].exp_offset, prev_header[i].data_offset, prev_header[i].data_size, src_addr[i]);
+			// fflush(stdout);
+			// }
+		}
+
+#else // Root XPMEM_REUSE
+
 #ifndef NO_XPMEM_SYSCALL
 		mpi_errno = xpmemAttachMem(&header_array[i], &srcdataBuf, &srcrealBuf);
 		if (mpi_errno != MPI_SUCCESS) {
 			errLine = __LINE__;
 			goto fn_fail;
 		}
-
-		insrc = (void*) ((char*) srcdataBuf + sindex * typesize);
 #endif
 
+#endif
+		insrc = (void*) ((char*) srcdataBuf + sindex * typesize);
 
 #ifndef NO_XPMEM_REDUCE_LOCAL
+
+		// printf("Rank %d - Before reduce local\n", comm->rank);
+		// fflush(stdout);
 		MPIR_Reduce_local(insrc, outdest, len, datatype, op);
+		// printf("Rank %d - Complete reduce local\n", comm->rank);
+		// fflush(stdout);
 #endif
 
+#ifndef XPMEM_REUSE
 #ifndef NO_XPMEM_SYSCALL
+		// printf("How dare you have detach?\n");
+		// fflush(stdout);
 		// if (myrank != i) {
 		mpi_errno = xpmemDetachMem(srcrealBuf);
 		if (mpi_errno != MPI_SUCCESS) {
@@ -164,16 +226,20 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 			goto fn_fail;
 		}
 #endif
+#endif // XPMEM_REUSE
 	}
 
-
+#ifndef XPMEM_REUSE
 #ifndef NO_XPMEM_SYSCALL
+	// printf("How dare you have detach?\n");
+	// fflush(stdout);
 	mpi_errno = xpmemDetachMem(dest_realBuf);
 	if (mpi_errno != MPI_SUCCESS) {
 		errLine = __LINE__;
 		goto fn_fail;
 	}
 #endif
+#endif // XPMEM_REUSE
 
 	MPL_free(header_array);
 	// COLL_SHMEM_MODULE = POSIX_MODULE;
@@ -263,6 +329,8 @@ static inline int MPIDI_XPMEM_mpi_tree_based_reduce(const void *sendbuf, void *r
 			// fflush(stdout);
 			break;
 		} else {
+			static uint64_t src_addr = 0;
+			static ackHeader prev_header = {.data_size = 0, .exp_offset = 0};
 			mpi_errno = MPIDI_POSIX_mpi_recv(&header, sizeof(ackHeader), MPI_BYTE, myrank + step, 0, comm, MPIR_CONTEXT_INTRA_COLL, MPI_STATUS_IGNORE, &request);
 			if (unlikely(mpi_errno != MPI_SUCCESS))
 				goto fn_fail;
@@ -271,24 +339,52 @@ static inline int MPIDI_XPMEM_mpi_tree_based_reduce(const void *sendbuf, void *r
 				goto fn_fail;
 			// printf("inter socket rank %d receives header %p (local_rank %d)\n", myrank, &header, xpmem_local_rank);
 			// fflush(stdout);
+#ifdef XPMEM_REUSE
+			// if (comm->rank == 0) {
+			// 	printf("Ready to attach src mem %X\n", header_array[i].exp_offset);
+			// 	fflush(stdout);
+			// }
+
+			if (prev_header.data_size == header.data_size && prev_header.exp_offset == header.exp_offset && prev_header.data_offset == header.data_offset) {
+				data_buf = (void*) src_addr;
+			} else {
+#ifndef NO_XPMEM_SYSCALL
+				mpi_errno = xpmemAttachMem(&header, &data_buf, &real_buf);
+				if (mpi_errno != MPI_SUCCESS) {
+					errLine = __LINE__;
+					goto fn_fail;
+				}
+				src_addr = (uint64_t) data_buf;
+				prev_header = header;
+#endif
+			}
+
+#else // Root XPMEM_REUSE
+
 #ifndef NO_XPMEM_SYSCALL
 			mpi_errno = xpmemAttachMem(&header, &data_buf, &real_buf);
-			if (unlikely(mpi_errno != MPI_SUCCESS))
+			if (mpi_errno != MPI_SUCCESS) {
+				errLine = __LINE__;
 				goto fn_fail;
+			}
 #endif
+
+#endif
+
 
 #ifndef NO_XPMEM_REDUCE_LOCAL
 			MPIR_Reduce_local(data_buf, local_buffer, count, datatype, op);
 #endif
 			// printf("inter socket rank %d reduce (local_rank %d)\n", myrank, xpmem_local_rank);
 			// fflush(stdout);
-
+#ifndef XPMEM_REUSE
 #ifndef NO_XPMEM_SYSCALL
 			mpi_errno = xpmemDetachMem(real_buf);
 			if (mpi_errno != MPI_SUCCESS) {
 				errLine = __LINE__;
 				goto fn_fail;
 			}
+#endif
 #endif
 			// printf("inter socket rank %d send back ack (local_rank %d)\n", myrank, xpmem_local_rank);
 			// fflush(stdout);
