@@ -14,6 +14,8 @@
 #include "ch4_coll_params.h"
 #include "coll_algo_params.h"
 
+extern char tmp_buffer[2][8388608];
+
 #undef FUNCNAME
 #define FUNCNAME MPIDI_Barrier_intra_composition_alpha
 #undef FCNAME
@@ -473,10 +475,11 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Reduce_intra_composition_alpha(const void *se
 
 		MPIR_Ensure_Aint_fits_in_pointer(count * MPL_MAX(extent, true_extent));
 
-		MPIR_CHKLMEM_MALLOC(tmp_buf, void *, count * (MPL_MAX(extent, true_extent)),
-		                    mpi_errno, "temporary buffer", MPL_MEM_BUFFER);
+		// MPIR_CHKLMEM_MALLOC(tmp_buf, void *, count * (MPL_MAX(extent, true_extent)),
+		// mpi_errno, "temporary buffer", MPL_MEM_BUFFER);
 		/* adjust for potential negative lower bound in datatype */
-		tmp_buf = (void *) ((char *) tmp_buf - true_lb);
+		// tmp_buf = (void *) ((char *) tmp_buf - true_lb);
+		tmp_buf = (void *) tmp_buffer[0];
 	}
 	// printf("Enter MPIDI_Reduce_intra_composition_alpha rank %d\n", comm->rank);
 	// fflush(stdout);
@@ -552,24 +555,27 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_Reduce_intra_composition_alpha(const void *se
 				// printf("Rank: %d, I am the root. in_place is automatically handled.\n", comm->rank);
 				// fflush(stdout);
 				/* I am the root. in_place is automatically handled. */
+				if (comm->node_roots_comm->local_size > 1) {
 #ifndef NO_XPMEM_REDUCE_LOCAL
-				mpi_errno =
-				    MPIDI_NM_mpi_reduce(sendbuf, recvbuf, count, datatype,
-				                        op, MPIR_Get_internode_rank(comm, root),
-				                        comm->node_roots_comm, errflag, reduce_roots_container);
+					mpi_errno =
+					    MPIDI_NM_mpi_reduce(sendbuf, recvbuf, count, datatype,
+					                        op, MPIR_Get_internode_rank(comm, root),
+					                        comm->node_roots_comm, errflag, reduce_roots_container);
 #endif
-				if (mpi_errno) {
-					/* for communication errors, just record the error but continue */
-					*errflag =
-					    MPIX_ERR_PROC_FAILED ==
-					    MPIR_ERR_GET_CLASS(mpi_errno) ? MPIR_ERR_PROC_FAILED : MPIR_ERR_OTHER;
-					MPIR_ERR_SET(mpi_errno, *errflag, "**fail");
-					MPIR_ERR_ADD(mpi_errno_ret, mpi_errno);
+					if (mpi_errno) {
+						/* for communication errors, just record the error but continue */
+						*errflag =
+						    MPIX_ERR_PROC_FAILED ==
+						    MPIR_ERR_GET_CLASS(mpi_errno) ? MPIR_ERR_PROC_FAILED : MPIR_ERR_OTHER;
+						MPIR_ERR_SET(mpi_errno, *errflag, "**fail");
+						MPIR_ERR_ADD(mpi_errno_ret, mpi_errno);
+					}
+#ifndef NO_XPMEM_REDUCE_LOCAL
+					/* set sendbuf to MPI_IN_PLACE to make final intranode reduce easy. */
+					sendbuf = MPI_IN_PLACE;
+#endif
 				}
-#ifndef NO_XPMEM_REDUCE_LOCAL
-				/* set sendbuf to MPI_IN_PLACE to make final intranode reduce easy. */
-				sendbuf = MPI_IN_PLACE;
-#endif
+
 			}
 		}
 

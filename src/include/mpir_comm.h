@@ -151,6 +151,7 @@ struct MPIR_Comm {
     
     struct MPIR_Comm *socket_comm;
     struct MPIR_Comm *socket_roots_comm;
+    void *tmp_buffer[2];
 
     int *intranode_table;       /* intranode_table[i] gives the rank in
                                  * node_comm of rank i in this comm or -1 if i

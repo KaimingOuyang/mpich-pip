@@ -30,7 +30,8 @@
 #endif
 
 #include <xpmem.h>
-void *global_buffer;
+char global_buffer[16][1024];
+char tmp_buffer[2][8388608];
 int xpmem_local_rank;
 xpmem_segid_t dtHandler;
 xpmem_segid_t *xpmem_handler_array;
@@ -878,8 +879,8 @@ void xpmem_intra_node_init()
 			}
 		}
 		
-		global_buffer = malloc(16 * 1024 * 1024);
-		memset(global_buffer, 0, 16 * 1024 * 1024);
+		//global_buffer = malloc(8 * 1024 * 1024);
+		//memset(global_buffer, 0, 8 * 1024 * 1024);
 	}
 
 	return;

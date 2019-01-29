@@ -13,7 +13,7 @@
 
 #include "posix_impl.h"
 
-
+extern char global_buffer[16][1024];
 /* ----------------------------------------------------- */
 /* MPIDI_POSIX_progress_recv                     */
 /* ----------------------------------------------------- */
@@ -290,7 +290,10 @@ match_l: {
 			MPIDI_POSIX_REQUEST(rreq)->type = cell->pkt.mpich.type;
 
 			if (data_sz > 0) {
-				MPIDI_POSIX_REQUEST(rreq)->user_buf = (char *) MPL_malloc(data_sz, MPL_MEM_SHM);
+                static int i = 0;
+                // MPIDI_POSIX_REQUEST(rreq)->user_buf = (char *) MPL_malloc(data_sz, MPL_MEM_SHM);
+				MPIDI_POSIX_REQUEST(rreq)->user_buf = (char *) global_buffer[i];
+                i = (i + 1) % 16;
 #ifdef POSIX_PROFILE_MISS
 				extern long long recvvalues[2];
 				long long values[4] = {0, 0, 0, 0};
@@ -407,7 +410,7 @@ release_cell_l:
 	} else {
 		/* destroy unexpected req */
 		MPIDI_POSIX_REQUEST(sreq)->pending = NULL;
-		MPL_free(MPIDI_POSIX_REQUEST(sreq)->user_buf);
+		// MPL_free(MPIDI_POSIX_REQUEST(sreq)->user_buf);
 		MPIDI_POSIX_REQUEST_DEQUEUE_AND_SET_ERROR(&sreq, prev_sreq, MPIDI_POSIX_recvq_unexpected,
 		        mpi_errno);
 	}

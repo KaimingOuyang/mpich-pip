@@ -11,12 +11,14 @@
 #include <shm.h>
 #include "../posix/shm_inline.h"
 #include "../xpmem/xpmem_inline.h"
-extern void *global_buffer;
+
 #if defined(POSIX_PROFILE_MISS) || defined(XPMEM_PROFILE_MISS) || defined(XPMEM_SYSCALL) || defined(XPMEM_SYNC) || defined(XPMEM_MEMCOPY)
 int PROFILE_FLAG = 1;
 #else
 int PROFILE_FLAG = 0;
 #endif
+
+extern char tmp_buffer[2][8388608];
 
 MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_barrier(MPIR_Comm * comm, MPIR_Errflag_t * errflag,
         const void *algo_parameters_container)
@@ -258,7 +260,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_reduce(const void *sendbuf, void *rec
 				rank0_tmp_buffer = MPL_malloc(MPIR_Datatype_get_basic_size(datatype) * count, MPL_MEM_OTHER);
 		} else {
 			if (comm_ptr->rank != 0 && comm_ptr->socket_comm->rank == 0)
-				rank0_tmp_buffer = global_buffer;	
+				rank0_tmp_buffer = (void*) tmp_buffer[1];	
 				//rank0_tmp_buffer = MPL_malloc(MPIR_Datatype_get_basic_size(datatype) * count, MPL_MEM_OTHER);
 			else
 				rank0_tmp_buffer = recvbuf;
