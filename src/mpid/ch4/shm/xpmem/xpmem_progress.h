@@ -163,7 +163,7 @@ MPL_STATIC_INLINE_PREFIX int papiStart(int *events, char *prefix, int myrank, in
 	strcat(file, ".log");
 	*fp = fopen(file, "a");
 	if (events != NULL) {
-		if (PAPI_start_counters(events, 2) != PAPI_OK) {
+		if (PAPI_start_counters(events, 1) != PAPI_OK) {
 			mpi_errno = MPI_ERR_OTHER;
 			errLine = __LINE__;
 			goto fn_fail;

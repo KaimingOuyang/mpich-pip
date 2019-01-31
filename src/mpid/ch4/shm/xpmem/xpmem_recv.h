@@ -129,11 +129,13 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 // #endif
 #ifdef XPMEM_PROFILE_MISS
 	long long sumv[2] = {0, 0};
-#ifdef XPMEM_COMBINE_MISS
 	int EventSet = PAPI_NULL;
+	int retval;
+#ifdef XPMEM_COMBINE_MISS
+	
 	int *events = NULL;
 	long long values[4] = {0, 0, 0, 0};
-	int retval;
+	
 	if ((retval = PAPI_create_eventset(&EventSet)) != PAPI_OK) {
 		fprintf(stderr, "PAPI_create_eventset error %d\n", retval);
 		exit(1);
@@ -162,14 +164,14 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 		return -1;
 	}
 #else
-	const int vnum = 2;
+	const int vnum = 1;
 	long long values[2] = {0, 0};
 #ifdef TLB_MISS
-	int events[2] = {PAPI_PRF_DM, PAPI_TLB_DM};
+	int events[1] = {PAPI_TLB_DM};
 #else
-	int events[2] = {PAPI_PRF_DM, PAPI_L3_TCM};
-#endif
-#endif
+	int events[1] = {PAPI_L3_TCM};
+#endif 
+#endif // XPMEM_COMBINE_MISS
 
 	FILE *fp;
 	mpi_errno = papiStart(events, "XPMEM-recv_", comm->rank, header.data_size, &fp, &EventSet);
@@ -178,7 +180,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 		goto fn_fail;
 	}
 
-#endif
+#endif // XPMEM_PROFILE_MISS
 
 #ifndef NO_XPMEM_MEMCOPY
 	// printf("define NO_XPMEM_MEMCOPY\n");
@@ -205,9 +207,11 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_XPMEM_mpi_recv(void *buf,
 		goto fn_fail;
 	}
 	sumv[0] = values[0];
-	sumv[1] = values[1];
+	// sumv[1] = values[1];
+	// printf("rank %d papi stop\n", comm->rank);
+	// fflush(stdout);
 #endif
-	fprintf(fp, "%lld %lld\n", sumv[0], sumv[1]);
+	fprintf(fp, "%lld \n", sumv[0]);
 	fclose(fp);
 #endif
 // #ifdef XPMEM_PROFILE
