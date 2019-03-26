@@ -23,7 +23,7 @@
 #ifdef HAVE_USLEEP
 #include <unistd.h>
 #endif
-
+int MPIR_Handlemem_shm_obj_pool_init();
 /*
 === BEGIN_MPI_T_CVAR_INFO_BLOCK ===
 
@@ -664,6 +664,10 @@ int MPIR_Init_thread(int *argc, char ***argv, int required, int *provided)
      * atomically so that MPI_Initialized() etc. are thread safe */
     OPA_write_barrier();
     OPA_store_int(&MPIR_Process.mpich_state, MPICH_MPI_STATE__POST_INIT);
+
+    if (MPIR_Process.comm_world->node_comm) {
+        MPIR_Handlemem_shm_obj_pool_init();
+    }
     return mpi_errno;
 
   fn_fail:

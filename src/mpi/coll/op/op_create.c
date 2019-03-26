@@ -38,6 +38,7 @@ MPIR_Object_alloc_t MPIR_Op_mem = { 0, 0, 0, 0, MPIR_OP,
     sizeof(MPIR_Op),
     MPIR_Op_direct,
     MPIR_OP_PREALLOC,
+    0, 0, 0, 0
 };
 
 #ifdef HAVE_CXX_BINDING

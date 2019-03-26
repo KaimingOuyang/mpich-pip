@@ -172,6 +172,14 @@ const char *MPIR_Handle_get_kind_str(int kind);
 #define HANDLE_KIND_BUILTIN  0x1
 #define HANDLE_KIND_DIRECT   0x2
 #define HANDLE_KIND_INDIRECT 0x3
+
+#define HANDLE_KIND_SHARED_SHIFT 25     /* When turning on shared pool, HANDLE_NUM_BLOCKS 8192 is used to spare 1 bit for shared handle type */
+#define HANDLE_KIND_SHARED_MASK (1 << HANDLE_KIND_SHARED_SHIFT)
+#define HANDLE_GET_SHARED_KIND(handle) (handle & HANDLE_KIND_SHARED_MASK)
+#define HANDLE_SHARED_BLOCK(a) (((a) & (~HANDLE_KIND_SHARED_MASK) & 0x01FFF000) >> HANDLE_INDIRECT_SHIFT)
+#define HANDLE_SHARED_INDEX(a) ((a) & 0x00000FFF)
+#define HANDLE_KIND_SHARED   0x1        /* 26 bit */
+
 /* Mask assumes that ints are at least 4 bytes */
 #define HANDLE_KIND_MASK 0xc0000000
 #define HANDLE_KIND_SHIFT 30
@@ -184,7 +192,7 @@ const char *MPIR_Handle_get_kind_str(int kind);
 #define HANDLE_BLOCK(a) (((a)& 0x03FFF000) >> HANDLE_INDIRECT_SHIFT)
 #define HANDLE_BLOCK_INDEX(a) ((a) & 0x00000FFF)
 
-/* Number of blocks is between 1 and 16384 */
+/* Number of blocks is between 1 and 8192 13-25 bits */
 #if defined MPID_HANDLE_NUM_BLOCKS
 #define HANDLE_NUM_BLOCKS MPID_HANDLE_NUM_BLOCKS
 #else
@@ -403,7 +411,7 @@ typedef OPA_int_t Handle_ref_count;
  *
  * NOTE: This macro *must* be invoked as the very first element of the structure! */
 #define MPIR_OBJECT_HEADER                                              \
-    int handle;                                                         \
+    int handle;                                                    \
     Handle_ref_count ref_count  /*semicolon intentionally omitted */
 
 /* ALL objects have the handle as the first value. */
@@ -427,6 +435,13 @@ typedef struct MPIR_Object_alloc_t {
     void *direct;               /* Pointer to direct block, used
                                  * for allocation */
     int direct_size;            /* Size of direct block */
+
+    /* Shared pool attributes */
+    int shm_initialized;
+    void **shm_base;
+    uint64_t shm_size;          /* total number of local shared pool */
+    uint64_t *shm_avail;        /* avail obj offset to shm_base */
+    MPL_proc_mutex_t *shm_lock;
 } MPIR_Object_alloc_t;
 static inline void *MPIR_Handle_obj_alloc(MPIR_Object_alloc_t *);
 static inline void *MPIR_Handle_obj_alloc_unsafe(MPIR_Object_alloc_t *);
@@ -459,6 +474,7 @@ static inline void *MPIR_Handle_get_ptr_indirect(int, MPIR_Object_alloc_t *);
         }                                                               \
     }
 
+void *MPIR_Handle_get_ptr_shared(uint64_t handle, MPIR_Object_alloc_t * objmem);
 /* Convert handles to objects for MPI types that do _not_ have any predefined
    objects */
 #define MPIR_Get_ptr(kind,a,ptr)                                        \
@@ -468,8 +484,12 @@ static inline void *MPIR_Handle_get_ptr_indirect(int, MPIR_Object_alloc_t *);
             ptr=MPIR_##kind##_direct+HANDLE_INDEX(a);                   \
             break;                                                      \
         case HANDLE_KIND_INDIRECT:                                      \
-            ptr=((MPIR_##kind*)                                         \
-                 MPIR_Handle_get_ptr_indirect(a,&MPIR_##kind##_mem));   \
+            if (a & HANDLE_KIND_SHARED_MASK)                            \
+                ptr=((MPIR_##kind*)                                     \
+                MPIR_Handle_get_ptr_shared(a, &MPIR_##kind##_mem));     \
+            else                                                        \
+                ptr=((MPIR_##kind*)                                     \
+                MPIR_Handle_get_ptr_indirect(a,&MPIR_##kind##_mem));    \
             break;                                                      \
         case HANDLE_KIND_INVALID:                                       \
         case HANDLE_KIND_BUILTIN:                                       \

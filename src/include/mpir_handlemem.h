@@ -235,54 +235,89 @@ static inline void *MPIR_Handle_obj_alloc(MPIR_Object_alloc_t * objmem)
 static inline void *MPIR_Handle_obj_alloc_unsafe(MPIR_Object_alloc_t * objmem)
 {
     MPIR_Handle_common *ptr;
+    int mpl_err;
+    int shm_block;
+    int shm_index;
+    int rank = MPIR_Process.comm_world->node_comm->rank;
+    if (objmem->shm_initialized) {
+        /* Shared buffer pool allocation */
+        // goto private_pool;
+        MPL_proc_mutex_lock(objmem->shm_lock, &mpl_err);
+        if (likely(*objmem->shm_avail != -1)) {
 
-    if (objmem->avail) {
-        ptr = objmem->avail;
-        objmem->avail = objmem->avail->next;
-        /* We do not clear ptr->next as we set it to an invalid pattern
-         * when doing memory debugging and we don't need to set it
-         * for the production/default case */
-        /* ptr points to object to allocate */
+            shm_block = HANDLE_SHARED_BLOCK(*objmem->shm_avail);
+            shm_index = HANDLE_SHARED_INDEX(*objmem->shm_avail);
+            // printf("rank %d - shm_block %d, shm_index %d\n", rank, shm_block, shm_index);
+            // fflush(stdout);
+            ptr =
+                (void *) ((uint64_t) objmem->shm_base[shm_block] + MPLI_SHM_GHND_SZ +
+                          (shm_index * objmem->size));
+            // printf("rank %d - Get obj %ld, handle %x\n", rank, *objmem->shm_avail, ptr->handle);
+            // fflush(stdout);
+            *objmem->shm_avail = (uint64_t) ptr->next;
+
+
+        } else {
+            /* Allocate new shared buffer pool */
+            printf("Not enough shared pool obj\n");
+            goto private_pool;
+        }
+
+        MPL_proc_mutex_unlock(objmem->shm_lock, &mpl_err);
     } else {
-        int objsize, objkind;
-
-        objsize = objmem->size;
-        objkind = objmem->kind;
-
-        if (!objmem->initialized) {
-            MPL_VG_CREATE_MEMPOOL(objmem, 0 /*rzB */ , 0 /*is_zeroed */);
-
-            /* Setup the first block.  This is done here so that short MPI
-             * jobs do not need to include any of the Info code if no
-             * Info-using routines are used */
-            objmem->initialized = 1;
-            ptr = MPIR_Handle_direct_init(objmem->direct, objmem->direct_size, objsize, objkind);
-            if (ptr) {
-                objmem->avail = ptr->next;
-            }
-#ifdef MPICH_DEBUG_HANDLEALLOC
-            /* The priority of these callbacks must be greater than
-             * the priority of the callback that frees the objmem direct and
-             * indirect storage. */
-            MPIR_Add_finalize(MPIR_check_handles_on_finalize, objmem,
-                              MPIR_FINALIZE_CALLBACK_HANDLE_CHECK_PRIO);
-#endif
-            MPIR_Add_finalize(MPIR_Handle_finalize, objmem, 0);
+      private_pool:
+        /* Private buffer pool allocation */
+        if (objmem->avail) {
+            ptr = objmem->avail;
+            objmem->avail = objmem->avail->next;
+            /* We do not clear ptr->next as we set it to an invalid pattern
+             * when doing memory debugging and we don't need to set it
+             * for the production/default case */
             /* ptr points to object to allocate */
         } else {
-            /* no space left in direct block; setup the indirect block. */
+            int objsize, objkind;
 
-            ptr = MPIR_Handle_indirect_init(&objmem->indirect,
-                                            &objmem->indirect_size,
-                                            HANDLE_NUM_BLOCKS,
-                                            HANDLE_NUM_INDICES, objsize, objkind);
-            if (ptr) {
-                objmem->avail = ptr->next;
+            objsize = objmem->size;
+            objkind = objmem->kind;
+
+            if (!objmem->initialized) {
+                MPL_VG_CREATE_MEMPOOL(objmem, 0 /*rzB */ , 0 /*is_zeroed */);
+
+                /* Setup the first block.  This is done here so that short MPI
+                 * jobs do not need to include any of the Info code if no
+                 * Info-using routines are used */
+                objmem->initialized = 1;
+                ptr =
+                    MPIR_Handle_direct_init(objmem->direct, objmem->direct_size, objsize, objkind);
+                if (ptr) {
+                    objmem->avail = ptr->next;
+                }
+#ifdef MPICH_DEBUG_HANDLEALLOC
+                /* The priority of these callbacks must be greater than
+                 * the priority of the callback that frees the objmem direct and
+                 * indirect storage. */
+                MPIR_Add_finalize(MPIR_check_handles_on_finalize, objmem,
+                                  MPIR_FINALIZE_CALLBACK_HANDLE_CHECK_PRIO);
+#endif
+                MPIR_Add_finalize(MPIR_Handle_finalize, objmem, 0);
+                /* ptr points to object to allocate */
+            } else {
+                /* no space left in direct block; setup the indirect block. */
+
+                ptr = MPIR_Handle_indirect_init(&objmem->indirect,
+                                                &objmem->indirect_size,
+                                                HANDLE_NUM_BLOCKS,
+                                                HANDLE_NUM_INDICES, objsize, objkind);
+                if (ptr) {
+                    objmem->avail = ptr->next;
+                }
+
+                /* ptr points to object to allocate */
             }
-
-            /* ptr points to object to allocate */
         }
     }
+
+
 
     if (ptr) {
 #ifdef USE_MEMORY_TRACING
@@ -336,7 +371,10 @@ Input Parameters:
 static inline void MPIR_Handle_obj_free(MPIR_Object_alloc_t * objmem, void *object)
 {
     MPIR_Handle_common *obj = (MPIR_Handle_common *) object;
-
+    int handle_kind;
+    int shared;
+    int kind;
+    int mpl_err;
     MPID_THREAD_CS_ENTER(POBJ, MPIR_THREAD_POBJ_HANDLE_MUTEX);
     MPID_THREAD_CS_ENTER(VCI, MPIR_THREAD_POBJ_HANDLE_MUTEX);
 
@@ -357,7 +395,7 @@ static inline void MPIR_Handle_obj_free(MPIR_Object_alloc_t * objmem, void *obje
         obj->handle = tmp_handle;
     }
 #endif
-
+    /* TODO: should I consider valgrind for shared pool? */
     if (MPL_VG_RUNNING_ON_VALGRIND()) {
         int tmp_handle = obj->handle;
 
@@ -380,8 +418,25 @@ static inline void MPIR_Handle_obj_free(MPIR_Object_alloc_t * objmem, void *obje
         MPL_VG_ANNOTATE_NEW_MEMORY(obj, objmem->size);
     }
 
-    obj->next = objmem->avail;
-    objmem->avail = obj;
+    handle_kind = HANDLE_GET_KIND(obj->handle);
+    shared = HANDLE_GET_SHARED_KIND(obj->handle);
+    // kind = HANDLE_GET_MPI_KIND((obj)->handle);
+    int rank = MPIR_Process.comm_world->node_comm->rank;
+
+    if (handle_kind == HANDLE_KIND_INDIRECT && shared) {
+        MPL_proc_mutex_lock(objmem->shm_lock, &mpl_err);
+        obj->next = (void *) *objmem->shm_avail;
+        *objmem->shm_avail = obj->handle & (HANDLE_KIND_SHARED_MASK - 1);
+
+        // printf("rank %d - free obj kind %s, handle %x, shared %x, free obj %ld\n", rank, MPIR_Handle_get_kind_str(HANDLE_GET_MPI_KIND((obj)->handle)), obj->handle, shared, *objmem->shm_avail);
+        // fflush(stdout);
+        MPL_proc_mutex_unlock(objmem->shm_lock, &mpl_err);
+        // printf("rank %d - free obj %ld\n", rank, *objmem->shm_avail);
+        // fflush(stdout);
+    } else {
+        obj->next = objmem->avail;
+        objmem->avail = obj;
+    }
     MPID_THREAD_CS_EXIT(VCI, MPIR_THREAD_POBJ_HANDLE_MUTEX);
     MPID_THREAD_CS_EXIT(POBJ, MPIR_THREAD_POBJ_HANDLE_MUTEX);
 }
