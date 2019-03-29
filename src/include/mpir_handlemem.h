@@ -238,8 +238,9 @@ static inline void *MPIR_Handle_obj_alloc_unsafe(MPIR_Object_alloc_t * objmem)
     int mpl_err;
     int shm_block;
     int shm_index;
-    int rank = MPIR_Process.comm_world->node_comm->rank;
+    // int rank = MPIR_Process.comm_world->node_comm->rank;
     if (objmem->shm_initialized) {
+        int rank = MPIR_Process.comm_world->node_comm->rank;
         /* Shared buffer pool allocation */
         // goto private_pool;
         MPL_proc_mutex_lock(objmem->shm_lock, &mpl_err);
