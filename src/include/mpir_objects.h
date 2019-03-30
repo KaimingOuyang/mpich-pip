@@ -176,7 +176,7 @@ const char *MPIR_Handle_get_kind_str(int kind);
 #define HANDLE_KIND_SHARED_SHIFT 25     /* When turning on shared pool, HANDLE_NUM_BLOCKS 8192 is used to spare 1 bit for shared handle type */
 #define HANDLE_KIND_SHARED_MASK (1 << HANDLE_KIND_SHARED_SHIFT)
 #define HANDLE_GET_SHARED_KIND(handle) (handle & HANDLE_KIND_SHARED_MASK)
-#define HANDLE_SHARED_BLOCK(a) (((a) & (~HANDLE_KIND_SHARED_MASK) & 0x01FFF000) >> HANDLE_INDIRECT_SHIFT)
+#define HANDLE_SHARED_BLOCK(a) (((a) & 0x01FFF000) >> HANDLE_INDIRECT_SHIFT)
 #define HANDLE_SHARED_INDEX(a) ((a) & 0x00000FFF)
 #define HANDLE_KIND_SHARED   0x1        /* 26 bit */
 
@@ -440,8 +440,8 @@ typedef struct MPIR_Object_alloc_t {
     int shm_initialized;
     void **shm_base;
     uint64_t shm_size;          /* total number of local shared pool */
-    uint64_t *shm_avail;        /* avail obj offset to shm_base */
-    MPL_proc_mutex_t *shm_lock;
+    uint64_t **shm_avail;       /* avail obj offset to shm_base */
+    MPL_proc_mutex_t **shm_lock;
 } MPIR_Object_alloc_t;
 static inline void *MPIR_Handle_obj_alloc(MPIR_Object_alloc_t *);
 static inline void *MPIR_Handle_obj_alloc_unsafe(MPIR_Object_alloc_t *);

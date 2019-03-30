@@ -93,6 +93,10 @@ static inline int MPL_proc_mutex_enabled(void)
             PROC_MUTEX_EINTR_PRINT_BREAK("pthread_mutex_lock", err__, err_ptr_);  \
     } while (0)
 
+#define MPL_proc_mutex_trylock(mutex_ptr_, err_ptr_)                                 \
+    do {                                                                          \
+        *(int *)(err_ptr_) = pthread_mutex_trylock(mutex_ptr_);                   \
+    } while (0)
 
 #define MPL_proc_mutex_unlock(mutex_ptr_, err_ptr_)                                 \
     do {                                                                            \

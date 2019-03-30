@@ -45,116 +45,38 @@ cvars:
 #define FCNAME MPL_QUOTE(FUNCNAME)
 static inline int MPIR_Handlemem_shm_obj_init(MPIR_Object_alloc_t * objmem)
 {
-    MPL_shm_hnd_t hnd;
-    int i;
-    MPIR_Errflag_t errflag = MPIR_ERR_NONE;
     int rank = MPIR_Process.comm_world->node_comm->rank;
-    int mpl_err = 0;
     int mpi_errno = MPI_SUCCESS;
-    MPIR_Handle_common *hptr = 0;
-    char *ptr;
-    void *shm_indirect;
-    char *serialized_hnd = NULL;
-    char *val = NULL;
     MPIR_FUNC_VERBOSE_STATE_DECL(MPIR_STATE_MPIR_HANDLEMEM_SHM_OBJ_INIT);
     MPIR_FUNC_VERBOSE_ENTER(MPIR_STATE_MPIR_HANDLEMEM_SHM_OBJ_INIT);
-    MPIR_CHKLMEM_DECL(1);
 
     if (MPL_proc_mutex_enabled()) {
         // printf("rank %d - Init start\n", rank);
         // fflush(stdout);
-        mpl_err = MPL_shm_hnd_init(&hnd);
-        MPIR_ERR_CHKANDJUMP(mpl_err, mpi_errno, MPI_ERR_OTHER, "**alloc_shar_mem");
 
         objmem->shm_base = (void **) MPL_calloc(HANDLE_NUM_BLOCKS, sizeof(void *), MPL_MEM_OBJECT);
         MPIR_ERR_CHKANDJUMP(!objmem->shm_base, mpi_errno, MPI_ERR_OTHER, "**alloc_shar_mem");
+
+        objmem->shm_avail =
+            (uint64_t **) MPL_calloc(HANDLE_NUM_BLOCKS, sizeof(uint64_t *), MPL_MEM_OBJECT);
+        MPIR_ERR_CHKANDJUMP(!objmem->shm_avail, mpi_errno, MPI_ERR_OTHER, "**alloc_shar_mem");
+
+        objmem->shm_lock =
+            (MPL_proc_mutex_t **) MPL_calloc(HANDLE_NUM_BLOCKS, sizeof(MPL_proc_mutex_t *),
+                                             MPL_MEM_OBJECT);
+        MPIR_ERR_CHKANDJUMP(!objmem->shm_lock, mpi_errno, MPI_ERR_OTHER, "**alloc_shar_mem");
         objmem->shm_size = 0;
 
-        if (rank == 0) {
-            /* TODO: remember to delete this attached shared memory after program completes */
-            mpl_err =
-                MPL_shm_seg_create_and_attach(hnd,
-                                              sizeof(MPL_proc_mutex_t) +
-                                              sizeof(uint64_t) +
-                                              MPLI_SHM_GHND_SZ +
-                                              HANDLE_NUM_INDICES * objmem->size,
-                                              (void **) &objmem->shm_base[objmem->shm_size], 0);
-            MPIR_ERR_CHKANDJUMP(mpl_err, mpi_errno, MPI_ERR_OTHER, "**alloc_shar_mem");
-
-            objmem->shm_lock = (MPL_proc_mutex_t *) objmem->shm_base[objmem->shm_size];
-            MPL_proc_mutex_create(objmem->shm_lock, &mpl_err);
-            /* TODO: remember to change error message **alloc_shar_mem */
-            MPIR_ERR_CHKANDJUMP(mpl_err, mpi_errno, MPI_ERR_OTHER, "**alloc_shar_mem");
-
-            ptr = shm_indirect =
-                (void *) ((size_t) objmem->shm_base[objmem->shm_size] + sizeof(MPL_proc_mutex_t) +
-                          sizeof(uint64_t) + MPLI_SHM_GHND_SZ);
-            for (i = 0; i < HANDLE_NUM_INDICES; i++) {
-                hptr = (MPIR_Handle_common *) (void *) ptr;
-                ptr = ptr + objmem->size;
-                /* offset to the shared memory base addr */
-                hptr->next = (void *) ((objmem->shm_size << HANDLE_INDIRECT_SHIFT) | (i + 1));
-                hptr->handle =
-                    (HANDLE_KIND_SHARED << HANDLE_KIND_SHARED_SHIFT) | (objmem->kind <<
-                                                                        HANDLE_MPI_KIND_SHIFT)
-                    | (HANDLE_KIND_INDIRECT << HANDLE_KIND_SHIFT) | (objmem->shm_size <<
-                                                                     HANDLE_INDIRECT_SHIFT) | i;
-            }
-
-            if (hptr)
-                hptr->next = (void *) -1;
-
-            objmem->shm_avail =
-                (uint64_t *) ((uint64_t) objmem->shm_base[objmem->shm_size] +
-                              sizeof(MPL_proc_mutex_t));
-            *objmem->shm_avail = 0;
-
-            val =
-                (char *) objmem->shm_base[objmem->shm_size] + sizeof(MPL_proc_mutex_t) +
-                sizeof(uint64_t);
-            /* TODO: do we need to consider portability of strcpy? */
-            strcpy(val, "MPIR_SHM_OBJ_NULL");
-            // printf("rank %d - copy str %s\n", rank, val);
-            // fflush(stdout);
-            mpl_err = MPL_shm_hnd_get_serialized_by_ref(hnd, &serialized_hnd);
-            MPIR_ERR_CHKANDJUMP(mpl_err, mpi_errno, MPI_ERR_OTHER, "**alloc_shar_mem");
-
-            mpi_errno = MPIR_Bcast(serialized_hnd, MPLI_SHM_GHND_SZ, MPI_CHAR, 0,
-                                   MPIR_Process.comm_world->node_comm, &errflag);
+        if (!rank) {
+            mpi_errno = MPIR_Handle_shm_obj_seg_create(objmem);
             if (mpi_errno)
                 MPIR_ERR_POP(mpi_errno);
         } else {
-            MPIR_CHKLMEM_MALLOC(val, char *, MPLI_SHM_GHND_SZ, mpi_errno, "val", MPL_MEM_SHM);
-            mpi_errno =
-                MPIR_Bcast(val, MPLI_SHM_GHND_SZ, MPI_CHAR, 0, MPIR_Process.comm_world->node_comm,
-                           &errflag);
+            mpi_errno = MPIR_Handle_shm_obj_seg_attach(objmem);
             if (mpi_errno)
                 MPIR_ERR_POP(mpi_errno);
-
-            mpl_err = MPL_shm_hnd_deserialize(hnd, val, strlen(val));
-            MPIR_ERR_CHKANDJUMP(mpl_err, mpi_errno, MPI_ERR_OTHER, "**alloc_shar_mem");
-
-            mpl_err = MPL_shm_seg_attach(hnd, sizeof(MPL_proc_mutex_t) +
-                                         sizeof(uint64_t) +
-                                         MPLI_SHM_GHND_SZ +
-                                         HANDLE_NUM_INDICES * objmem->size,
-                                         (void **) &objmem->shm_base[objmem->shm_size], 0);
-            MPIR_ERR_CHKANDJUMP(mpl_err, mpi_errno, MPI_ERR_OTHER, "**attach_shar_mem");
-            // printf("rank %d - attach segment %s\n", rank, (char *) ((uint64_t) objmem->shm_base[objmem->shm_size] + sizeof(MPL_proc_mutex_t) + sizeof(uint64_t)));
-            // fflush(stdout);
-            objmem->shm_lock = (MPL_proc_mutex_t *) objmem->shm_base[objmem->shm_size];
-            objmem->shm_avail =
-                (uint64_t *) ((uint64_t) objmem->shm_base[objmem->shm_size] +
-                              sizeof(MPL_proc_mutex_t));
-
         }
 
-        /* Calibrate shm_base to the beginning of string "MPIR_SHM_OBJ_NULL" */
-        objmem->shm_base[objmem->shm_size] =
-            (void *) ((uint64_t) objmem->shm_base[objmem->shm_size] + sizeof(MPL_proc_mutex_t) +
-                      sizeof(uint64_t));
-        /* Local shm_size update */
-        ++objmem->shm_size;
 
     } else {
         /* inter-process lock is not available, so it's not possible to use
@@ -172,13 +94,176 @@ static inline int MPIR_Handlemem_shm_obj_init(MPIR_Object_alloc_t * objmem)
     // fflush(stdout);
 
   fn_exit:
-    MPIR_CHKLMEM_FREEALL();
     MPIR_FUNC_VERBOSE_EXIT(MPIR_STATE_MPIR_HANDLEMEM_SHM_OBJ_INIT);
     return mpi_errno;
   fn_fail:
     goto fn_exit;
 
 }
+
+
+#undef FUNCNAME
+#define FUNCNAME MPIR_Handlemem_shm_obj_pool_init
+#undef FCNAME
+#define FCNAME MPL_QUOTE(FUNCNAME)
+int MPIR_Handle_shm_obj_seg_create(MPIR_Object_alloc_t * objmem)
+{
+    MPL_shm_hnd_t hnd;
+    MPIR_Errflag_t errflag = MPIR_ERR_NONE;
+    // int rank = MPIR_Process.comm_world->node_comm->rank;
+    int i;
+    int mpl_err = 0;
+    int mpi_errno = MPI_SUCCESS;
+    MPIR_Handle_common *hptr = 0;
+    char *ptr;
+    void *shm_indirect;
+    char *serialized_hnd = NULL;
+    char *val = NULL;
+    MPIR_FUNC_VERBOSE_STATE_DECL(MPIR_STATE_MPIR_HANDLEMEM_SHM_OBJ_POOL_INIT);
+    MPIR_FUNC_VERBOSE_ENTER(MPIR_STATE_MPIR_HANDLEMEM_SHM_OBJ_POOL_INIT);
+
+    mpl_err = MPL_shm_hnd_init(&hnd);
+    MPIR_ERR_CHKANDJUMP(mpl_err, mpi_errno, MPI_ERR_OTHER, "**alloc_shar_mem");
+
+    /* Create a seg and broadcast to others */
+    /* TODO: remember to delete this attached shared memory after program completes */
+    mpl_err =
+        MPL_shm_seg_create_and_attach(hnd,
+                                      sizeof(MPL_proc_mutex_t) +
+                                      sizeof(uint64_t) +
+                                      MPLI_SHM_GHND_SZ +
+                                      HANDLE_NUM_INDICES * objmem->size,
+                                      (void **) &objmem->shm_base[objmem->shm_size], 0);
+    MPIR_ERR_CHKANDJUMP(mpl_err, mpi_errno, MPI_ERR_OTHER, "**alloc_shar_mem");
+
+    objmem->shm_lock[objmem->shm_size] = (MPL_proc_mutex_t *) objmem->shm_base[objmem->shm_size];
+    MPL_proc_mutex_create(objmem->shm_lock[objmem->shm_size], &mpl_err);
+    /* TODO: remember to change error message **alloc_shar_mem */
+    MPIR_ERR_CHKANDJUMP(mpl_err, mpi_errno, MPI_ERR_OTHER, "**alloc_shar_mem");
+
+    ptr = shm_indirect =
+        (void *) ((size_t) objmem->shm_base[objmem->shm_size] + sizeof(MPL_proc_mutex_t) +
+                  sizeof(uint64_t) + MPLI_SHM_GHND_SZ);
+    for (i = 0; i < HANDLE_NUM_INDICES; i++) {
+        hptr = (MPIR_Handle_common *) (void *) ptr;
+        ptr = ptr + objmem->size;
+        /* offset to the shared memory base addr */
+        hptr->next = (void *) ((objmem->shm_size << HANDLE_INDIRECT_SHIFT) | (i + 1));
+        hptr->handle =
+            (HANDLE_KIND_SHARED << HANDLE_KIND_SHARED_SHIFT) | (objmem->kind <<
+                                                                HANDLE_MPI_KIND_SHIFT)
+            | (HANDLE_KIND_INDIRECT << HANDLE_KIND_SHIFT) | (objmem->shm_size <<
+                                                             HANDLE_INDIRECT_SHIFT) | i;
+    }
+
+    if (hptr)
+        hptr->next = (void *) -1;
+
+    objmem->shm_avail[objmem->shm_size] =
+        (uint64_t *) ((uint64_t) objmem->shm_base[objmem->shm_size] + sizeof(MPL_proc_mutex_t));
+    *objmem->shm_avail[objmem->shm_size] = (uint64_t) (objmem->shm_size << HANDLE_INDIRECT_SHIFT);
+
+    val = (char *) objmem->shm_base[objmem->shm_size] + sizeof(MPL_proc_mutex_t) + sizeof(uint64_t);
+    /* TODO: do we need to consider portability of strcpy? */
+    strcpy(val, "MPIR_SHM_OBJ_NULL");
+    // printf("rank %d - copy str %s\n", rank, val);
+    // fflush(stdout);
+    mpl_err = MPL_shm_hnd_get_serialized_by_ref(hnd, &serialized_hnd);
+    MPIR_ERR_CHKANDJUMP(mpl_err, mpi_errno, MPI_ERR_OTHER, "**alloc_shar_mem");
+    if (objmem->shm_size)
+        strcpy((char *) objmem->shm_base[objmem->shm_size - 1], serialized_hnd);
+    else {
+        mpi_errno = MPIR_Bcast(serialized_hnd, MPLI_SHM_GHND_SZ, MPI_CHAR, 0,
+                               MPIR_Process.comm_world->node_comm, &errflag);
+        if (mpi_errno)
+            MPIR_ERR_POP(mpi_errno);
+    }
+
+
+    /* Calibrate shm_base to the beginning of string "MPIR_SHM_OBJ_NULL" */
+    objmem->shm_base[objmem->shm_size] =
+        (void *) ((uint64_t) objmem->shm_base[objmem->shm_size] + sizeof(MPL_proc_mutex_t) +
+                  sizeof(uint64_t));
+    /* Local shm_size update */
+    ++objmem->shm_size;
+
+  fn_exit:
+    MPIR_FUNC_VERBOSE_EXIT(MPIR_STATE_MPIR_HANDLEMEM_SHM_OBJ_POOL_INIT);
+    return mpi_errno;
+  fn_fail:
+    goto fn_exit;
+
+}
+
+
+#undef FUNCNAME
+#define FUNCNAME MPIR_Handlemem_shm_obj_pool_init
+#undef FCNAME
+#define FCNAME MPL_QUOTE(FUNCNAME)
+int MPIR_Handle_shm_obj_seg_attach(MPIR_Object_alloc_t * objmem)
+{
+    MPL_shm_hnd_t hnd;
+    MPIR_Errflag_t errflag = MPIR_ERR_NONE;
+    // int rank = MPIR_Process.comm_world->node_comm->rank;
+    int i;
+    int mpl_err = 0;
+    int mpi_errno = MPI_SUCCESS;
+    MPIR_Handle_common *hptr = 0;
+    char *ptr;
+    void *shm_indirect;
+    char *serialized_hnd = NULL;
+    char *val = NULL;
+    MPIR_FUNC_VERBOSE_STATE_DECL(MPIR_STATE_MPIR_HANDLEMEM_SHM_OBJ_POOL_INIT);
+    MPIR_FUNC_VERBOSE_ENTER(MPIR_STATE_MPIR_HANDLEMEM_SHM_OBJ_POOL_INIT);
+    MPIR_CHKLMEM_DECL(1);
+
+    mpl_err = MPL_shm_hnd_init(&hnd);
+    MPIR_ERR_CHKANDJUMP(mpl_err, mpi_errno, MPI_ERR_OTHER, "**alloc_shar_mem");
+
+    MPIR_CHKLMEM_MALLOC(val, char *, MPLI_SHM_GHND_SZ, mpi_errno, "val", MPL_MEM_SHM);
+    if (objmem->shm_size) {
+        strcpy(val, (char *) objmem->shm_base[objmem->shm_size - 1]);
+    } else {
+        mpi_errno =
+            MPIR_Bcast(val, MPLI_SHM_GHND_SZ, MPI_CHAR, 0, MPIR_Process.comm_world->node_comm,
+                       &errflag);
+        if (mpi_errno)
+            MPIR_ERR_POP(mpi_errno);
+    }
+
+    mpl_err = MPL_shm_hnd_deserialize(hnd, val, strlen(val));
+    MPIR_ERR_CHKANDJUMP(mpl_err, mpi_errno, MPI_ERR_OTHER, "**alloc_shar_mem");
+
+
+    mpl_err = MPL_shm_seg_attach(hnd, sizeof(MPL_proc_mutex_t) +
+                                 sizeof(uint64_t) +
+                                 MPLI_SHM_GHND_SZ +
+                                 HANDLE_NUM_INDICES * objmem->size,
+                                 (void **) &objmem->shm_base[objmem->shm_size], 0);
+    MPIR_ERR_CHKANDJUMP(mpl_err, mpi_errno, MPI_ERR_OTHER, "**attach_shar_mem");
+    // printf("rank %d - attach segment %s\n", rank, (char *) ((uint64_t) objmem->shm_base[objmem->shm_size] + sizeof(MPL_proc_mutex_t) + sizeof(uint64_t)));
+    // fflush(stdout);
+    objmem->shm_lock[objmem->shm_size] = (MPL_proc_mutex_t *) objmem->shm_base[objmem->shm_size];
+    objmem->shm_avail[objmem->shm_size] =
+        (uint64_t *) ((uint64_t) objmem->shm_base[objmem->shm_size] + sizeof(MPL_proc_mutex_t));
+
+
+    /* Calibrate shm_base to the beginning of string "MPIR_SHM_OBJ_NULL" */
+    objmem->shm_base[objmem->shm_size] =
+        (void *) ((uint64_t) objmem->shm_base[objmem->shm_size] + sizeof(MPL_proc_mutex_t) +
+                  sizeof(uint64_t));
+    /* Local shm_size update */
+    ++objmem->shm_size;
+
+  fn_exit:
+    MPIR_CHKLMEM_FREEALL();
+    MPIR_FUNC_VERBOSE_EXIT(MPIR_STATE_MPIR_HANDLEMEM_SHM_OBJ_POOL_INIT);
+    return mpi_errno;
+  fn_fail:
+    goto fn_exit;
+
+}
+
 
 #undef FUNCNAME
 #define FUNCNAME MPIR_Handlemem_shm_obj_pool_init

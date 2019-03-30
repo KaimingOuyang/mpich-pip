@@ -17,6 +17,9 @@
 int MPIR_check_handles_on_finalize(void *objmem_ptr);
 #endif
 
+int MPIR_Handle_shm_obj_seg_create(MPIR_Object_alloc_t * objmem);
+int MPIR_Handle_shm_obj_seg_attach(MPIR_Object_alloc_t * objmem);
+
 /* This is the utility file for info that contains routines used to
    manage the arrays used to store handle objects.
 
@@ -235,7 +238,7 @@ static inline void *MPIR_Handle_obj_alloc(MPIR_Object_alloc_t * objmem)
 static inline void *MPIR_Handle_obj_alloc_unsafe(MPIR_Object_alloc_t * objmem)
 {
     MPIR_Handle_common *ptr;
-    int mpl_err;
+    int mpl_err, i;
     int shm_block;
     int shm_index;
     // int rank = MPIR_Process.comm_world->node_comm->rank;
@@ -243,28 +246,51 @@ static inline void *MPIR_Handle_obj_alloc_unsafe(MPIR_Object_alloc_t * objmem)
         int rank = MPIR_Process.comm_world->node_comm->rank;
         /* Shared buffer pool allocation */
         // goto private_pool;
-        MPL_proc_mutex_lock(objmem->shm_lock, &mpl_err);
-        if (likely(*objmem->shm_avail != -1)) {
+        i = 0;
+        do {
+            MPL_proc_mutex_trylock(objmem->shm_lock[i], &mpl_err);
+            if (!mpl_err) {
+                /* Get the lock */
+                if (unlikely(*objmem->shm_avail[i] == (uint64_t) - 1)) {
+                    if (i == objmem->shm_size - 1) {
+                        /* Allocate new shared buffer pool */
+                        if (!strcmp(objmem->shm_base[i], "MPIR_SHM_OBJ_NULL")) {
+                            MPIR_Handle_shm_obj_seg_create(objmem);
+                            // if (mpi_errno)
+                            //     MPIR_ERR_POP(mpi_errno);
+                            /* We must release lock after creation */
+                            // MPL_proc_mutex_unlock(objmem->shm_lock[i], &mpl_err);
 
-            shm_block = HANDLE_SHARED_BLOCK(*objmem->shm_avail);
-            shm_index = HANDLE_SHARED_INDEX(*objmem->shm_avail);
-            // printf("rank %d - shm_block %d, shm_index %d\n", rank, shm_block, shm_index);
-            // fflush(stdout);
-            ptr =
-                (void *) ((uint64_t) objmem->shm_base[shm_block] + MPLI_SHM_GHND_SZ +
-                          (shm_index * objmem->size));
-            // printf("rank %d - Get obj %ld, handle %x\n", rank, *objmem->shm_avail, ptr->handle);
-            // fflush(stdout);
-            *objmem->shm_avail = (uint64_t) ptr->next;
+                        } else {
+                            /* We can release lock before attach */
+                            // MPL_proc_mutex_unlock(objmem->shm_lock[i], &mpl_err);
+                            MPIR_Handle_shm_obj_seg_attach(objmem);
+                            // if (mpi_errno)
+                            //     MPIR_ERR_POP(mpi_errno);
+                        }
+                    }
+                    MPL_proc_mutex_unlock(objmem->shm_lock[i], &mpl_err);
+                    goto next_iteration;
+                }
 
+                shm_block = HANDLE_SHARED_BLOCK(*objmem->shm_avail[i]);
+                shm_index = HANDLE_SHARED_INDEX(*objmem->shm_avail[i]);
+                // printf("rank %d - shm_block %d, shm_index %d\n", rank, shm_block, shm_index);
+                // fflush(stdout);
+                ptr =
+                    (void *) ((uint64_t) objmem->shm_base[shm_block] + MPLI_SHM_GHND_SZ +
+                              (shm_index * objmem->size));
+                // printf("rank %d - Get obj %ld, handle %x\n", rank, *objmem->shm_avail, ptr->handle);
+                // fflush(stdout);
+                *objmem->shm_avail[shm_block] = (uint64_t) ptr->next;
+                break;
+            }
+          next_iteration:
+            i = (i + 1) % objmem->shm_size;
+        } while (true);
 
-        } else {
-            /* Allocate new shared buffer pool */
-            printf("Not enough shared pool obj\n");
-            goto private_pool;
-        }
+        MPL_proc_mutex_unlock(objmem->shm_lock[i], &mpl_err);
 
-        MPL_proc_mutex_unlock(objmem->shm_lock, &mpl_err);
     } else {
       private_pool:
         /* Private buffer pool allocation */
@@ -376,6 +402,7 @@ static inline void MPIR_Handle_obj_free(MPIR_Object_alloc_t * objmem, void *obje
     int shared;
     int kind;
     int mpl_err;
+    int shm_block;
     MPID_THREAD_CS_ENTER(POBJ, MPIR_THREAD_POBJ_HANDLE_MUTEX);
     MPID_THREAD_CS_ENTER(VCI, MPIR_THREAD_POBJ_HANDLE_MUTEX);
 
@@ -425,13 +452,15 @@ static inline void MPIR_Handle_obj_free(MPIR_Object_alloc_t * objmem, void *obje
     int rank = MPIR_Process.comm_world->node_comm->rank;
 
     if (handle_kind == HANDLE_KIND_INDIRECT && shared) {
-        MPL_proc_mutex_lock(objmem->shm_lock, &mpl_err);
-        obj->next = (void *) *objmem->shm_avail;
-        *objmem->shm_avail = obj->handle & (HANDLE_KIND_SHARED_MASK - 1);
+        shm_block = HANDLE_SHARED_BLOCK(obj->handle);
+        MPL_proc_mutex_lock(objmem->shm_lock[shm_block], &mpl_err);
+
+        obj->next = (void *) *objmem->shm_avail[shm_block];
+        *objmem->shm_avail[shm_block] = obj->handle;
 
         // printf("rank %d - free obj kind %s, handle %x, shared %x, free obj %ld\n", rank, MPIR_Handle_get_kind_str(HANDLE_GET_MPI_KIND((obj)->handle)), obj->handle, shared, *objmem->shm_avail);
         // fflush(stdout);
-        MPL_proc_mutex_unlock(objmem->shm_lock, &mpl_err);
+        MPL_proc_mutex_unlock(objmem->shm_lock[shm_block], &mpl_err);
         // printf("rank %d - free obj %ld\n", rank, *objmem->shm_avail);
         // fflush(stdout);
     } else {
