@@ -6,18 +6,11 @@
 #include <papi.h>
 #endif
 #include <shm.h>
+#include "xpmem_pre.h"
 
 extern xpmem_segid_t *xpmem_handler_array;
 extern xpmem_apid_t *xpmem_apid_array;
 
-
-typedef struct ackHeader {
-	__s64 local_rank;
-	__s64 data_size;
-	__s64 page_size;
-	__s64 data_offset;
-	__s64 exp_offset;
-} ackHeader;
 
 // #define XPMEM_PROFILE
 #define PAGE_SIZE (1L << 12)

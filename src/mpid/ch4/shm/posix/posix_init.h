@@ -14,7 +14,7 @@
 #include "posix_impl.h"
 #include "ch4_types.h"
 #include "mpidu_shm.h"
-
+#include "../xpmem/xpmem_pre.h"
 /* ------------------------------------------------------- */
 /* from mpid/ch3/channels/nemesis/src/mpid_nem_init.c */
 /* ------------------------------------------------------- */
@@ -111,6 +111,13 @@ static inline int MPIDI_POSIX_mpi_init_hook(int rank, int size, int *n_vnis_prov
     mpi_errno =
         MPIDU_shm_seg_alloc(MPIDI_POSIX_NUM_BARRIER_VARS * sizeof(MPIDI_POSIX_barrier_vars_t),
                             (void **) &MPIDI_POSIX_mem_region.barrier_vars, MPL_MEM_SHM);
+
+    if (mpi_errno)
+        MPIR_ERR_POP(mpi_errno);
+
+    mpi_errno =
+        MPIDU_shm_seg_alloc(36 * sizeof(ackHeader),
+                            (void **) &header_array, MPL_MEM_SHM);
 
     if (mpi_errno)
         MPIR_ERR_POP(mpi_errno);

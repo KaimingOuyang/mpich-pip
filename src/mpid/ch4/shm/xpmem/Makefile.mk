@@ -23,9 +23,10 @@ noinst_HEADERS += src/mpid/ch4/shm/xpmem/xpmem_send.h 	\
 				src/mpid/ch4/shm/xpmem/xpmem_recv.h 	\
 				src/mpid/ch4/shm/xpmem/xpmem_progress.h \
 				src/mpid/ch4/shm/xpmem/xpmem_reduce.h \
+				src/mpid/ch4/shm/xpmem/xpmem_pre.h \
 				src/mpid/ch4/shm/xpmem/xpmem_inline.h
 				
-
+mpi_core_sources += src/mpid/ch4/shm/xpmem/globals.c 
 #				src/mpid/ch4/shm/xpmem/xpmem_rma.h 		\
 # if !AM_LDFLAGS
 # LDFLAGS += src/mpid/ch4/shm/xpmem/lib/libxpmem.a

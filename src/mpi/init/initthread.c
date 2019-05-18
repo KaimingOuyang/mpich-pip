@@ -12,9 +12,9 @@
  * excludes the implied warranties of merchantability, fitness for a
  * particular purpose and non-infringement.
  */
-#define _GNU_SOURCE
-#include <sched.h>
-#include <numa.h>
+// #define _GNU_SOURCE
+// #include <sched.h>
+// #include <numa.h>
 #include "mpiimpl.h"
 #include "mpir_info.h"
 #include "datatype.h"
@@ -35,7 +35,7 @@ int xpmem_local_rank;
 xpmem_segid_t dtHandler;
 xpmem_segid_t *xpmem_handler_array;
 xpmem_apid_t *xpmem_apid_array;
-void xpmem_intra_node_init();
+// void xpmem_intra_node_init();
 /*
 === BEGIN_MPI_T_CVAR_INFO_BLOCK ===
 
@@ -851,35 +851,35 @@ void xpmem_intra_node_init()
 				exit(1);
 			}
 		}
-		int socket_id;
-		/* Get socket information */
-		int cpu = sched_getcpu();
-		int node = numa_node_of_cpu(cpu);
-		socket_id = node;
+		// int socket_id;
+		// /* Get socket information */
+		// int cpu = sched_getcpu();
+		// int node = numa_node_of_cpu(cpu);
+		// socket_id = node;
 
-		// MPIR_create_shared_addr(MPIR_Process.comm_world);
-		// MPIR_create_shared_addr(comm_ptr);
-		MPIR_Comm_split_impl(MPIR_Process.comm_world, socket_id, 0, &intra_socket_comm);
-		comm_ptr->socket_comm = intra_socket_comm;
-		// printf("MPIR_create_shared_addr comm_ptr->socket_comm %p rank %d, \n", intra_socket_comm, MPIR_Process.comm_world->rank);
-		// fflush(stdout);
-		// MPIR_create_shared_addr(comm_ptr->socket_comm);
-		// if(MPIR_Process.socket_id == 0)
+		// // MPIR_create_shared_addr(MPIR_Process.comm_world);
+		// // MPIR_create_shared_addr(comm_ptr);
+		// MPIR_Comm_split_impl(MPIR_Process.comm_world, socket_id, 0, &intra_socket_comm);
+		// comm_ptr->socket_comm = intra_socket_comm;
+		// // printf("MPIR_create_shared_addr comm_ptr->socket_comm %p rank %d, \n", intra_socket_comm, MPIR_Process.comm_world->rank);
+		// // fflush(stdout);
+		// // MPIR_create_shared_addr(comm_ptr->socket_comm);
+		// // if(MPIR_Process.socket_id == 0)
 
-		if (comm_ptr->local_size != intra_socket_comm->local_size) {
+		// if (comm_ptr->local_size != intra_socket_comm->local_size) {
 
-			if (intra_socket_comm->rank == 0) {
-				// printf("Intersplit rank %d, newrank %d\n", comm_ptr->rank, intra_socket_comm->rank);
-				// fflush(stdout);
-				MPIR_Comm_split_impl(comm_ptr, 0, 0, &inter_socket_comm);
-				comm_ptr->socket_roots_comm = inter_socket_comm;
-			} else {
-				MPIR_Comm_split_impl(comm_ptr, 1, 0, &inter_socket_comm);
-			}
-		}
+		// 	if (intra_socket_comm->rank == 0) {
+		// 		// printf("Intersplit rank %d, newrank %d\n", comm_ptr->rank, intra_socket_comm->rank);
+		// 		// fflush(stdout);
+		// 		MPIR_Comm_split_impl(comm_ptr, 0, 0, &inter_socket_comm);
+		// 		comm_ptr->socket_roots_comm = inter_socket_comm;
+		// 	} else {
+		// 		MPIR_Comm_split_impl(comm_ptr, 1, 0, &inter_socket_comm);
+		// 	}
+		// }
 		
-		global_buffer = malloc(16 * 1024 * 1024);
-		memset(global_buffer, 0, 16 * 1024 * 1024);
+		// global_buffer = malloc(16 * 1024 * 1024);
+		// memset(global_buffer, 0, 16 * 1024 * 1024);
 	}
 
 	return;

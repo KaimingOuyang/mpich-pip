@@ -3,6 +3,7 @@
 
 #include "mpl.h"
 #include "xpmem_progress.h"
+#include "xpmem_pre.h"
 extern int xpmem_local_rank;
 
 
@@ -39,20 +40,18 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 	if (count == 0)
 		goto fn_exit;
 
-	ackHeader *header_array = (ackHeader*) MPL_malloc(sizeof(ackHeader) * psize, MPL_MEM_OTHER);
-#ifdef XPMEM_REUSE
+// #ifdef XPMEM_REUSE
 	// static ackHeader *header_reuse = NULL;
-	static uint64_t *src_addr = NULL;
-	static ackHeader *prev_header = NULL;
-	if (src_addr == NULL) {
-		// header_reuse = (ackHeader*) MPL_malloc(sizeof(ackHeader) * psize, MPL_MEM_OTHER);
-		src_addr = MPL_malloc(sizeof(uint64_t) * psize, MPL_MEM_OTHER);
-		prev_header = MPL_malloc(sizeof(ackHeader) * psize, MPL_MEM_OTHER);
-		memset(src_addr, 0, sizeof(uint64_t) * psize);
-		memset(prev_header, 0, sizeof(ackHeader) * psize);
-		// printf("psize %d\n", psize);
-	}
-#endif
+	
+	// if (src_addr == NULL) {
+	// 	// header_reuse = (ackHeader*) MPL_malloc(sizeof(ackHeader) * psize, MPL_MEM_OTHER);
+	// 	src_addr = MPL_malloc(sizeof(uint64_t) * psize, MPL_MEM_OTHER);
+	// 	prev_header = MPL_malloc(sizeof(ackHeader) * psize, MPL_MEM_OTHER);
+	// 	memset(src_addr, 0, sizeof(uint64_t) * psize);
+	// 	memset(prev_header, 0, sizeof(ackHeader) * psize);
+	// 	// printf("psize %d\n", psize);
+	// }
+// #endif
 
 
 	typesize =  MPIR_Datatype_get_basic_size(datatype);
@@ -85,11 +84,13 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 	}
 
 	/* Exchange mem segment info */
-	mpi_errno = MPIR_Allgather(&destheader, sizeof(ackHeader), MPI_BYTE, header_array, sizeof(ackHeader), MPI_BYTE, comm, errflag);
-	if (mpi_errno != MPI_SUCCESS) {
-		errLine = __LINE__;
-		goto fn_fail;
-	}
+	header_array[comm->rank] = destheader;
+	MPIDI_POSIX_mpi_barrier(comm, errflag, NULL);
+	// mpi_errno = MPIR_Allgather(&destheader, sizeof(ackHeader), MPI_BYTE, header_array, sizeof(ackHeader), MPI_BYTE, comm, errflag);
+	// if (mpi_errno != MPI_SUCCESS) {
+	// 	errLine = __LINE__;
+	// 	goto fn_fail;
+	// }
 	// COLL_SHMEM_MODULE = POSIX_MODULE;
 	// mpi_errno = MPIDI_POSIX_mpi_bcast(&destheader, 4, MPI_LONG_LONG, root, comm, errflag, NULL);
 	// if (mpi_errno != MPI_SUCCESS) {
@@ -111,8 +112,8 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 	// 	// printArray(myrank, destdataBuf, count);
 	// 	// printf("Rank: %d, attach dest buffer with handler %llX\n", myrank, destheader.dtHandler);
 	// 	// fflush(stdout);
-	// }
-	// printf("Rank: %d, attach dest buffer with handler %llX, and %d\n", myrank, destheader.dtHandler, ((int*)destdataBuf)[0]);
+	// // }
+	// printf("Rank: %d, attach dest buffer with handler\n", myrank);
 	// fflush(stdout);
 #ifdef XPMEM_REUSE
 
@@ -241,7 +242,7 @@ static inline int MPIDI_XPMEM_mpi_reduce(const void *sendbuf, void *recvbuf, int
 #endif
 #endif // XPMEM_REUSE
 
-	MPL_free(header_array);
+	// MPL_free(header_array);
 	// COLL_SHMEM_MODULE = POSIX_MODULE;
 	MPIDI_POSIX_mpi_barrier(comm, errflag, NULL);
 	// COLL_SHMEM_MODULE = XPMEM_MODULE;
@@ -263,157 +264,157 @@ fn_exit :
 }
 
 
-#undef FCNAME
-#define FCNAME MPL_QUOTE(MPIDI_PIP_mpi_tree_based_reduce)
-static inline int MPIDI_XPMEM_mpi_tree_based_reduce(const void *sendbuf, void *recvbuf, int count,
-        MPI_Datatype datatype, MPI_Op op, int root,
-        MPIR_Comm * comm, MPIR_Errflag_t * errflag,
-        const void *ch4_algo_parameters_container_in __attribute__((unused)))
-{
-	/* Current tree base algorithm only deal with power of 2 sockets */
-	int mpi_errno = MPI_SUCCESS;
-	int myrank = comm->rank;
-	int psize = comm->local_size;
-	int errLine;
-	void *dest = NULL;
-	void *src = NULL;
-	int step = 1;
-	int new_rank = myrank;
-	MPIR_Request *request = NULL;
-	int size = MPIR_Datatype_get_basic_size(datatype) * count;
+// #undef FCNAME
+// #define FCNAME MPL_QUOTE(MPIDI_PIP_mpi_tree_based_reduce)
+// static inline int MPIDI_XPMEM_mpi_tree_based_reduce(const void *sendbuf, void *recvbuf, int count,
+//         MPI_Datatype datatype, MPI_Op op, int root,
+//         MPIR_Comm * comm, MPIR_Errflag_t * errflag,
+//         const void *ch4_algo_parameters_container_in __attribute__((unused)))
+// {
+// 	/* Current tree base algorithm only deal with power of 2 sockets */
+// 	int mpi_errno = MPI_SUCCESS;
+// 	int myrank = comm->rank;
+// 	int psize = comm->local_size;
+// 	int errLine;
+// 	void *dest = NULL;
+// 	void *src = NULL;
+// 	int step = 1;
+// 	int new_rank = myrank;
+// 	MPIR_Request *request = NULL;
+// 	int size = MPIR_Datatype_get_basic_size(datatype) * count;
 
-	void* local_buffer;
-	int ack;
+// 	void* local_buffer;
+// 	int ack;
 
-	if ((myrank & 1) == 0) {
-		if (myrank != root) {
+// 	if ((myrank & 1) == 0) {
+// 		if (myrank != root) {
 
-			local_buffer = MPL_malloc(size, MPL_MEM_OTHER);
-#ifndef NO_XPMEM_REDUCE_LOCAL
-			MPIR_Memcpy(local_buffer, sendbuf, size);
-#endif
-		} else {
-			/* root sendbuf should be MPI_IN_PLACE */
-			local_buffer = recvbuf;
-		}
-	} else {
-		local_buffer = sendbuf;
-	}
+// 			local_buffer = MPL_malloc(size, MPL_MEM_OTHER);
+// #ifndef NO_XPMEM_REDUCE_LOCAL
+// 			MPIR_Memcpy(local_buffer, sendbuf, size);
+// #endif
+// 		} else {
+// 			/* root sendbuf should be MPI_IN_PLACE */
+// 			local_buffer = recvbuf;
+// 		}
+// 	} else {
+// 		local_buffer = sendbuf;
+// 	}
 
-	void* data_buf;
-	void* real_buf;
-	ackHeader header;
-	while (1) {
-		if (new_rank & 1) {
-			src = local_buffer;
-			mpi_errno = xpmemExposeMem(src, size, &header, xpmem_local_rank);
-			if (unlikely(mpi_errno != MPI_SUCCESS))
-				goto fn_fail;
+// 	void* data_buf;
+// 	void* real_buf;
+// 	ackHeader header;
+// 	while (1) {
+// 		if (new_rank & 1) {
+// 			src = local_buffer;
+// 			mpi_errno = xpmemExposeMem(src, size, &header, xpmem_local_rank);
+// 			if (unlikely(mpi_errno != MPI_SUCCESS))
+// 				goto fn_fail;
 
-			mpi_errno = MPIDI_POSIX_mpi_send(&header, sizeof(ackHeader), MPI_BYTE, myrank - step, 0, comm, MPIR_CONTEXT_INTRA_COLL, NULL, &request);
-			if (unlikely(mpi_errno != MPI_SUCCESS))
-				goto fn_fail;
-			mpi_errno = MPID_XPMEM_Wait(request);
-			if (unlikely(mpi_errno != MPI_SUCCESS))
-				goto fn_fail;
+// 			mpi_errno = MPIDI_POSIX_mpi_send(&header, sizeof(ackHeader), MPI_BYTE, myrank - step, 0, comm, MPIR_CONTEXT_INTRA_COLL, NULL, &request);
+// 			if (unlikely(mpi_errno != MPI_SUCCESS))
+// 				goto fn_fail;
+// 			mpi_errno = MPID_XPMEM_Wait(request);
+// 			if (unlikely(mpi_errno != MPI_SUCCESS))
+// 				goto fn_fail;
 
-			// printf("inter socket rank %d waits for ack (local_rank %d)\n", myrank, xpmem_local_rank);
-			// fflush(stdout);
-			mpi_errno = MPIDI_POSIX_mpi_recv(&ack, 1, MPI_INT, myrank - step, 0, comm, MPIR_CONTEXT_INTRA_COLL, MPI_STATUS_IGNORE, &request);
-			if (unlikely(mpi_errno != MPI_SUCCESS))
-				goto fn_fail;
-			mpi_errno = MPID_XPMEM_Wait(request);
-			if (unlikely(mpi_errno != MPI_SUCCESS))
-				goto fn_fail;
-			// printf("inter socket rank %d receives ack and break out (local_rank %d)\n", myrank, xpmem_local_rank);
-			// fflush(stdout);
-			break;
-		} else {
-			static uint64_t src_addr = 0;
-			static ackHeader prev_header = {.data_size = 0, .exp_offset = 0};
-			mpi_errno = MPIDI_POSIX_mpi_recv(&header, sizeof(ackHeader), MPI_BYTE, myrank + step, 0, comm, MPIR_CONTEXT_INTRA_COLL, MPI_STATUS_IGNORE, &request);
-			if (unlikely(mpi_errno != MPI_SUCCESS))
-				goto fn_fail;
-			mpi_errno = MPID_XPMEM_Wait(request);
-			if (unlikely(mpi_errno != MPI_SUCCESS))
-				goto fn_fail;
-			// printf("inter socket rank %d receives header %p (local_rank %d)\n", myrank, &header, xpmem_local_rank);
-			// fflush(stdout);
-#ifdef XPMEM_REUSE
-			// if (comm->rank == 0) {
-			// 	printf("Ready to attach src mem %X\n", header_array[i].exp_offset);
-			// 	fflush(stdout);
-			// }
+// 			// printf("inter socket rank %d waits for ack (local_rank %d)\n", myrank, xpmem_local_rank);
+// 			// fflush(stdout);
+// 			mpi_errno = MPIDI_POSIX_mpi_recv(&ack, 1, MPI_INT, myrank - step, 0, comm, MPIR_CONTEXT_INTRA_COLL, MPI_STATUS_IGNORE, &request);
+// 			if (unlikely(mpi_errno != MPI_SUCCESS))
+// 				goto fn_fail;
+// 			mpi_errno = MPID_XPMEM_Wait(request);
+// 			if (unlikely(mpi_errno != MPI_SUCCESS))
+// 				goto fn_fail;
+// 			// printf("inter socket rank %d receives ack and break out (local_rank %d)\n", myrank, xpmem_local_rank);
+// 			// fflush(stdout);
+// 			break;
+// 		} else {
+// 			static uint64_t src_addr = 0;
+// 			static ackHeader prev_header = {.data_size = 0, .exp_offset = 0};
+// 			mpi_errno = MPIDI_POSIX_mpi_recv(&header, sizeof(ackHeader), MPI_BYTE, myrank + step, 0, comm, MPIR_CONTEXT_INTRA_COLL, MPI_STATUS_IGNORE, &request);
+// 			if (unlikely(mpi_errno != MPI_SUCCESS))
+// 				goto fn_fail;
+// 			mpi_errno = MPID_XPMEM_Wait(request);
+// 			if (unlikely(mpi_errno != MPI_SUCCESS))
+// 				goto fn_fail;
+// 			// printf("inter socket rank %d receives header %p (local_rank %d)\n", myrank, &header, xpmem_local_rank);
+// 			// fflush(stdout);
+// #ifdef XPMEM_REUSE
+// 			// if (comm->rank == 0) {
+// 			// 	printf("Ready to attach src mem %X\n", header_array[i].exp_offset);
+// 			// 	fflush(stdout);
+// 			// }
 
-			if (prev_header.data_size == header.data_size && prev_header.exp_offset == header.exp_offset && prev_header.data_offset == header.data_offset) {
-				data_buf = (void*) src_addr;
-			} else {
-#ifndef NO_XPMEM_SYSCALL
-				mpi_errno = xpmemAttachMem(&header, &data_buf, &real_buf);
-				if (mpi_errno != MPI_SUCCESS) {
-					errLine = __LINE__;
-					goto fn_fail;
-				}
-				src_addr = (uint64_t) data_buf;
-				prev_header = header;
-#endif
-			}
+// 			if (prev_header.data_size == header.data_size && prev_header.exp_offset == header.exp_offset && prev_header.data_offset == header.data_offset) {
+// 				data_buf = (void*) src_addr;
+// 			} else {
+// #ifndef NO_XPMEM_SYSCALL
+// 				mpi_errno = xpmemAttachMem(&header, &data_buf, &real_buf);
+// 				if (mpi_errno != MPI_SUCCESS) {
+// 					errLine = __LINE__;
+// 					goto fn_fail;
+// 				}
+// 				src_addr = (uint64_t) data_buf;
+// 				prev_header = header;
+// #endif
+// 			}
 
-#else // Root XPMEM_REUSE
+// #else // Root XPMEM_REUSE
 
-#ifndef NO_XPMEM_SYSCALL
-			mpi_errno = xpmemAttachMem(&header, &data_buf, &real_buf);
-			if (mpi_errno != MPI_SUCCESS) {
-				errLine = __LINE__;
-				goto fn_fail;
-			}
-#endif
+// #ifndef NO_XPMEM_SYSCALL
+// 			mpi_errno = xpmemAttachMem(&header, &data_buf, &real_buf);
+// 			if (mpi_errno != MPI_SUCCESS) {
+// 				errLine = __LINE__;
+// 				goto fn_fail;
+// 			}
+// #endif
 
-#endif
-
-
-#ifndef NO_XPMEM_REDUCE_LOCAL
-			MPIR_Reduce_local(data_buf, local_buffer, count, datatype, op);
-#endif
-			// printf("inter socket rank %d reduce (local_rank %d)\n", myrank, xpmem_local_rank);
-			// fflush(stdout);
-#ifndef XPMEM_REUSE
-#ifndef NO_XPMEM_SYSCALL
-			mpi_errno = xpmemDetachMem(real_buf);
-			if (mpi_errno != MPI_SUCCESS) {
-				errLine = __LINE__;
-				goto fn_fail;
-			}
-#endif
-#endif
-			// printf("inter socket rank %d send back ack (local_rank %d)\n", myrank, xpmem_local_rank);
-			// fflush(stdout);
-			mpi_errno = MPIDI_POSIX_mpi_send(&ack, 1, MPI_INT, myrank + step, 0, comm, MPIR_CONTEXT_INTRA_COLL, NULL, &request);
-			if (unlikely(mpi_errno != MPI_SUCCESS))
-				goto fn_fail;
-			mpi_errno = MPID_XPMEM_Wait(request);
-			if (unlikely(mpi_errno != MPI_SUCCESS))
-				goto fn_fail;
-			// printf("inter socket rank %d finish (local_rank %d)\n", myrank, xpmem_local_rank);
-			// fflush(stdout);
-			new_rank = new_rank >> 1;
-			step = step << 1;
-			if (step >= psize)
-				break;
-		}
-	}
-
-	if ((myrank & 1) == 0 && myrank != root) {
-		MPL_free(local_buffer);
-	}
+// #endif
 
 
-fn_exit:
-	return mpi_errno;
-fn_fail:
-	printf("[%s-%d] Error with mpi_errno (%d)\n", __FUNCTION__, errLine, mpi_errno);
-	goto fn_exit;
+// #ifndef NO_XPMEM_REDUCE_LOCAL
+// 			MPIR_Reduce_local(data_buf, local_buffer, count, datatype, op);
+// #endif
+// 			// printf("inter socket rank %d reduce (local_rank %d)\n", myrank, xpmem_local_rank);
+// 			// fflush(stdout);
+// #ifndef XPMEM_REUSE
+// #ifndef NO_XPMEM_SYSCALL
+// 			mpi_errno = xpmemDetachMem(real_buf);
+// 			if (mpi_errno != MPI_SUCCESS) {
+// 				errLine = __LINE__;
+// 				goto fn_fail;
+// 			}
+// #endif
+// #endif
+// 			// printf("inter socket rank %d send back ack (local_rank %d)\n", myrank, xpmem_local_rank);
+// 			// fflush(stdout);
+// 			mpi_errno = MPIDI_POSIX_mpi_send(&ack, 1, MPI_INT, myrank + step, 0, comm, MPIR_CONTEXT_INTRA_COLL, NULL, &request);
+// 			if (unlikely(mpi_errno != MPI_SUCCESS))
+// 				goto fn_fail;
+// 			mpi_errno = MPID_XPMEM_Wait(request);
+// 			if (unlikely(mpi_errno != MPI_SUCCESS))
+// 				goto fn_fail;
+// 			// printf("inter socket rank %d finish (local_rank %d)\n", myrank, xpmem_local_rank);
+// 			// fflush(stdout);
+// 			new_rank = new_rank >> 1;
+// 			step = step << 1;
+// 			if (step >= psize)
+// 				break;
+// 		}
+// 	}
 
-}
+// 	if ((myrank & 1) == 0 && myrank != root) {
+// 		MPL_free(local_buffer);
+// 	}
+
+
+// fn_exit:
+// 	return mpi_errno;
+// fn_fail:
+// 	printf("[%s-%d] Error with mpi_errno (%d)\n", __FUNCTION__, errLine, mpi_errno);
+// 	goto fn_exit;
+
+// }
 
 #endif
