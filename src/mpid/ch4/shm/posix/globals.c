@@ -12,6 +12,12 @@
 #include "posix_impl.h"
 #include "posix_types.h"
 
+volatile uint64_t header = 0;
+volatile uint64_t counter = 0;
+volatile uint64_t workload = 0;
+volatile uint64_t others_workload = 0;
+uint64_t recv_flag = 0;
+
 MPIDI_POSIX_global_t MPIDI_POSIX_global = { 0 };
 
 MPIDI_POSIX_eager_funcs_t *MPIDI_POSIX_eager_func = NULL;

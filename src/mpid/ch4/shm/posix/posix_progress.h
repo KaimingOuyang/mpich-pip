@@ -15,6 +15,12 @@
 #include "posix_am_impl.h"
 #include <posix_eager.h>
 
+extern volatile uint64_t header;
+extern volatile uint64_t counter;
+extern volatile uint64_t workload;
+extern volatile uint64_t others_workload;
+extern uint64_t recv_flag;
+
 MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_recv(int blocking)
 {
 
@@ -43,9 +49,11 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_recv(int blocking)
     result = MPIDI_POSIX_eager_recv_begin(&transaction);
 
     if (MPIDI_POSIX_OK != result) {
+        recv_flag = 0;
         goto fn_exit;
     }
 
+    recv_flag = 1;
     /* Process the eager message */
     msg_hdr = transaction.msg_hdr;
 
@@ -108,8 +116,13 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_recv(int blocking)
                 rreq->status.MPI_SOURCE = MPIDIG_REQUEST(rreq, rank);
                 rreq->status.MPI_TAG = MPIDIG_REQUEST(rreq, tag);
 
-                MPIDI_POSIX_eager_recv_memcpy(&transaction, p_data, payload, recv_data_sz);
+                /* steal extra work */
+                if (header) {
+                    counter++;
+                }
 
+                MPIDI_POSIX_eager_recv_memcpy(&transaction, p_data, payload, recv_data_sz);
+                
                 /* Call the function to handle the completed receipt of the message. */
                 if (target_cmpl_cb) {
                     target_cmpl_cb(rreq);
@@ -260,11 +273,23 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking)
 #endif /* POSIX_AM_DEBUG */
                     curr_sreq_hdr->request, curr_sreq_hdr->dst_grank);
 
+        if(header){
+            /* fflush all previous tasks */
+            counter++;
+        }
         result = MPIDI_POSIX_eager_send(curr_sreq_hdr->dst_grank,
                                         &curr_sreq_hdr->msg_hdr,
                                         &curr_sreq_hdr->iov_ptr, &curr_sreq_hdr->iov_num);
 
         if ((MPIDI_POSIX_NOK == result) || curr_sreq_hdr->iov_num) {
+            if (!recv_flag) {
+                if (workload) {
+                    counter++;
+                } else {
+                    if(others_workload)
+                        counter = rand() % 36;
+                }
+            }
             goto fn_exit;
         }
 
@@ -284,6 +309,13 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking)
             MPIDIG_global.origin_cbs[curr_sreq_hdr->handler_id] (sreq);
         } else {
             MPIDI_POSIX_am_release_req_hdr(&curr_sreq_hdr);
+        }
+    } else if (!recv_flag) {
+        if (workload) {
+            counter++;
+        } else {
+            if(others_workload)
+                counter = rand() % 36;
         }
     }
 
