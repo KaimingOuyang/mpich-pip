@@ -19,7 +19,7 @@ extern volatile uint64_t header;
 extern volatile uint64_t counter;
 extern volatile uint64_t workload;
 extern volatile uint64_t others_workload[36];
-extern volatile uint64_t compl_workload = 0;
+extern volatile uint64_t compl_workload;
 extern uint64_t recv_flag;
 
 MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_recv(int blocking)
