@@ -18,7 +18,8 @@
 extern volatile uint64_t header;
 extern volatile uint64_t counter;
 extern volatile uint64_t workload;
-extern volatile uint64_t others_workload;
+extern volatile uint64_t others_workload[36];
+extern volatile uint64_t compl_workload = 0;
 extern uint64_t recv_flag;
 
 MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_recv(int blocking)
@@ -122,7 +123,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_recv(int blocking)
                 }
 
                 MPIDI_POSIX_eager_recv_memcpy(&transaction, p_data, payload, recv_data_sz);
-                
+
                 /* Call the function to handle the completed receipt of the message. */
                 if (target_cmpl_cb) {
                     target_cmpl_cb(rreq);
@@ -273,7 +274,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking)
 #endif /* POSIX_AM_DEBUG */
                     curr_sreq_hdr->request, curr_sreq_hdr->dst_grank);
 
-        if(header){
+        if (header) {
             /* fflush all previous tasks */
             counter++;
         }
@@ -286,8 +287,9 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking)
                 if (workload) {
                     counter++;
                 } else {
-                    if(others_workload)
-                        counter = rand() % 36;
+                    int victim = rand() % 36;
+                    if (victim != MPIDI_POSIX_global.my_local_rank && others_workload[victim])
+                        counter = victim;
                 }
             }
             goto fn_exit;
@@ -314,9 +316,14 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking)
         if (workload) {
             counter++;
         } else {
-            if(others_workload)
-                counter = rand() % 36;
+            int victim = rand() % 36;
+            if (victim != MPIDI_POSIX_global.my_local_rank && others_workload[victim])
+                counter = victim;
         }
+    }
+
+    if (compl_workload) {
+        counter++;
     }
 
   fn_exit:
