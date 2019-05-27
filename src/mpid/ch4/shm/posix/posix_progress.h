@@ -281,7 +281,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking)
                     -1,
 #endif /* POSIX_AM_DEBUG */
                     curr_sreq_hdr->request, curr_sreq_hdr->dst_grank);
-        if (curr_sreq_hdr->msg_hdr == NULL || curr_sreq_hdr->msg_hdr->flush_flag == 1) {
+        if (curr_sreq_hdr->msg_hdr == NULL) {
             while (workload) {
                 counter++;
             }
@@ -300,20 +300,20 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking)
                                         &curr_sreq_hdr->iov_ptr, &curr_sreq_hdr->iov_num);
 
         if ((MPIDI_POSIX_NOK == result) || curr_sreq_hdr->iov_num) {
-            if (!recv_flag) {
-                if (workload) {
-                    counter++;
-                } else {
-                    int victim = rand() % 36;
-                    // if (compl_workload) {
-                    //     counter++;
-                    // }
-                    if (victim != MPIDI_POSIX_global.my_local_rank) {
-                        if (others_workload[victim])
-                            counter = victim;
-                    }
-                }
-            }
+            // if (!recv_flag) {
+            //     if (workload) {
+            //         counter++;
+            //     } else {
+            //         int victim = rand() % 36;
+            //         // if (compl_workload) {
+            //         //     counter++;
+            //         // }
+            //         if (victim != MPIDI_POSIX_global.my_local_rank) {
+            //             if (others_workload[victim])
+            //                 counter = victim;
+            //         }
+            //     }
+            // }
             goto fn_exit;
         }
 

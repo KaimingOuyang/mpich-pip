@@ -52,7 +52,7 @@ MPIDI_POSIX_eager_send(int grank,
         goto fn_exit;
     }
 
-    if (*msg_hdr == NULL || (*msg_hdr)->flush_flag == 1) {
+    if (*msg_hdr == NULL) {
         while (workload) {
             counter++;
         }
