@@ -142,12 +142,17 @@ int MPIDI_POSIX_mpi_init_hook(int rank, int size, int *n_vcis_provided, int *tag
     /* --END ERROR HANDLING-- */
 }
 
+extern volatile uint64_t counter;
+
 int MPIDI_POSIX_mpi_finalize_hook(void)
 {
     int mpi_errno = MPI_SUCCESS;
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_POSIX_FINALIZE_HOOK);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_POSIX_FINALIZE_HOOK);
-
+    if (MPIDI_POSIX_global.my_local_rank >= 1024) {
+        printf("total counter %ld\n", counter);
+        fflush(stdout);
+    }
     mpi_errno = MPIDI_POSIX_eager_finalize();
     if (mpi_errno)
         MPIR_ERR_POP(mpi_errno);

@@ -12,7 +12,7 @@
 
 #include "posix_impl.h"
 #include "posix_am_impl.h"
-
+#include "eager/fbox/fbox_types.h"
 /* Enqueue a request header onto the postponed message queue. This is a helper function and most
  * likely shouldn't be used outside of this file. */
 MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_am_enqueue_request(const void *am_hdr, size_t am_hdr_sz,
@@ -104,6 +104,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_am_isend(int rank,
     struct iovec iov_left[2];
     struct iovec *iov_left_ptr;
     size_t iov_num_left;
+    size_t data_sz_thres = MPIDI_POSIX_FBOX_DATA_LEN - sizeof(MPIDI_POSIX_am_header_t) - am_hdr_sz;
 #ifdef POSIX_AM_DEBUG
     static int seq_num = 0;
 #endif /* POSIX_AM_DEBUG */
@@ -122,7 +123,10 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_am_isend(int rank,
     msg_hdr.handler_id = handler_id;
     msg_hdr.am_hdr_sz = am_hdr_sz;
     msg_hdr.data_sz = data_sz;
-
+    if(data_sz <= data_sz_thres)
+        msg_hdr.flush_flag = 0;
+    else
+        msg_hdr.flush_flag = 1;
     /* If the data being sent is not contiguous, pack it into a contiguous buffer using the datatype
      * engine. */
     if (unlikely(!dt_contig && (data_sz > 0))) {

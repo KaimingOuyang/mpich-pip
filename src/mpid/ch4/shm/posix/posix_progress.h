@@ -118,9 +118,17 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_recv(int blocking)
                 rreq->status.MPI_TAG = MPIDIG_REQUEST(rreq, tag);
 
                 /* steal extra work */
-                if (header) {
-                    counter++;
-                }
+                // while(workload){
+                //     counter++;
+                // }
+
+                // while(compl_workload){
+                //     counter++;
+                // }
+
+                // while(header){
+                //     counter++;
+                // }
 
                 MPIDI_POSIX_eager_recv_memcpy(&transaction, p_data, payload, recv_data_sz);
 
@@ -273,11 +281,22 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking)
                     -1,
 #endif /* POSIX_AM_DEBUG */
                     curr_sreq_hdr->request, curr_sreq_hdr->dst_grank);
+        if(curr_sreq_hdr->msg_hdr && curr_sreq_hdr->msg_hdr->flush_flag == 0){
+            goto fbox_copy_progress;
+        }else{
+            while(workload){
+                counter++;
+            }
 
-        if (header) {
-            /* fflush all previous tasks */
-            counter++;
+            while(compl_workload){
+                counter++;
+            }
+
+            // while(header){
+            //     counter++;
+            // }
         }
+  fbox_copy_progress:      
         result = MPIDI_POSIX_eager_send(curr_sreq_hdr->dst_grank,
                                         &curr_sreq_hdr->msg_hdr,
                                         &curr_sreq_hdr->iov_ptr, &curr_sreq_hdr->iov_num);
@@ -288,8 +307,13 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking)
                     counter++;
                 } else {
                     int victim = rand() % 36;
-                    if (victim != MPIDI_POSIX_global.my_local_rank && others_workload[victim])
-                        counter = victim;
+                    // if (compl_workload) {
+                    //     counter++;
+                    // }
+                    if (victim != MPIDI_POSIX_global.my_local_rank){
+                        if(others_workload[victim])
+                            counter = victim;
+                    }
                 }
             }
             goto fn_exit;
@@ -317,14 +341,17 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking)
             counter++;
         } else {
             int victim = rand() % 36;
-            if (victim != MPIDI_POSIX_global.my_local_rank && others_workload[victim])
-                counter = victim;
+            // if (compl_workload) {
+            //     counter++;
+            // }
+            if (victim != MPIDI_POSIX_global.my_local_rank){
+                if(others_workload[victim])
+                    counter = victim;
+            }
         }
     }
 
-    if (compl_workload) {
-        counter++;
-    }
+    
 
   fn_exit:
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_POSIX_PROGRESS_SEND);

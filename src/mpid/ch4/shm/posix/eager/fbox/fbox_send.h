@@ -12,7 +12,10 @@
 #define POSIX_EAGER_FBOX_SEND_H_INCLUDED
 
 #include "fbox_impl.h"
-
+extern volatile uint64_t workload;
+extern volatile uint64_t compl_workload;
+extern volatile uint64_t counter;
+extern volatile uint64_t header;
 /* This function attempts to send the next chunk of a message via the fastbox. If the fastbox is
  * already full, this function will return and the caller is expected to queue the message for later
  * and retry.
@@ -49,6 +52,22 @@ MPIDI_POSIX_eager_send(int grank,
         goto fn_exit;
     }
 
+    if(*msg_hdr && (*msg_hdr)->flush_flag == 0){
+        goto fbox_copy;
+    }else{
+        while (workload) {
+            counter++;
+        }
+
+        while (compl_workload) {
+            counter++;
+        }
+
+        // while (header) {
+        //     counter++;
+        // }
+    }
+fbox_copy:
     fbox_payload_ptr = fbox_out->payload;
 
     fbox_out->is_header = 0;
