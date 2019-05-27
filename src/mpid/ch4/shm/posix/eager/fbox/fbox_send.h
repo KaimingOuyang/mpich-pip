@@ -52,9 +52,7 @@ MPIDI_POSIX_eager_send(int grank,
         goto fn_exit;
     }
 
-    if(*msg_hdr && (*msg_hdr)->flush_flag == 0){
-        goto fbox_copy;
-    }else{
+    if (*msg_hdr == NULL || (*msg_hdr)->flush_flag == 1) {
         while (workload) {
             counter++;
         }
@@ -62,12 +60,8 @@ MPIDI_POSIX_eager_send(int grank,
         while (compl_workload) {
             counter++;
         }
-
-        // while (header) {
-        //     counter++;
-        // }
     }
-fbox_copy:
+
     fbox_payload_ptr = fbox_out->payload;
 
     fbox_out->is_header = 0;

@@ -118,15 +118,15 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_recv(int blocking)
                 rreq->status.MPI_TAG = MPIDIG_REQUEST(rreq, tag);
 
                 /* steal extra work */
-                // while(workload){
+                // while (workload){
                 //     counter++;
                 // }
 
-                // while(compl_workload){
+                // while (compl_workload){
                 //     counter++;
                 // }
 
-                // while(header){
+                // while (header){
                 //     counter++;
                 // }
 
@@ -281,22 +281,20 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking)
                     -1,
 #endif /* POSIX_AM_DEBUG */
                     curr_sreq_hdr->request, curr_sreq_hdr->dst_grank);
-        if(curr_sreq_hdr->msg_hdr && curr_sreq_hdr->msg_hdr->flush_flag == 0){
-            goto fbox_copy_progress;
-        }else{
-            while(workload){
+        if (curr_sreq_hdr->msg_hdr == NULL || curr_sreq_hdr->msg_hdr->flush_flag == 1) {
+            while (workload) {
                 counter++;
             }
 
-            while(compl_workload){
+            while (compl_workload) {
                 counter++;
             }
 
-            // while(header){
+            // while (header){
             //     counter++;
             // }
         }
-  fbox_copy_progress:      
+        // fbox_copy_progress:
         result = MPIDI_POSIX_eager_send(curr_sreq_hdr->dst_grank,
                                         &curr_sreq_hdr->msg_hdr,
                                         &curr_sreq_hdr->iov_ptr, &curr_sreq_hdr->iov_num);
@@ -310,8 +308,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking)
                     // if (compl_workload) {
                     //     counter++;
                     // }
-                    if (victim != MPIDI_POSIX_global.my_local_rank){
-                        if(others_workload[victim])
+                    if (victim != MPIDI_POSIX_global.my_local_rank) {
+                        if (others_workload[victim])
                             counter = victim;
                     }
                 }
@@ -344,14 +342,14 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking)
             // if (compl_workload) {
             //     counter++;
             // }
-            if (victim != MPIDI_POSIX_global.my_local_rank){
-                if(others_workload[victim])
+            if (victim != MPIDI_POSIX_global.my_local_rank) {
+                if (others_workload[victim])
                     counter = victim;
             }
         }
     }
 
-    
+
 
   fn_exit:
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_POSIX_PROGRESS_SEND);
