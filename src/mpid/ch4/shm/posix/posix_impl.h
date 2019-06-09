@@ -27,6 +27,7 @@
 /* constants                                            */
 /* ---------------------------------------------------- */
 #define MPIDI_POSIX_EAGER_THRESHOLD MPIDI_POSIX_DATA_LEN
+#define MPIDI_POSIX_EAGER_THRESHOLD_2TIME (MPIDI_POSIX_DATA_LEN << 1)
 #define MPIDI_POSIX_TYPESTANDARD    0
 #define MPIDI_POSIX_TYPEEAGER       1
 #define MPIDI_POSIX_TYPELMT         2
@@ -34,6 +35,7 @@
 #define MPIDI_POSIX_TYPEBUFFERED    4
 #define MPIDI_POSIX_TYPEREADY       5
 #define MPIDI_POSIX_TYPEACK         6
+#define MPIDI_POSIX_TYPELMT_LAST    7
 #define MPIDI_POSIX_REQUEST(req)    (&(req)->dev.ch4.shm.posix)
 
 /* ---------------------------------------------------- */
@@ -104,6 +106,7 @@ typedef struct {
 #define MPIDI_POSIX_REQUEST_CREATE_SREQ(sreq_)                  \
     {                                                           \
         (sreq_) = MPIR_Request_create(MPIR_REQUEST_KIND__SEND); \
+        MPIDI_POSIX_REQUEST(sreq_)->cur_cell_id = 0;            \
         MPIR_ERR_CHKANDSTMT((sreq_) == NULL, mpi_errno, MPIX_ERR_NOREQ, goto fn_fail, "**nomemreq"); \
         MPIR_Request_add_ref((sreq_));                          \
         (sreq_)->u.persist.real_request   = NULL;               \
@@ -112,6 +115,7 @@ typedef struct {
 #define MPIDI_POSIX_REQUEST_CREATE_RREQ(rreq_)                  \
     {                                                           \
         (rreq_) = MPIR_Request_create(MPIR_REQUEST_KIND__RECV); \
+        MPIDI_POSIX_REQUEST(rreq_)->cur_cell_id = 0;            \
         MPIR_ERR_CHKANDSTMT((rreq_) == NULL, mpi_errno, MPIX_ERR_NOREQ, goto fn_fail, "**nomemreq"); \
         MPIR_Request_add_ref((rreq_));                          \
         (rreq_)->u.persist.real_request   = NULL;               \

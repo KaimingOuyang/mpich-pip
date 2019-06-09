@@ -15,7 +15,7 @@
 #include <../posix/posix_datatypes.h>
 
 #define MPIDI_TASK_PREALLOC 64
-#define MPIDI_MAX_TASK_THREASHOLD 36
+#define MPIDI_MAX_TASK_THREASHOLD 62
 
 struct MPIDI_PIP_task_queue;
 
@@ -23,15 +23,18 @@ struct MPIDI_PIP_task_queue;
 typedef struct MPIDI_PIP_task {
     MPIR_OBJECT_HEADER;
     MPIR_Request *req;
+    int rank;
+    int compl_flag;
+    MPI_Aint asym_addr;
     // union {
     MPIDI_POSIX_cell_ptr_t cell;
     //     MPIR_Request *unexp_req;
     // };
 
-    // volatile uint64_t *cur_task_id;
-    // uint64_t task_id;
+    volatile uint64_t *cur_task_id;
+    uint64_t task_id;
     // int send_flag;
-    int compl_flag;
+
     // int *completion_count;
     // MPIDI_POSIX_queue_ptr_t cellQ;
     MPIDI_POSIX_queue_ptr_t cell_queue;
@@ -57,6 +60,7 @@ typedef struct {
     uint64_t *shm_send_counter;
     uint64_t *local_recv_counter;
     uint64_t *shm_recv_counter;
+    uint64_t *shm_in_proc;
     MPIDI_PIP_task_queue_t *local_task_queue;
     MPIDI_PIP_task_queue_t **shm_task_queue;
     // MPIDI_PIP_task_queue_t *local_recv_compl_queue;
