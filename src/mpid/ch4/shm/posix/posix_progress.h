@@ -236,7 +236,6 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_recv(int blocking, int *comple
                             MPIR_Memcpy(recv_buffer, (void *) send_buffer, data_sz);
                             while (pip_global.local_compl_queue->head)
                                 MPIDI_PIP_fflush_compl_task(pip_global.local_compl_queue);
-
                         } else {
                             task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
                             task->req = req;
@@ -244,7 +243,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_recv(int blocking, int *comple
                             task->cell = cell;
                             task->cell_queue = MPIDI_POSIX_mem_region.FreeQ[cell->my_rank];
                             task->rank = pip_global.local_rank;
-                            // task->send_flag = 0;
+                            task->send_flag = 0;
                             task->compl_flag = 0;
                             task->data_sz = data_sz;
                             task->asym_addr = (MPI_Aint) MPIDI_POSIX_asym_base_addr;
@@ -266,7 +265,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_recv(int blocking, int *comple
                                 //            MPIDI_POSIX_mem_region.local_rank, pip_global.local_task_queue->task_num);
                                 //     fflush(stdout);
                                 // }
-                                // MPIDI_PIP_fflush_task();
+                                MPIDI_PIP_fflush_task();
                                 MPIDI_PIP_fflush_compl_task(pip_global.local_compl_queue);
                                 // MPIDI_PIP_fflush_compl_task(pip_global.local_recv_compl_queue);
                             }
@@ -548,7 +547,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking, int *comple
                 task->compl_flag = 0;
                 task->asym_addr = (MPI_Aint) MPIDI_POSIX_asym_base_addr;
                 // task->task_id = pip_global.local_send_counter[]
-                // task->send_flag = 1;
+                task->send_flag = 1;
                 task->next = NULL;
                 task->compl_next = NULL;
                 task->rank = pip_global.local_rank;
@@ -602,7 +601,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking, int *comple
                 /* only one LMT send left */
                 /* long message */
                 cell->pkt.mpich.type = MPIDI_POSIX_TYPELMT_LAST;
-                MPIDI_PIP_fflush_task();
+                // MPIDI_PIP_fflush_task();
                 if (MPIDI_POSIX_REQUEST(sreq)->segment_ptr) {
                     /* non-contig */
                     size_t last =
@@ -632,7 +631,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking, int *comple
         }
 
         // (*completion_count)++;
-    } else if (pip_global.recv_empty) {
+    } else if (pip_global.recv_empty && pip_global.local_rank > 1) {
 
         if (pip_global.local_task_queue->head) {
             MPIDI_PIP_compl_one_task();

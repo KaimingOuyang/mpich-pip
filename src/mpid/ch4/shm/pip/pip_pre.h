@@ -33,7 +33,7 @@ typedef struct MPIDI_PIP_task {
 
     volatile uint64_t *cur_task_id;
     uint64_t task_id;
-    // int send_flag;
+    int send_flag;
 
     // int *completion_count;
     // MPIDI_POSIX_queue_ptr_t cellQ;
@@ -69,10 +69,12 @@ typedef struct {
     uint64_t copy_size;
     uint64_t try_steal;
     uint64_t suc_steal;
-
+    
+    double steal_time;
     int *esteal_done;
     int recvQ_empty;
     int *esteal_try;
+    int *conflict;
     int recv_empty;
 } MPIDI_PIP_global_t;
 

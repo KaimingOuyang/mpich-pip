@@ -264,14 +264,22 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_do_task_copy(MPIDI_PIP_task_t * task)
     pip_global.copy_size += task->data_sz;
 
     // task->next = NULL;
-
-    while (task_id != *task->cur_task_id);
+    if(task->send_flag){
+        static int conflict = 0;
+        while (task_id != *task->cur_task_id) conflict = 1;
+        pip_global.conflict[task->rank] += conflict;
+        conflict = 0;
+        MPIDI_POSIX_PIP_queue_enqueue(task->cell_queue, cell, task->asym_addr);
+        *task->cur_task_id = task_id + 1;
+        OPA_write_barrier();
+    }else{
+        MPIDI_POSIX_PIP_queue_enqueue(task->cell_queue, cell, task->asym_addr);
+    }
+    
     // OPA_write_barrier();
     // if (task->send_flag){
-    MPIDI_POSIX_PIP_queue_enqueue(task->cell_queue, cell, task->asym_addr);
+    
     // }
-    *task->cur_task_id = task_id + 1;
-    OPA_write_barrier();
 
     // OPA_write_barrier();
     // clock_gettime(CLOCK_MONOTONIC, &end);
@@ -372,14 +380,22 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_steal_task()
     if (victim != pip_global.local_rank) {
 #ifdef MPI_PIP_SHM_TASK_STEAL
         if (pip_global.shm_task_queue[victim]->head) {
+            // struct timespec start, end;
+            // clock_gettime(CLOCK_MONOTONIC, &start);
             MPIDI_PIP_Task_safe_dequeue(pip_global.shm_task_queue[victim], &task);
-            if (task)
+            pip_global.esteal_try[victim]++;
+            if (task) {
+                pip_global.esteal_done[victim]++;
                 MPIDI_PIP_do_task_copy(task);
+                // clock_gettime(CLOCK_MONOTONIC, &end);
+                // pip_global.steal_time +=
+                //     (double) (end.tv_sec - start.tv_sec) * 1e6 + (double) (end.tv_nsec -
+                //                                                            start.tv_nsec) / 1e3;
+            }
         }
         // pip_global.try_steal++;
-        // pip_global.esteal_try[victim]++;
 
-        // pip_global.esteal_done[victim]++;
+
         // pip_global.suc_steal++;
         // printf
         //     ("Process %d steal task from victim %d, task %p, data size %ld, remaining task# %d, queue %p\n",
