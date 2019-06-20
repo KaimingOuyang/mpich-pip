@@ -25,12 +25,42 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_Task_safe_enqueue(MPIDI_PIP_task_queue_t
     // task->next = NULL;
     MPID_Thread_mutex_lock(&task_queue->lock, &err);
     if (task_queue->tail) {
+        // task->prev = task_queue->tail;
         task_queue->tail->next = task;
         task_queue->tail = task;
     } else {
+        // task->prev = NULL;
         task_queue->head = task_queue->tail = task;
     }
+    // task->prev_flag = 1;
+    // task->prev_tick = 0;
     task_queue->task_num++;
+    MPID_Thread_mutex_unlock(&task_queue->lock, &err);
+
+    // if (err)
+    //     printf("MPIDI_PIP_Task_safe_enqueue lock error %d\n", err);
+
+    // MPIDI_PIP_task_t *old_tail =
+    //     (MPIDI_PIP_task_t *) __sync_lock_test_and_set(&task_queue->tail, task);
+    // old_tail->next = task;
+
+
+    // printf("rank %d - after enqueue, task_queue %p has task num %d\n", pip_global.local_rank, task_queue,
+    //        task_queue->task_num);
+    // fflush(stdout);
+    return;
+}
+
+#undef FCNAME
+#define FCNAME MPL_QUOTE(MPIDI_PIP_get_num_of_task)
+MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_get_num_of_task(MPIDI_PIP_task_queue_t * task_queue)
+{
+    // int err = 0;
+    int err;
+
+    // task->next = NULL;
+    MPID_Thread_mutex_lock(&task_queue->lock, &err);
+    pip_global.remaining_task += task_queue->task_num;
     MPID_Thread_mutex_unlock(&task_queue->lock, &err);
 
     // if (err)
@@ -66,6 +96,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_Task_safe_dequeue(MPIDI_PIP_task_queue_t
         if (task_queue->head == NULL)
             task_queue->tail = NULL;
         task_queue->task_num--;
+        // old_head->socket = pip_global.socket;
     }
     MPID_Thread_mutex_unlock(&task_queue->lock, &err);
     // }
@@ -113,10 +144,14 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_Compl_task_enqueue(MPIDI_PIP_task_queue_t
     int mpi_errno = MPI_SUCCESS, err;
 
     // task->next = NULL;
+    task->ref_cnt = 1;
     if (task_queue->tail) {
+        task->compl_prev = task_queue->tail;
+        __sync_add_and_fetch(&task_queue->tail->ref_cnt, 1);
         task_queue->tail->compl_next = task;
         task_queue->tail = task;
     } else {
+        task->compl_prev = NULL;
         task_queue->head = task_queue->tail = task;
     }
     // MPID_Thread_mutex_lock(&task_queue->lock, &err);
@@ -209,7 +244,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_Compl_task_delete_head(MPIDI_PIP_task_que
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_fflush_compl_task(MPIDI_PIP_task_queue_t * compl_queue)
 {
     MPIDI_PIP_task_t *task = compl_queue->head;
-    while (task && task->compl_flag) {
+    while (task && (task->ref_cnt == 0 || task->compl_flag)) {
         // if (task->compl_flag) {
         MPIDI_PIP_Compl_task_delete_head(compl_queue);
         // MPIDI_POSIX_queue_enqueue(task->cell_queue, task->cell);
@@ -262,23 +297,51 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_do_task_copy(MPIDI_PIP_task_t * task)
         MPIR_Memcpy(task->dest, task->src_first, task->data_sz);
     }
     pip_global.copy_size += task->data_sz;
-
+    cell->socket_id = pip_global.socket;
     // task->next = NULL;
-    if(task->send_flag){
-        static int conflict = 0;
-        while (task_id != *task->cur_task_id) conflict = 1;
-        pip_global.conflict[task->rank] += conflict;
-        conflict = 0;
+    if (task->send_flag) {
+        static uint64_t conflict = 0;
+        while (task_id != *task->cur_task_id)
+            // if (task->prev_flag)
+            conflict++;
+        // conflict = 1;
+
+        // if (task->compl_next) {
+        //     task->next->prev_tick = conflict;
+        //     // task->next->prev_flag = 0;
+        // }
+
+        if (conflict) {
+            if (task->compl_prev) {
+                if (conflict - task->compl_prev->tick > 0)
+                    pip_global.local_conflict += conflict - task->compl_prev->tick;
+            }
+            // pip_global.local_conflict += conflict;
+            conflict = 0;
+        }
+
+        task->tick = conflict;
+
         MPIDI_POSIX_PIP_queue_enqueue(task->cell_queue, cell, task->asym_addr);
+        if (task->compl_prev) {
+            __sync_sub_and_fetch(&task->compl_prev->ref_cnt, 1);
+        }
+
         *task->cur_task_id = task_id + 1;
         OPA_write_barrier();
-    }else{
+        __sync_sub_and_fetch(&task->ref_cnt, 1);
+    } else {
         MPIDI_POSIX_PIP_queue_enqueue(task->cell_queue, cell, task->asym_addr);
+
+        // if (task->compl_prev) {
+        //     task->compl_prev->ref_cnt--;
+        // }
+        task->compl_flag = 1;
     }
-    
+
     // OPA_write_barrier();
     // if (task->send_flag){
-    
+
     // }
 
     // OPA_write_barrier();
@@ -287,7 +350,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_do_task_copy(MPIDI_PIP_task_t * task)
     // printf("rank %d - copy data from %d, size %ld, time %.3lfus\n", pip_global.local_rank, task->rank,
     //        task->data_sz, time);
     // fflush(stdout);
-    task->compl_flag = 1;
+
 
     // MPIDI_PIP_Compl_task_safe_enqueue(task->compl_queue, task);
     // *task->cur_task_id = task_id + 1;
@@ -331,9 +394,10 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_compl_one_task()
 
         /* find my own task */
         if (task) {
+            // pip_global.esteal_done[pip_global.local_rank]++;
             MPIDI_PIP_do_task_copy(task);
             // MPIDI_PIP_compl_one_task(pip_global.local_compl_queue);
-            MPIDI_PIP_fflush_compl_task(pip_global.local_compl_queue);
+            // MPIDI_PIP_fflush_compl_task(pip_global.local_compl_queue);
             // MPIDI_PIP_fflush_compl_task(pip_global.local_send_compl_queue);
             // MPIDI_PIP_fflush_compl_task(pip_global.local_recv_compl_queue);
         }
@@ -356,6 +420,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_fflush_task()
 
         /* find my own task */
         if (task) {
+            // pip_global.esteal_done[pip_global.local_rank]++;
             MPIDI_PIP_do_task_copy(task);
             // MPIDI_PIP_compl_one_task(pip_global.local_compl_queue);
             // MPIDI_PIP_fflush_compl_task(pip_global.local_compl_queue);
@@ -376,6 +441,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_fflush_task()
 MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_steal_task()
 {
     int victim = rand() % pip_global.num_local;
+    // int victim = 0;
     MPIDI_PIP_task_t *task = NULL;
     if (victim != pip_global.local_rank) {
 #ifdef MPI_PIP_SHM_TASK_STEAL

@@ -36,7 +36,8 @@ void MPIDI_PIP_init()
     pip_global.num_local = num_local = MPIDI_POSIX_mem_region.num_local;
     pip_global.local_rank = local_rank = MPIDI_POSIX_mem_region.local_rank;
     pip_global.steal_time = 0.0;
-    pip_global.conflict = 0;
+    pip_global.local_conflict = 0;
+    pip_global.remaining_task = 0;
     MPIR_CHKPMEM_MALLOC(pip_global.local_send_counter, uint64_t *,
                         num_local * sizeof(uint64_t), mpi_errno, "pip_local_send_counter",
                         MPL_MEM_SHM);
@@ -61,18 +62,28 @@ void MPIDI_PIP_init()
     pip_global.copy_size = 0;
     pip_global.try_steal = 0;
     pip_global.suc_steal = 0;
+    int half = num_local / 2;
+    if (local_rank < half) {
+        pip_global.socket = 0;
+    } else {
+        pip_global.socket = 1;
+    }
     // pip_global.task_num = 0;
+    // if (local_rank == 0) {
+    //     printf("#processes #socket_0_stealing #socket_1_stealing remaining_task\n");
+    //     fflush(stdout);
+    // }
 
     MPIR_CHKPMEM_MALLOC(pip_global.esteal_done, int *,
                         sizeof(int) * num_local, mpi_errno, "esteal_done", MPL_MEM_SHM);
     MPIR_CHKPMEM_MALLOC(pip_global.esteal_try, int *,
                         sizeof(int) * num_local, mpi_errno, "esteal_try", MPL_MEM_SHM);
-     MPIR_CHKPMEM_MALLOC(pip_global.conflict, int *,
-                        sizeof(int) * num_local, mpi_errno, "conflict", MPL_MEM_SHM);
+    // MPIR_CHKPMEM_MALLOC(pip_global.conflict, int *,
+    //                     sizeof(int) * num_local, mpi_errno, "conflict", MPL_MEM_SHM);
 
     memset(pip_global.esteal_done, 0, num_local * sizeof(int));
     memset(pip_global.esteal_try, 0, num_local * sizeof(int));
-    memset(pip_global.conflict, 0, num_local * sizeof(int));
+    // memset(pip_global.conflict, 0, num_local * sizeof(int));
 
 
     MPID_Thread_mutex_create(&pip_global.local_task_queue->lock, &err);
@@ -114,9 +125,8 @@ void MPIDI_PIP_init()
     // printf("rank %d - I am here node_comm %p\n", local_rank, MPIR_Process.comm_world->node_comm);
     // fflush(stdout);
     if (MPIR_Process.comm_world->node_comm) {
-        MPIDU_shm_seg_t pip_memory;
-        MPIDU_shm_barrier_t *pip_barrier;
         uint64_t *shm_in_proc_addr;
+
         mpi_errno =
             MPIDU_shm_seg_alloc(num_local * sizeof(uint64_t),
                                 (void **) &task_queue_addr, MPL_MEM_SHM);
@@ -127,8 +137,24 @@ void MPIDI_PIP_init()
         if (mpi_errno)
             MPIR_ERR_POP(mpi_errno);
 
+        MPIR_CHKPMEM_MALLOC(pip_global.shm_done, int **,
+                            num_local * sizeof(int *), mpi_errno, "shm_done", MPL_MEM_SHM);
+        for (i = 0; i < num_local; ++i) {
+            mpi_errno =
+                MPIDU_shm_seg_alloc(num_local * sizeof(int),
+                                    (void **) &pip_global.shm_done[i], MPL_MEM_SHM);
+            if (mpi_errno)
+                MPIR_ERR_POP(mpi_errno);
+        }
+
         mpi_errno =
-            MPIDU_shm_seg_commit(&pip_memory, &pip_barrier,
+            MPIDU_shm_seg_alloc(num_local * sizeof(int),
+                                (void **) &pip_global.shm_conflict, MPL_MEM_SHM);
+        if (mpi_errno)
+            MPIR_ERR_POP(mpi_errno);
+
+        mpi_errno =
+            MPIDU_shm_seg_commit(&pip_global.pip_memory, &pip_global.pip_barrier,
                                  num_local, local_rank, MPIDI_POSIX_mem_region.local_procs[0],
                                  MPIDI_POSIX_mem_region.rank, MPL_MEM_SHM);
         if (mpi_errno)
@@ -137,7 +163,7 @@ void MPIDI_PIP_init()
         task_queue_addr[local_rank] = (uint64_t) pip_global.local_task_queue;
         if (pip_global.local_rank == 0)
             *shm_in_proc_addr = (uint64_t) pip_global.shm_in_proc;
-        mpi_errno = MPIDU_shm_barrier(pip_barrier, num_local);
+        mpi_errno = MPIDU_shm_barrier(pip_global.pip_barrier, num_local);
         if (mpi_errno)
             MPIR_ERR_POP(mpi_errno);
 
@@ -151,9 +177,6 @@ void MPIDI_PIP_init()
             pip_global.shm_task_queue[i] = (MPIDI_PIP_task_queue_t *) task_queue_addr[i];
         }
 
-        mpi_errno = MPIDU_shm_seg_destroy(&pip_memory, num_local);
-        if (mpi_errno)
-            MPIR_ERR_POP(mpi_errno);
     } else {
         pip_global.shm_task_queue[0] = pip_global.local_task_queue;
     }
@@ -389,29 +412,69 @@ static inline int MPIDI_POSIX_mpi_init_hook(int rank, int size, int *n_vnis_prov
 #define FCNAME MPL_QUOTE(MPIDI_POSIX_mpi_finalize_hook)
 MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_mpi_finalize_hook(void)
 {
+    int i, j;
     int mpi_errno = MPI_SUCCESS;
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_POSIX_FINALIZE);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_POSIX_FINALIZE);
-    char results[1024];
-    char buffer[128];
-    sprintf(results,
-            "---------- rank %d - copy size %ld, speed %.3lfMB/s (steal from, conflict, done)----------\n",
-            pip_global.local_rank, pip_global.copy_size,
-            pip_global.copy_size / 1024 / 1024 / (pip_global.steal_time / 1e6));
-    fflush(stdout);
-    int i;
-    for (i = 0; i < pip_global.num_local; i++) {
-        sprintf(buffer, "(%d, %d, %d) ", i, pip_global.conflict[i], pip_global.esteal_done[i]);
-        strcat(results, buffer);
+    pip_global.shm_conflict[pip_global.local_rank] = pip_global.local_conflict;
+
+    for (j = 0; j < pip_global.num_local; ++j) {
+        pip_global.shm_done[pip_global.local_rank][j] = pip_global.esteal_done[j];
     }
 
-    if (pip_global.local_rank >= 2) {
-        printf("%s\n", results);
+    mpi_errno = MPIDU_shm_barrier(pip_global.pip_barrier, pip_global.num_local);
+    // printf("pip_global.shm_conflict[0] = %d, pip_global.shm_conflict[1] = %d\n",
+    //        pip_global.shm_conflict[0], pip_global.shm_conflict[1]);
+    if (pip_global.local_rank == 0) {
+        uint64_t socket0_conflict = 0;
+        uint64_t socket1_conflict = 0;
+        int *socket0_done = (int *) malloc(pip_global.num_local * sizeof(int));
+        int *socket1_done = (int *) malloc(pip_global.num_local * sizeof(int));
+        memset(socket0_done, 0, sizeof(int) * pip_global.num_local);
+        memset(socket1_done, 0, sizeof(int) * pip_global.num_local);
+        int half = pip_global.num_local / 2;
+        for (i = 0; i < pip_global.num_local; ++i) {
+            if (i < half) {
+                socket0_conflict += pip_global.shm_conflict[i];
+                for (j = 0; j < pip_global.num_local; ++j)
+                    socket0_done[j] += pip_global.shm_done[i][j];
+            } else {
+                socket1_conflict += pip_global.shm_conflict[i];
+                for (j = 0; j < pip_global.num_local; ++j)
+                    socket1_done[j] += pip_global.shm_done[i][j];
+            }
+            // printf("pip_global.shm_conflict[%d] = %d\n", i, pip_global.shm_conflict[i]);
+        }
+        // printf("----- #processes %d -----\n", pip_global.num_local);
+        // printf("socket 0 - conflict %d, steal_0 %d, steal_half %d\n",
+        //        socket0_conflict, socket0_done[0], socket0_done[half]);
+        // // fflush(stdout);
+        // printf("socket 1 - conflict %d, steal_0 %d, steal_half %d\n",
+        //        socket1_conflict, socket1_done[0], socket1_done[half]);
+        // fflush(stdout);
+        char *ITERATION = getenv("ITERATION");
+        printf("iteration %s\n", ITERATION);
+        const int iter = atoi(ITERATION);
+        printf("%d %d %d %d %ld [conflict %ld (0) %ld (1)]\n", pip_global.num_local,
+               (socket0_done[0]) / iter, (socket1_done[0]) / iter,
+               pip_global.remaining_task / iter, (socket0_conflict + socket1_conflict) / iter,
+               socket0_conflict, socket1_conflict);
         fflush(stdout);
     }
+    // char results[1024];
+    // char buffer[128];
+
+    // for (i = 0; i < pip_global.num_local; i++) {
+    //     sprintf(buffer, "(%d, %d, %d) ", i, pip_global.conflict[i], pip_global.esteal_done[i]);
+    //     strcat(results, buffer);
+    // }
+
+    // if (pip_global.local_rank >= 2) {
+    //     printf("%s\n", results);
+    //     fflush(stdout);
+    // }
     /* local barrier */
     mpi_errno = MPIDU_shm_barrier(MPIDI_POSIX_mem_region.barrier, MPIDI_POSIX_mem_region.num_local);
-
     if (mpi_errno)
         MPIR_ERR_POP(mpi_errno);
 

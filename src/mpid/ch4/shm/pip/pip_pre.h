@@ -12,6 +12,7 @@
 #ifndef PIP_PRE_H_INCLUDED
 #define PIP_PRE_H_INCLUDED
 #include <mpidimpl.h>
+#include "mpidu_shm.h"
 #include <../posix/posix_datatypes.h>
 
 #define MPIDI_TASK_PREALLOC 64
@@ -24,7 +25,12 @@ typedef struct MPIDI_PIP_task {
     MPIR_OBJECT_HEADER;
     MPIR_Request *req;
     int rank;
+    // int socket;
+    // int prev_flag;
+    // uint64_t prev_tick;
+    uint64_t tick;
     int compl_flag;
+    int ref_cnt;
     MPI_Aint asym_addr;
     // union {
     MPIDI_POSIX_cell_ptr_t cell;
@@ -44,6 +50,8 @@ typedef struct MPIDI_PIP_task {
     size_t data_sz;
     struct MPIDI_PIP_task *next;
     struct MPIDI_PIP_task *compl_next;
+    struct MPIDI_PIP_task *compl_prev;
+
 } MPIDI_PIP_task_t;
 
 typedef struct MPIDI_PIP_task_queue {
@@ -69,12 +77,18 @@ typedef struct {
     uint64_t copy_size;
     uint64_t try_steal;
     uint64_t suc_steal;
-    
+    int remaining_task;
+    int socket;
+
     double steal_time;
     int *esteal_done;
     int recvQ_empty;
     int *esteal_try;
-    int *conflict;
+    int local_conflict;
+    int *shm_conflict;
+    int **shm_done;
+    MPIDU_shm_seg_t pip_memory;
+    MPIDU_shm_barrier_t *pip_barrier;
     int recv_empty;
 } MPIDI_PIP_global_t;
 
