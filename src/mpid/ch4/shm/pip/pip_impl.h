@@ -265,13 +265,18 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_do_task_copy(MPIDI_PIP_task_t * task)
 
     // task->next = NULL;
 
-    while (task_id != *task->cur_task_id);
-    // OPA_write_barrier();
-    // if (task->send_flag){
-    MPIDI_POSIX_PIP_queue_enqueue(task->cell_queue, cell, task->asym_addr);
-    // }
-    *task->cur_task_id = task_id + 1;
-    OPA_write_barrier();
+    if (task->send_flag) {
+        while (task_id != *task->cur_task_id);
+        // OPA_write_barrier();
+        // if (task->send_flag){
+        MPIDI_POSIX_PIP_queue_enqueue(task->cell_queue, cell, task->asym_addr);
+        // }
+        *task->cur_task_id = task_id + 1;
+        OPA_write_barrier();
+    } else {
+        MPIDI_POSIX_PIP_queue_enqueue(task->cell_queue, cell, task->asym_addr);
+    }
+
 
     // OPA_write_barrier();
     // clock_gettime(CLOCK_MONOTONIC, &end);
