@@ -297,7 +297,11 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_do_task_copy(MPIDI_PIP_task_t * task)
         MPIR_Memcpy(task->dest, task->src_first, task->data_sz);
     }
     pip_global.copy_size += task->data_sz;
-    cell->socket_id = pip_global.socket;
+    if (cell->prev_socket_used == 0) {
+        pip_global.socket_info[0]++;
+    } else if (cell->prev_socket_used == 1)
+        pip_global.socket_info[1]++;
+    cell->prev_socket_used = pip_global.socket;
     // task->next = NULL;
     if (task->send_flag) {
         static uint64_t conflict = 0;

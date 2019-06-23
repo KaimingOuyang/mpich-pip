@@ -68,6 +68,8 @@ void MPIDI_PIP_init()
     } else {
         pip_global.socket = 1;
     }
+    pip_global.socket_info[0] = 0;
+    pip_global.socket_info[1] = 0;
     // pip_global.task_num = 0;
     // if (local_rank == 0) {
     //     printf("#processes #socket_0_stealing #socket_1_stealing remaining_task\n");
@@ -152,6 +154,17 @@ void MPIDI_PIP_init()
                                 (void **) &pip_global.shm_conflict, MPL_MEM_SHM);
         if (mpi_errno)
             MPIR_ERR_POP(mpi_errno);
+
+        MPIR_CHKPMEM_MALLOC(pip_global.shm_socket_info, int **,
+                            num_local * sizeof(int *), mpi_errno, "shm_socket_info", MPL_MEM_SHM);
+        for (i = 0; i < num_local; ++i) {
+            mpi_errno =
+                MPIDU_shm_seg_alloc(2 * sizeof(int),
+                                    (void **) &pip_global.shm_socket_info[i], MPL_MEM_SHM);
+            if (mpi_errno)
+                MPIR_ERR_POP(mpi_errno);
+        }
+
 
         mpi_errno =
             MPIDU_shm_seg_commit(&pip_global.pip_memory, &pip_global.pip_barrier,
@@ -420,14 +433,20 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_mpi_finalize_hook(void)
 
     for (j = 0; j < pip_global.num_local; ++j) {
         pip_global.shm_done[pip_global.local_rank][j] = pip_global.esteal_done[j];
-    }
 
+    }
+    pip_global.shm_socket_info[pip_global.local_rank][0] = pip_global.socket_info[0];
+    pip_global.shm_socket_info[pip_global.local_rank][1] = pip_global.socket_info[1];
     mpi_errno = MPIDU_shm_barrier(pip_global.pip_barrier, pip_global.num_local);
     // printf("pip_global.shm_conflict[0] = %d, pip_global.shm_conflict[1] = %d\n",
     //        pip_global.shm_conflict[0], pip_global.shm_conflict[1]);
+    // printf("rank %d - steal from 0 %d\n", pip_global.local_rank, pip_global.esteal_done[0]);
+    // fflush(stdout);
     if (pip_global.local_rank == 0) {
         uint64_t socket0_conflict = 0;
         uint64_t socket1_conflict = 0;
+        uint64_t socket0_info[2] = { 0 };
+        uint64_t socket1_info[2] = { 0 };
         int *socket0_done = (int *) malloc(pip_global.num_local * sizeof(int));
         int *socket1_done = (int *) malloc(pip_global.num_local * sizeof(int));
         memset(socket0_done, 0, sizeof(int) * pip_global.num_local);
@@ -435,10 +454,14 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_mpi_finalize_hook(void)
         int half = pip_global.num_local / 2;
         for (i = 0; i < pip_global.num_local; ++i) {
             if (i < half) {
+                socket0_info[0] += pip_global.shm_socket_info[i][0];
+                socket0_info[1] += pip_global.shm_socket_info[i][1];
                 socket0_conflict += pip_global.shm_conflict[i];
                 for (j = 0; j < pip_global.num_local; ++j)
                     socket0_done[j] += pip_global.shm_done[i][j];
             } else {
+                socket1_info[0] += pip_global.shm_socket_info[i][0];
+                socket1_info[1] += pip_global.shm_socket_info[i][1];
                 socket1_conflict += pip_global.shm_conflict[i];
                 for (j = 0; j < pip_global.num_local; ++j)
                     socket1_done[j] += pip_global.shm_done[i][j];
@@ -455,10 +478,12 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_mpi_finalize_hook(void)
         char *ITERATION = getenv("ITERATION");
         printf("iteration %s\n", ITERATION);
         const int iter = atoi(ITERATION);
-        printf("%d %d %d %d %ld [conflict %ld (0) %ld (1)]\n", pip_global.num_local,
-               (socket0_done[0]) / iter, (socket1_done[0]) / iter,
-               pip_global.remaining_task / iter, (socket0_conflict + socket1_conflict) / iter,
-               socket0_conflict, socket1_conflict);
+        printf
+            ("%d socket0_steal %d socket1_steal %d remaining_task %d conflict %d (socket0_info[0] %d socket0_info[1] %d) (socket1_info[0] %d socket1_info[1] %d)\n",
+             pip_global.num_local, (socket0_done[0]) / iter, (socket1_done[0]) / iter,
+             pip_global.remaining_task / iter, (socket0_conflict + socket1_conflict) / iter,
+             socket0_info[0] / iter, socket0_info[1] / iter, socket1_info[0] / iter,
+             socket1_info[1] / iter);
         fflush(stdout);
     }
     // char results[1024];

@@ -79,7 +79,8 @@ typedef struct {
     uint64_t suc_steal;
     int remaining_task;
     int socket;
-
+    int socket_info[2];
+    int **shm_socket_info;
     double steal_time;
     int *esteal_done;
     int recvQ_empty;
