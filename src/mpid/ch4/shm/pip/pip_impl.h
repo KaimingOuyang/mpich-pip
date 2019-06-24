@@ -144,14 +144,14 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_Compl_task_enqueue(MPIDI_PIP_task_queue_t
     int mpi_errno = MPI_SUCCESS, err;
 
     // task->next = NULL;
-    task->ref_cnt = 1;
+    // task->ref_cnt = 1;
     if (task_queue->tail) {
-        task->compl_prev = task_queue->tail;
-        __sync_add_and_fetch(&task_queue->tail->ref_cnt, 1);
+        // task->compl_prev = task_queue->tail;
+        // __sync_add_and_fetch(&task_queue->tail->ref_cnt, 1);
         task_queue->tail->compl_next = task;
         task_queue->tail = task;
     } else {
-        task->compl_prev = NULL;
+        // task->compl_prev = NULL;
         task_queue->head = task_queue->tail = task;
     }
     // MPID_Thread_mutex_lock(&task_queue->lock, &err);
@@ -244,7 +244,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_Compl_task_delete_head(MPIDI_PIP_task_que
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_fflush_compl_task(MPIDI_PIP_task_queue_t * compl_queue)
 {
     MPIDI_PIP_task_t *task = compl_queue->head;
-    while (task && (task->ref_cnt == 0 || task->compl_flag)) {
+    while (task && task->compl_flag) {
         // if (task->compl_flag) {
         MPIDI_PIP_Compl_task_delete_head(compl_queue);
         // MPIDI_POSIX_queue_enqueue(task->cell_queue, task->cell);
@@ -297,17 +297,19 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_do_task_copy(MPIDI_PIP_task_t * task)
         MPIR_Memcpy(task->dest, task->src_first, task->data_sz);
     }
     pip_global.copy_size += task->data_sz;
-    if (cell->prev_socket_used == 0) {
-        pip_global.socket_info[0]++;
-    } else if (cell->prev_socket_used == 1)
-        pip_global.socket_info[1]++;
-    cell->prev_socket_used = pip_global.socket;
+
     // task->next = NULL;
     if (task->send_flag) {
-        static uint64_t conflict = 0;
-        while (task_id != *task->cur_task_id)
-            // if (task->prev_flag)
-            conflict++;
+        if (cell->in_socket[pip_global.socket]) {
+            pip_global.socket_info[pip_global.socket]++;
+        } else {
+            pip_global.socket_info[pip_global.socket ^ 1]++;
+        }
+
+        // static uint64_t conflict = 0;
+        while (task_id != *task->cur_task_id);
+        // if (task->prev_flag)
+        // conflict++;
         // conflict = 1;
 
         // if (task->compl_next) {
@@ -315,34 +317,37 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_do_task_copy(MPIDI_PIP_task_t * task)
         //     // task->next->prev_flag = 0;
         // }
 
-        if (conflict) {
-            if (task->compl_prev) {
-                if (conflict - task->compl_prev->tick > 0)
-                    pip_global.local_conflict += conflict - task->compl_prev->tick;
-            }
-            // pip_global.local_conflict += conflict;
-            conflict = 0;
-        }
+        // if (conflict) {
+        //     if (task->compl_prev) {
+        //         if (conflict - task->compl_prev->tick > 0)
+        //             pip_global.local_conflict += conflict - task->compl_prev->tick;
+        //     }
+        //     // pip_global.local_conflict += conflict;
+        //     conflict = 0;
+        // }
 
-        task->tick = conflict;
-
+        // task->tick = conflict;
+        cell->in_socket[pip_global.socket] = 1;
+        cell->in_socket[pip_global.socket ^ 1] = 0;
         MPIDI_POSIX_PIP_queue_enqueue(task->cell_queue, cell, task->asym_addr);
-        if (task->compl_prev) {
-            __sync_sub_and_fetch(&task->compl_prev->ref_cnt, 1);
-        }
+        // if (task->compl_prev) {
+        //     __sync_sub_and_fetch(&task->compl_prev->ref_cnt, 1);
+        // }
 
         *task->cur_task_id = task_id + 1;
         OPA_write_barrier();
-        __sync_sub_and_fetch(&task->ref_cnt, 1);
+        // __sync_sub_and_fetch(&task->ref_cnt, 1);
     } else {
+
+        cell->in_socket[pip_global.socket] = 1;
         MPIDI_POSIX_PIP_queue_enqueue(task->cell_queue, cell, task->asym_addr);
 
         // if (task->compl_prev) {
         //     task->compl_prev->ref_cnt--;
         // }
-        task->compl_flag = 1;
-    }
 
+    }
+    task->compl_flag = 1;
     // OPA_write_barrier();
     // if (task->send_flag){
 
@@ -398,6 +403,8 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_compl_one_task()
 
         /* find my own task */
         if (task) {
+            if (task->send_flag)
+                pip_global.esteal_done[pip_global.local_rank]++;
             // pip_global.esteal_done[pip_global.local_rank]++;
             MPIDI_PIP_do_task_copy(task);
             // MPIDI_PIP_compl_one_task(pip_global.local_compl_queue);
@@ -424,12 +431,20 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_fflush_task()
 
         /* find my own task */
         if (task) {
-            // pip_global.esteal_done[pip_global.local_rank]++;
+
+            if (task->send_flag) {
+                pip_global.esteal_done[pip_global.local_rank]++;
+                // if (task->cell->prev_socket_used == 0) {
+                //     pip_global.socket_info[0]++;
+                // } else if (task->cell->prev_socket_used == 1)
+                //     pip_global.socket_info[1]++;
+                // MPIDI_PIP_compl_one_task(pip_global.local_compl_queue);
+                // MPIDI_PIP_fflush_compl_task(pip_global.local_compl_queue);
+                // MPIDI_PIP_fflush_compl_task(pip_global.local_send_compl_queue);
+                // MPIDI_PIP_fflush_compl_task(pip_global.local_recv_compl_queue);
+            }
+
             MPIDI_PIP_do_task_copy(task);
-            // MPIDI_PIP_compl_one_task(pip_global.local_compl_queue);
-            // MPIDI_PIP_fflush_compl_task(pip_global.local_compl_queue);
-            // MPIDI_PIP_fflush_compl_task(pip_global.local_send_compl_queue);
-            // MPIDI_PIP_fflush_compl_task(pip_global.local_recv_compl_queue);
         }
     }
 
@@ -455,7 +470,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_steal_task()
             MPIDI_PIP_Task_safe_dequeue(pip_global.shm_task_queue[victim], &task);
             pip_global.esteal_try[victim]++;
             if (task) {
-                pip_global.esteal_done[victim]++;
+                if (task->send_flag)
+                    pip_global.esteal_done[victim]++;
                 MPIDI_PIP_do_task_copy(task);
                 // clock_gettime(CLOCK_MONOTONIC, &end);
                 // pip_global.steal_time +=

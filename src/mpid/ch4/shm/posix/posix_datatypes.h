@@ -17,7 +17,7 @@
 
 #define MPIDI_POSIX_OFFSETOF(struc, field) ((int)(&((struc *)0)->field))
 #define MPIDI_POSIX_CACHE_LINE_LEN (64)
-#define MPIDI_POSIX_NUM_CELLS      (128)
+#define MPIDI_POSIX_NUM_CELLS      (64)
 #define MPIDI_POSIX_CELL_LEN       (64*1024)
 
 #if (SIZEOF_OPA_PTR_T > 8)
@@ -99,8 +99,7 @@ typedef struct MPIDI_POSIX_cell {
     int rank;
     int tag;
     int context_id;
-    int cell_id;
-    int prev_socket_used;
+    int in_socket[2];
     MPIR_Request *pending;
 #if MPIDI_POSIX_CACHE_LINE_LEN != 0
     char padding[MPIDI_POSIX_CACHE_LINE_LEN - MPIDI_POSIX_CELL_HEAD_LEN - MPIDI_POSIX_MPICH_HEAD_LEN - 6 * sizeof(int) - sizeof(MPIR_Request *)];       /* should be 64-16-16-16-8 = 8 */

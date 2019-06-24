@@ -443,10 +443,10 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_mpi_finalize_hook(void)
     // printf("rank %d - steal from 0 %d\n", pip_global.local_rank, pip_global.esteal_done[0]);
     // fflush(stdout);
     if (pip_global.local_rank == 0) {
-        uint64_t socket0_conflict = 0;
-        uint64_t socket1_conflict = 0;
-        uint64_t socket0_info[2] = { 0 };
-        uint64_t socket1_info[2] = { 0 };
+        // int socket0_conflict = 0;
+        // int socket1_conflict = 0;
+        int socket0_info[2] = { 0 };
+        int socket1_info[2] = { 0 };
         int *socket0_done = (int *) malloc(pip_global.num_local * sizeof(int));
         int *socket1_done = (int *) malloc(pip_global.num_local * sizeof(int));
         memset(socket0_done, 0, sizeof(int) * pip_global.num_local);
@@ -456,13 +456,13 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_mpi_finalize_hook(void)
             if (i < half) {
                 socket0_info[0] += pip_global.shm_socket_info[i][0];
                 socket0_info[1] += pip_global.shm_socket_info[i][1];
-                socket0_conflict += pip_global.shm_conflict[i];
+                // socket0_conflict += pip_global.shm_conflict[i];
                 for (j = 0; j < pip_global.num_local; ++j)
                     socket0_done[j] += pip_global.shm_done[i][j];
             } else {
                 socket1_info[0] += pip_global.shm_socket_info[i][0];
                 socket1_info[1] += pip_global.shm_socket_info[i][1];
-                socket1_conflict += pip_global.shm_conflict[i];
+                // socket1_conflict += pip_global.shm_conflict[i];
                 for (j = 0; j < pip_global.num_local; ++j)
                     socket1_done[j] += pip_global.shm_done[i][j];
             }
@@ -479,9 +479,9 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_mpi_finalize_hook(void)
         printf("iteration %s\n", ITERATION);
         const int iter = atoi(ITERATION);
         printf
-            ("%d socket0_steal %d socket1_steal %d remaining_task %d conflict %d (socket0_info[0] %d socket0_info[1] %d) (socket1_info[0] %d socket1_info[1] %d)\n",
-             pip_global.num_local, (socket0_done[0]) / iter, (socket1_done[0]) / iter,
-             pip_global.remaining_task / iter, (socket0_conflict + socket1_conflict) / iter,
+            ("%d socket0_steal %d socket1_steal %d remaining_task %d (socket0_info[0] %d socket0_info[1] %d) (socket1_info[0] %d socket1_info[1] %d)\n",
+             pip_global.num_local, (socket0_done[0] + socket0_done[1]) / iter,
+             (socket1_done[0] + socket1_done[1]) / iter, pip_global.remaining_task / iter,
              socket0_info[0] / iter, socket0_info[1] / iter, socket1_info[0] / iter,
              socket1_info[1] / iter);
         fflush(stdout);

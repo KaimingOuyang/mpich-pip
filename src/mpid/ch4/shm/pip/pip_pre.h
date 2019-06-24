@@ -28,9 +28,9 @@ typedef struct MPIDI_PIP_task {
     // int socket;
     // int prev_flag;
     // uint64_t prev_tick;
-    uint64_t tick;
+    // uint64_t tick;
     int compl_flag;
-    int ref_cnt;
+    // int ref_cnt;
     MPI_Aint asym_addr;
     // union {
     MPIDI_POSIX_cell_ptr_t cell;
@@ -50,7 +50,7 @@ typedef struct MPIDI_PIP_task {
     size_t data_sz;
     struct MPIDI_PIP_task *next;
     struct MPIDI_PIP_task *compl_next;
-    struct MPIDI_PIP_task *compl_prev;
+    // struct MPIDI_PIP_task *compl_prev;
 
 } MPIDI_PIP_task_t;
 

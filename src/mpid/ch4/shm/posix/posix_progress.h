@@ -229,15 +229,22 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_recv(int blocking, int *comple
                         // MPIDI_PIP_fflush_compl_task();
                         if (send_buffer)
                             MPIR_Memcpy(recv_buffer, (void *) send_buffer, data_sz);
+
+                        if (in_cell) {
+                            cell->in_socket[pip_global.socket] = 1;
+                        }
                         // eager_task_id = pip_global.local_recv_counter[src_local]++;
                     } else {
-                        if (type == MPIDI_POSIX_TYPELMT_LAST || type == MPIDI_POSIX_TYPELMT) {
+                        // if (type == MPIDI_POSIX_TYPELMT_LAST || type == MPIDI_POSIX_TYPELMT) {
+                        if (type == MPIDI_POSIX_TYPELMT_LAST) {
                             // printf("cell id %d, from socket %d\n", cell->cell_id, cell->socket_id);
                             // fflush(stdout);
-                            // MPIDI_PIP_fflush_task();
-                            // MPIR_Memcpy(recv_buffer, (void *) send_buffer, data_sz);
-                            // while (pip_global.local_compl_queue->head)
-                            //     MPIDI_PIP_fflush_compl_task(pip_global.local_compl_queue);
+
+                            cell->in_socket[pip_global.socket] = 1;
+                            MPIR_Memcpy(recv_buffer, (void *) send_buffer, data_sz);
+                            MPIDI_PIP_fflush_task();
+                            while (pip_global.local_compl_queue->head)
+                                MPIDI_PIP_fflush_compl_task(pip_global.local_compl_queue);
                         } else {
                             task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
                             task->req = req;
@@ -318,8 +325,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_recv(int blocking, int *comple
                     // }
                     goto release_cell_l;
                 }
-
-                if (!in_cell || type == MPIDI_POSIX_TYPELMT_LAST || type == MPIDI_POSIX_TYPELMT)
+                // if (!in_cell || type == MPIDI_POSIX_TYPELMT_LAST || type == MPIDI_POSIX_TYPELMT)
+                if (!in_cell || type == MPIDI_POSIX_TYPELMT_LAST)
                     goto release_cell_l;
                 else
                     goto fn_exit;
@@ -349,7 +356,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_recv(int blocking, int *comple
             data_sz = cell->pkt.mpich.datalen;
             MPIDI_POSIX_REQUEST(rreq)->data_sz = data_sz;
             MPIDI_POSIX_REQUEST(rreq)->type = cell->pkt.mpich.type;
-            MPIDI_POSIX_REQUEST(rreq)->cur_cell_id = cell->cell_id;
+            // MPIDI_POSIX_REQUEST(rreq)->cur_cell_id = cell->cell_id;
             if (data_sz > 0) {
                 MPIDI_POSIX_REQUEST(rreq)->user_buf = (char *) MPL_malloc(data_sz, MPL_MEM_SHM);
                 MPIR_Memcpy(MPIDI_POSIX_REQUEST(rreq)->user_buf, (void *) cell->pkt.mpich.p.payload,
@@ -476,8 +483,9 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking, int *comple
                 }
 
                 /* Enqueue task without performing actual copy */
-                cell->cell_id = MPIDI_POSIX_REQUEST(sreq)->cur_cell_id;
-                cell->prev_socket_used = 0;
+                // cell->cell_id = MPIDI_POSIX_REQUEST(sreq)->cur_cell_id;
+                cell->in_socket[pip_global.socket] = 1;
+                cell->in_socket[pip_global.socket ^ 1] = 0;
                 cell->pkt.mpich.type = MPIDI_POSIX_TYPEEAGER;
                 /* set status */
                 /*
@@ -541,7 +549,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking, int *comple
             cell->pkt.mpich.datalen = MPIDI_POSIX_EAGER_THRESHOLD;
             MPIDI_POSIX_REQUEST(sreq)->data_sz -= MPIDI_POSIX_EAGER_THRESHOLD;
 
-            cell->cell_id = MPIDI_POSIX_REQUEST(sreq)->cur_cell_id++;
+            // cell->cell_id = MPIDI_POSIX_REQUEST(sreq)->cur_cell_id++;
 
             if (MPIDI_POSIX_REQUEST(sreq)->data_sz > MPIDI_POSIX_EAGER_THRESHOLD) {
                 /* need more LMT send calls */
@@ -555,9 +563,9 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking, int *comple
                 task->send_flag = 1;
                 task->next = NULL;
                 task->compl_next = NULL;
-                task->compl_prev = NULL;
+                // task->compl_prev = NULL;
                 // task->prev_flag = 1;
-                task->tick = 0;
+                // task->tick = 0;
                 task->rank = pip_global.local_rank;
                 task->data_sz = MPIDI_POSIX_EAGER_THRESHOLD;
 
@@ -611,7 +619,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking, int *comple
                 /* only one LMT send left */
                 /* long message */
                 cell->pkt.mpich.type = MPIDI_POSIX_TYPELMT_LAST;
-                cell->prev_socket_used = 0;
+                cell->in_socket[pip_global.socket] = 1;
+                cell->in_socket[pip_global.socket ^ 1] = 0;
                 if (MPIDI_POSIX_REQUEST(sreq)->segment_ptr) {
                     /* non-contig */
                     size_t last =
@@ -627,7 +636,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking, int *comple
                     MPIDI_POSIX_REQUEST(sreq)->user_buf += MPIDI_POSIX_EAGER_THRESHOLD;
                 }
                 // MPIDI_PIP_get_num_of_task(pip_global.local_task_queue);
-                // MPIDI_PIP_fflush_task();
+                MPIDI_PIP_fflush_task();
                 // pip_global.esteal_done[pip_global.local_rank]++;
                 // static int conflict = 0;
                 while (pip_global.local_compl_queue->head) {
@@ -649,8 +658,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking, int *comple
         }
 
         // (*completion_count)++;
-    } else if (pip_global.recv_empty && pip_global.local_rank != 0 &&
-               pip_global.local_rank != (pip_global.num_local / 2)) {
+    } else if (pip_global.recv_empty) {
         // && pip_global.local_rank != 0 &&
         //        pip_global.local_rank != pip_global.num_local / 2
         // if (pip_global.local_rank == 0) {
