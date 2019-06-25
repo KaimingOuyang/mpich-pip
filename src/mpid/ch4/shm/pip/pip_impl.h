@@ -13,6 +13,7 @@
 #define PIP_IMPL_H_INCLUDED
 
 #include "pip_pre.h"
+#include <papi.h>
 
 #undef FCNAME
 #define FCNAME MPL_QUOTE(MPIDI_PIP_Task_safe_enqueue)
@@ -278,7 +279,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_do_task_copy(MPIDI_PIP_task_t * task)
 
     // struct timespec start, end;
     // clock_gettime(CLOCK_MONOTONIC, &start);
-
+    long long values[2];
     MPIR_Request *req = task->req;
     if (MPIDI_POSIX_REQUEST(req)->segment_ptr) {
         printf("rank %d - dealing with non-contig data right now\n", pip_global.local_rank);
@@ -294,15 +295,33 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_do_task_copy(MPIDI_PIP_task_t * task)
         // printf("rank %d - send data size %ld, task %p, src %p, dest %p\n", pip_global.local_rank,
         //        task->data_sz, task, task->src_first, task->dest);
         // fflush(stdout);
+        int retval;
+        retval = PAPI_start(pip_global.eventset);
+        if (retval != PAPI_OK) {
+            printf("Error : %s\n", PAPI_strerror(retval));
+            return -1;
+        }
+
         MPIR_Memcpy(task->dest, task->src_first, task->data_sz);
+
+        retval = PAPI_stop(pip_global.eventset, values);
+        if (retval != PAPI_OK) {
+            printf("Error : %s\n", PAPI_strerror(retval));
+            return -1;
+        }
     }
     pip_global.copy_size += task->data_sz;
 
     // task->next = NULL;
     if (task->send_flag) {
         if (cell->in_socket[pip_global.socket]) {
+            pip_global.in_LLC[0] += values[0];
+            pip_global.in_LLC[1] += values[1];
             pip_global.socket_info[pip_global.socket]++;
         } else {
+            // printf("rank %d - cell->in_socket[%d] = %d\n", pip_global.local_rank, pip_global.socket, cell->in_socket[pip_global.socket]);
+            pip_global.out_LLC[0] += values[0];
+            pip_global.out_LLC[1] += values[1];
             pip_global.socket_info[pip_global.socket ^ 1]++;
         }
 
@@ -338,6 +357,17 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_do_task_copy(MPIDI_PIP_task_t * task)
         OPA_write_barrier();
         // __sync_sub_and_fetch(&task->ref_cnt, 1);
     } else {
+        if (cell->in_socket[pip_global.socket]) {
+            pip_global.in_LLC[0] += values[0];
+            pip_global.in_LLC[1] += values[1];
+            pip_global.socket_info[pip_global.socket]++;
+        } else {
+            // printf("rank %d - cell->in_socket[%d] = %d\n", pip_global.local_rank, pip_global.socket,
+            //        cell->in_socket[pip_global.socket]);
+            pip_global.out_LLC[0] += values[0];
+            pip_global.out_LLC[1] += values[1];
+            pip_global.socket_info[pip_global.socket ^ 1]++;
+        }
 
         cell->in_socket[pip_global.socket] = 1;
         MPIDI_POSIX_PIP_queue_enqueue(task->cell_queue, cell, task->asym_addr);
@@ -470,8 +500,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_steal_task()
             MPIDI_PIP_Task_safe_dequeue(pip_global.shm_task_queue[victim], &task);
             pip_global.esteal_try[victim]++;
             if (task) {
-                if (task->send_flag)
-                    pip_global.esteal_done[victim]++;
+                // if (task->send_flag)
+                pip_global.esteal_done[victim]++;
                 MPIDI_PIP_do_task_copy(task);
                 // clock_gettime(CLOCK_MONOTONIC, &end);
                 // pip_global.steal_time +=

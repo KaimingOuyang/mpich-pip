@@ -46,8 +46,8 @@ static inline void MPIDI_POSIX_cell_init(MPIDI_POSIX_cell_ptr_t cell, int rank)
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_POSIX_CELL_INIT);
 
     MPIDI_POSIX_SET_REL_NULL(cell->next);
-    cell->in_socket[0] = 0;
-    cell->in_socket[1] = 0;
+    cell->in_socket[0] = 1;
+    cell->in_socket[1] = 1;
     memset((void *) &cell->pkt, 0, sizeof(MPIDI_POSIX_pkt_t));
     cell->my_rank = rank;
 

@@ -79,7 +79,11 @@ typedef struct {
     uint64_t suc_steal;
     int remaining_task;
     int socket;
-    int socket_info[2];
+    int socket_info[2];         // record #in or out socket copy
+    uint64_t out_LLC[2];        // out_LLC[0] load misses, out_LLC[1] store misses
+    uint64_t in_LLC[2];         // in_LLC[0] load misses, in_LLC[1] store misses
+    uint64_t **shm_out_LLC;
+    uint64_t **shm_in_LLC;
     int **shm_socket_info;
     double steal_time;
     int *esteal_done;
@@ -88,6 +92,7 @@ typedef struct {
     int local_conflict;
     int *shm_conflict;
     int **shm_done;
+    int eventset;
     MPIDU_shm_seg_t pip_memory;
     MPIDU_shm_barrier_t *pip_barrier;
     int recv_empty;

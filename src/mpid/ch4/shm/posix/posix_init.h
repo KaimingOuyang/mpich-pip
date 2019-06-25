@@ -16,6 +16,7 @@
 #include "mpidu_shm.h"
 #include <time.h>
 #include <../pip/pip_pre.h>
+#include <papi.h>
 extern MPIR_Object_alloc_t MPIDI_Task_mem;
 /* ------------------------------------------------------- */
 /* from mpid/ch3/channels/nemesis/src/mpid_nem_init.c */
@@ -31,7 +32,29 @@ void MPIDI_PIP_init()
     uint64_t *task_queue_addr;
     MPIR_Errflag_t errflag = MPIR_ERR_NONE;
     // MPIDI_PIP_task_t *task_dummy, *compl_dummy;
-    MPIR_CHKPMEM_DECL(12);
+    MPIR_CHKPMEM_DECL(14);
+    int retval;
+    pip_global.eventset = PAPI_NULL;
+    retval = PAPI_library_init(PAPI_VER_CURRENT);
+    if (retval != PAPI_VER_CURRENT) {
+        fprintf(stderr, "PAPI library init error!\n");
+        exit(1);
+    }
+    if ((retval = PAPI_create_eventset(&pip_global.eventset)) != PAPI_OK) {
+        fprintf(stderr, "PAPI_create_eventset error %s\n", PAPI_strerror(retval));
+        exit(1);
+    }
+    retval = PAPI_add_named_event(pip_global.eventset, "perf::LLC-LOAD-MISSES");
+    if (retval != PAPI_OK) {
+        printf("Error : %s\n", PAPI_strerror(retval));
+        exit(1);
+    }
+    retval = PAPI_add_named_event(pip_global.eventset, "perf::LLC-STORE-MISSES");
+    if (retval != PAPI_OK) {
+        printf("Error : %s\n", PAPI_strerror(retval));
+        exit(1);
+    }
+
 
     pip_global.num_local = num_local = MPIDI_POSIX_mem_region.num_local;
     pip_global.local_rank = local_rank = MPIDI_POSIX_mem_region.local_rank;
@@ -62,14 +85,19 @@ void MPIDI_PIP_init()
     pip_global.copy_size = 0;
     pip_global.try_steal = 0;
     pip_global.suc_steal = 0;
-    int half = num_local / 2;
-    if (local_rank < half) {
-        pip_global.socket = 0;
-    } else {
-        pip_global.socket = 1;
+    // int half = num_local / 2;
+    char *mode = getenv("STEALING_MODE");
+    pip_global.socket = 0;
+    if (strcmp(mode, "inter-stealing") == 0) {
+        if (local_rank == 3)
+            pip_global.socket = 1;
     }
     pip_global.socket_info[0] = 0;
     pip_global.socket_info[1] = 0;
+    pip_global.out_LLC[0] = 0;
+    pip_global.out_LLC[1] = 0;
+    pip_global.in_LLC[0] = 0;
+    pip_global.in_LLC[1] = 0;
     // pip_global.task_num = 0;
     // if (local_rank == 0) {
     //     printf("#processes #socket_0_stealing #socket_1_stealing remaining_task\n");
@@ -157,10 +185,24 @@ void MPIDI_PIP_init()
 
         MPIR_CHKPMEM_MALLOC(pip_global.shm_socket_info, int **,
                             num_local * sizeof(int *), mpi_errno, "shm_socket_info", MPL_MEM_SHM);
+        MPIR_CHKPMEM_MALLOC(pip_global.shm_in_LLC, uint64_t **,
+                            num_local * sizeof(uint64_t *), mpi_errno, "shm_in_LLC", MPL_MEM_SHM);
+        MPIR_CHKPMEM_MALLOC(pip_global.shm_out_LLC, uint64_t **,
+                            num_local * sizeof(uint64_t *), mpi_errno, "shm_out_LLC", MPL_MEM_SHM);
         for (i = 0; i < num_local; ++i) {
             mpi_errno =
                 MPIDU_shm_seg_alloc(2 * sizeof(int),
                                     (void **) &pip_global.shm_socket_info[i], MPL_MEM_SHM);
+            if (mpi_errno)
+                MPIR_ERR_POP(mpi_errno);
+            mpi_errno =
+                MPIDU_shm_seg_alloc(2 * sizeof(uint64_t),
+                                    (void **) &pip_global.shm_in_LLC[i], MPL_MEM_SHM);
+            if (mpi_errno)
+                MPIR_ERR_POP(mpi_errno);
+            mpi_errno =
+                MPIDU_shm_seg_alloc(2 * sizeof(uint64_t),
+                                    (void **) &pip_global.shm_out_LLC[i], MPL_MEM_SHM);
             if (mpi_errno)
                 MPIR_ERR_POP(mpi_errno);
         }
@@ -437,6 +479,12 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_mpi_finalize_hook(void)
     }
     pip_global.shm_socket_info[pip_global.local_rank][0] = pip_global.socket_info[0];
     pip_global.shm_socket_info[pip_global.local_rank][1] = pip_global.socket_info[1];
+
+    pip_global.shm_out_LLC[pip_global.local_rank][0] = pip_global.out_LLC[0];
+    pip_global.shm_out_LLC[pip_global.local_rank][1] = pip_global.out_LLC[1];
+    // printf("rank %d - pip_global.out_LLC[0] = %ld, pip_global.out_LLC[1] = %ld\n", pip_global.local_rank, pip_global.out_LLC[0], pip_global.out_LLC[1]);
+    pip_global.shm_in_LLC[pip_global.local_rank][0] = pip_global.in_LLC[0];
+    pip_global.shm_in_LLC[pip_global.local_rank][1] = pip_global.in_LLC[1];
     mpi_errno = MPIDU_shm_barrier(pip_global.pip_barrier, pip_global.num_local);
     // printf("pip_global.shm_conflict[0] = %d, pip_global.shm_conflict[1] = %d\n",
     //        pip_global.shm_conflict[0], pip_global.shm_conflict[1]);
@@ -445,26 +493,46 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_mpi_finalize_hook(void)
     if (pip_global.local_rank == 0) {
         // int socket0_conflict = 0;
         // int socket1_conflict = 0;
-        int socket0_info[2] = { 0 };
-        int socket1_info[2] = { 0 };
+        int socket0_info[2] = { 0 };    // cell in/out socket copy from socket 0
+        int socket1_info[2] = { 0 };    // cell in/out socket copy from socket 1
+
+        uint64_t out_LLC_load_miss = 0;
+        uint64_t out_LLC_store_miss = 0;
+        uint64_t in_LLC_load_miss = 0;
+        uint64_t in_LLC_store_miss = 0;
+
         int *socket0_done = (int *) malloc(pip_global.num_local * sizeof(int));
         int *socket1_done = (int *) malloc(pip_global.num_local * sizeof(int));
         memset(socket0_done, 0, sizeof(int) * pip_global.num_local);
         memset(socket1_done, 0, sizeof(int) * pip_global.num_local);
         int half = pip_global.num_local / 2;
+
         for (i = 0; i < pip_global.num_local; ++i) {
-            if (i < half) {
+            out_LLC_load_miss += pip_global.shm_out_LLC[i][0];
+            out_LLC_store_miss += pip_global.shm_out_LLC[i][1];
+            in_LLC_load_miss += pip_global.shm_in_LLC[i][0];
+            in_LLC_store_miss += pip_global.shm_in_LLC[i][1];
+            if (i <= 2) {
                 socket0_info[0] += pip_global.shm_socket_info[i][0];
                 socket0_info[1] += pip_global.shm_socket_info[i][1];
                 // socket0_conflict += pip_global.shm_conflict[i];
                 for (j = 0; j < pip_global.num_local; ++j)
                     socket0_done[j] += pip_global.shm_done[i][j];
             } else {
-                socket1_info[0] += pip_global.shm_socket_info[i][0];
-                socket1_info[1] += pip_global.shm_socket_info[i][1];
-                // socket1_conflict += pip_global.shm_conflict[i];
-                for (j = 0; j < pip_global.num_local; ++j)
-                    socket1_done[j] += pip_global.shm_done[i][j];
+                char *mode = getenv("STEALING_MODE");
+                if (strcmp(mode, "inter-stealing") == 0) {
+                    socket1_info[0] += pip_global.shm_socket_info[i][0];
+                    socket1_info[1] += pip_global.shm_socket_info[i][1];
+                    // socket1_conflict += pip_global.shm_conflict[i];
+                    for (j = 0; j < pip_global.num_local; ++j)
+                        socket1_done[j] += pip_global.shm_done[i][j];
+                } else {
+                    socket0_info[0] += pip_global.shm_socket_info[i][0];
+                    socket0_info[1] += pip_global.shm_socket_info[i][1];
+                    // socket0_conflict += pip_global.shm_conflict[i];
+                    for (j = 0; j < pip_global.num_local; ++j)
+                        socket0_done[j] += pip_global.shm_done[i][j];
+                }
             }
             // printf("pip_global.shm_conflict[%d] = %d\n", i, pip_global.shm_conflict[i]);
         }
@@ -478,12 +546,20 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_mpi_finalize_hook(void)
         char *ITERATION = getenv("ITERATION");
         printf("iteration %s\n", ITERATION);
         const int iter = atoi(ITERATION);
+        // printf
+        //     ("%d socket0_steal %d socket1_steal %d remaining_task %d (socket0_info[0] %d socket0_info[1] %d) (socket1_info[0] %d socket1_info[1] %d)\n",
+        //      pip_global.num_local, (socket0_done[0] + socket0_done[1]) / iter,
+        //      (socket1_done[0] + socket1_done[1]) / iter, pip_global.remaining_task / iter,
+        //      socket0_info[0] / iter, socket0_info[1] / iter, socket1_info[0] / iter,
+        //      socket1_info[1] / iter);
+        // uint64_t out_stealing_num = socket0_info[1] + socket1_info[0];
+        // uint64_t in_stealing_num = socket0_info[0] + socket1_info[1];
         printf
-            ("%d socket0_steal %d socket1_steal %d remaining_task %d (socket0_info[0] %d socket0_info[1] %d) (socket1_info[0] %d socket1_info[1] %d)\n",
-             pip_global.num_local, (socket0_done[0] + socket0_done[1]) / iter,
-             (socket1_done[0] + socket1_done[1]) / iter, pip_global.remaining_task / iter,
-             socket0_info[0] / iter, socket0_info[1] / iter, socket1_info[0] / iter,
-             socket1_info[1] / iter);
+            ("%d user_load_miss %ld user_store_miss %ld cell_LLC_load_miss %ld cell_LLC_store_miss %ld cell_in_copy %d cell_out_copy %d\n",
+             pip_global.num_local, in_LLC_load_miss / iter, in_LLC_store_miss / iter,
+             out_LLC_load_miss / iter, out_LLC_store_miss / iter,
+             (socket0_info[0] + socket1_info[1]) / iter,
+             (socket0_info[1] + socket1_info[0]) / iter);
         fflush(stdout);
     }
     // char results[1024];

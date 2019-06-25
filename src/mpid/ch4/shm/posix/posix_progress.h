@@ -242,7 +242,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_recv(int blocking, int *comple
 
                             cell->in_socket[pip_global.socket] = 1;
                             MPIR_Memcpy(recv_buffer, (void *) send_buffer, data_sz);
-                            MPIDI_PIP_fflush_task();
+                            // MPIDI_PIP_fflush_task();
                             while (pip_global.local_compl_queue->head)
                                 MPIDI_PIP_fflush_compl_task(pip_global.local_compl_queue);
                         } else {
@@ -636,7 +636,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking, int *comple
                     MPIDI_POSIX_REQUEST(sreq)->user_buf += MPIDI_POSIX_EAGER_THRESHOLD;
                 }
                 // MPIDI_PIP_get_num_of_task(pip_global.local_task_queue);
-                MPIDI_PIP_fflush_task();
+                // MPIDI_PIP_fflush_task();
                 // pip_global.esteal_done[pip_global.local_rank]++;
                 // static int conflict = 0;
                 while (pip_global.local_compl_queue->head) {
@@ -658,7 +658,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking, int *comple
         }
 
         // (*completion_count)++;
-    } else if (pip_global.recv_empty) {
+    } else if (pip_global.recv_empty && pip_global.local_rank > 1) {
         // && pip_global.local_rank != 0 &&
         //        pip_global.local_rank != pip_global.num_local / 2
         // if (pip_global.local_rank == 0) {
