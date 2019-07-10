@@ -75,7 +75,9 @@ typedef struct MPIDI_PIP_global {
     int recvQ_empty;
     int recv_empty;
     int local_numa_id;
-
+    double mani_time;
+    double cnt;
+    double pack_time;
 } MPIDI_PIP_global_t;
 
 extern MPIDI_PIP_global_t pip_global;

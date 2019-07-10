@@ -134,7 +134,14 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_do_task_copy(MPIDI_PIP_task_t * task)
         DLOOP_Segment *segp = task->segp;
         size_t last = task->segment_first + task->data_sz;
         if (task->send_flag) {
+            struct timespec start, end;
+            clock_gettime(CLOCK_MONOTONIC, &start);
             MPIR_Segment_pack(segp, task->segment_first, (MPI_Aint *) & last, task->dest);
+            clock_gettime(CLOCK_MONOTONIC, &end);
+            pip_global.pack_time +=
+                (double) (end.tv_sec - start.tv_sec) * 1e6 + (double) (end.tv_nsec -
+                                                                       start.tv_nsec) / 1e3;
+
         } else {
             MPIR_Segment_unpack(segp, task->segment_first, (MPI_Aint *) & last, task->src);
         }

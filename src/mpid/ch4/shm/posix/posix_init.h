@@ -39,7 +39,7 @@ void MPIDI_PIP_init()
 
     pip_global.num_local = num_local = MPIDI_POSIX_mem_region.num_local;
     pip_global.local_rank = local_rank = MPIDI_POSIX_mem_region.local_rank;
-
+    pip_global.mani_time = pip_global.pack_time = pip_global.cnt = 0.0;
     MPIR_CHKPMEM_MALLOC(pip_global.local_send_counter, uint64_t *,
                         num_local * sizeof(uint64_t), mpi_errno, "pip_local_send_counter",
                         MPL_MEM_SHM);
@@ -443,6 +443,12 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_mpi_finalize_hook(void)
 
     // printf("%s\n", results);
     // fflush(stdout);
+    if (pip_global.local_rank == 0) {
+        printf("mani time %.3lf, pack time %.3lf\n", pip_global.mani_time / pip_global.cnt,
+               pip_global.pack_time / pip_global.cnt);
+        fflush(stdout);
+    }
+
     /* local barrier */
     mpi_errno = MPIDU_shm_barrier(MPIDI_POSIX_mem_region.barrier, MPIDI_POSIX_mem_region.num_local);
 
