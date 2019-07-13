@@ -58,7 +58,9 @@ typedef struct MPIDI_PIP_global {
     uint32_t local_rank;
     uint32_t numa_max_node;
     uint64_t *shm_in_proc;
-    MPIDI_PIP_task_queue_t *task_queue; // socket aware queue
+    MPIDI_PIP_task_queue_t *task_any_queue;     // sender's task queue any process can steal
+    MPIDI_PIP_task_queue_t **shm_task_any_queue;
+    MPIDI_PIP_task_queue_t *task_queue; // receiver's task queue
     MPIDI_PIP_task_queue_t **shm_task_queue;
     MPIDI_PIP_task_queue_t *local_compl_queue;
     struct MPIDI_PIP_global **shm_pip_global;

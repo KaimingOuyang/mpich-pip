@@ -243,7 +243,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_do_task_copy(MPIDI_PIP_task_t * task)
 
     // struct timespec start, end;
     // clock_gettime(CLOCK_MONOTONIC, &start);
-
+    cell->socket_id = pip_global.local_numa_id;
     MPIR_Request *req = task->req;
     if (MPIDI_POSIX_REQUEST(req)->segment_ptr) {
         printf("rank %d - dealing with non-contig data right now\n", pip_global.local_rank);
@@ -368,17 +368,35 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_fflush_task()
 {
     MPIDI_PIP_task_t *task;
     int i;
-    for (i = 0; i < pip_global.numa_max_node; ++i) {
-        while (pip_global.task_queue[i].head) {
-            MPIDI_PIP_Task_safe_dequeue(&pip_global.task_queue[i], &task);
+    while (pip_global.task_queue[pip_global.local_numa_id].head) {
+        MPIDI_PIP_Task_safe_dequeue(&pip_global.task_queue[i], &task);
+        /* fflush local NUMA task */
+        if (task) {
+            MPIDI_PIP_do_task_copy(task);
+        }
+    }
 
-            /* find my own task */
-            if (task) {
-                MPIDI_PIP_do_task_copy(task);
-                // MPIDI_PIP_compl_one_task(pip_global.local_compl_queue);
-                // MPIDI_PIP_fflush_compl_task(pip_global.local_compl_queue);
-                // MPIDI_PIP_fflush_compl_task(pip_global.local_send_compl_queue);
-                // MPIDI_PIP_fflush_compl_task(pip_global.local_recv_compl_queue);
+    while (pip_global.task_any_queue->head) {
+        MPIDI_PIP_Task_safe_dequeue(pip_global.task_any_queue, &task);
+        /* fflush sender's task */
+        if (task) {
+            MPIDI_PIP_do_task_copy(task);
+        }
+    }
+
+    for (i = 0; i < pip_global.numa_max_node; ++i) {
+        if (i != pip_global.local_numa_id) {
+            while (pip_global.task_queue[i].head) {
+                MPIDI_PIP_Task_safe_dequeue(&pip_global.task_queue[i], &task);
+
+                /* find my own task */
+                if (task) {
+                    MPIDI_PIP_do_task_copy(task);
+                    // MPIDI_PIP_compl_one_task(pip_global.local_compl_queue);
+                    // MPIDI_PIP_fflush_compl_task(pip_global.local_compl_queue);
+                    // MPIDI_PIP_fflush_compl_task(pip_global.local_send_compl_queue);
+                    // MPIDI_PIP_fflush_compl_task(pip_global.local_recv_compl_queue);
+                }
             }
         }
     }
@@ -394,18 +412,22 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_fflush_task()
 MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_steal_task()
 {
     int victim = rand() % pip_global.num_local;
+    int mpi_errno = MPI_SUCCESS;
     MPIDI_PIP_task_t *task = NULL;
     if (victim != pip_global.local_rank) {
 #ifdef MPI_PIP_SHM_TASK_STEAL
         MPIDI_PIP_task_queue_t *victim_queue =
             &pip_global.shm_task_queue[victim][pip_global.local_numa_id];
-        if (victim_queue->head) {
+        if (victim_queue->head == NULL) {
+            victim_queue = pip_global.shm_task_any_queue[victim];
+            if (victim_queue->head == NULL)
+                goto fn_exit;
             // __sync_add_and_fetch(&pip_global.shm_in_proc[victim], 1);
-            MPIDI_PIP_Task_safe_dequeue(victim_queue, &task);
-            // __sync_sub_and_fetch(&pip_global.shm_in_proc[victim], 1);
-            if (task)
-                MPIDI_PIP_do_task_copy(task);
         }
+        MPIDI_PIP_Task_safe_dequeue(victim_queue, &task);
+        // __sync_sub_and_fetch(&pip_global.shm_in_proc[victim], 1);
+        if (task)
+            MPIDI_PIP_do_task_copy(task);
         // pip_global.try_steal++;
         // pip_global.esteal_try[victim]++;
 
@@ -424,5 +446,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_steal_task()
 
 #endif
     }
+  fn_exit:
+    return mpi_errno;
 }
 #endif
