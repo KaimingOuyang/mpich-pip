@@ -269,10 +269,35 @@ static inline int MPIDI_POSIX_mpi_init_hook(int rank, int size, int *n_vnis_prov
     MPIDI_POSIX_mem_region.local_ranks = local_ranks;
     MPIDI_POSIX_mem_region.local_rank = local_rank;
     MPIDI_POSIX_mem_region.next = NULL;
+
+#ifdef PROCESS_BIND_HALF_MODE
+    const int comm_proc_num = 2;
+    const int cores_per_numa = 18; /* bebop node */
+    int half = (num_local - comm_proc_num) / 2;
+    int map_rank = local_rank - comm_proc_num;
+    if(map_rank < 0){
+        cpu_set_t mask;
+        CPU_ZERO(&mask);
+        CPU_SET(local_rank, &mask);
+        sched_setaffinity(getpid(), sizeof(cpu_set_t), &mask);
+    }else{
+        cpu_set_t mask;
+        if(map_rank < half){
+            CPU_ZERO(&mask);
+            CPU_SET(local_rank, &mask);
+            sched_setaffinity(getpid(), sizeof(cpu_set_t), &mask);
+        }else{
+            CPU_ZERO(&mask);
+            CPU_SET(map_rank - half + cores_per_numa, &mask);
+            sched_setaffinity(getpid(), sizeof(cpu_set_t), &mask);
+        }
+    }
+#else
     cpu_set_t mask;
     CPU_ZERO(&mask);
     CPU_SET(local_rank, &mask);
     sched_setaffinity(getpid(), sizeof(cpu_set_t), &mask);
+#endif
 
     int cpu = sched_getcpu();
     int numa_id = numa_node_of_cpu(cpu);
