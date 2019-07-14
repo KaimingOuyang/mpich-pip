@@ -244,7 +244,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_recv(int blocking, int *comple
                             task->cell = cell;
                             task->cell_queue = MPIDI_POSIX_mem_region.FreeQ[cell->my_rank];
                             task->rank = pip_global.local_rank;
-                            // task->send_flag = 0;
+                            task->send_flag = 0;
                             task->compl_flag = 0;
                             task->data_sz = data_sz;
                             task->asym_addr = (MPI_Aint) MPIDI_POSIX_asym_base_addr;
@@ -553,7 +553,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking, int *comple
                 task->compl_flag = 0;
                 task->asym_addr = (MPI_Aint) MPIDI_POSIX_asym_base_addr;
 
-                // task->send_flag = 1;
+                task->send_flag = 1;
                 task->next = NULL;
                 task->compl_next = NULL;
                 task->rank = pip_global.local_rank;

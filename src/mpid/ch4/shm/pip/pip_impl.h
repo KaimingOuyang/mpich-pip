@@ -243,7 +243,11 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_do_task_copy(MPIDI_PIP_task_t * task)
 
     // struct timespec start, end;
     // clock_gettime(CLOCK_MONOTONIC, &start);
-    cell->socket_id = pip_global.local_numa_id;
+    if (task->send_flag) {
+        cell->socket_id = pip_global.local_numa_id;
+    } else {
+        pip_global.nsf_socket[cell->socket_id]++;
+    }
     MPIR_Request *req = task->req;
     if (MPIDI_POSIX_REQUEST(req)->segment_ptr) {
         printf("rank %d - dealing with non-contig data right now\n", pip_global.local_rank);
@@ -259,9 +263,16 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_do_task_copy(MPIDI_PIP_task_t * task)
         // printf("rank %d - send data size %ld, task %p, src %p, dest %p\n", pip_global.local_rank,
         //        task->data_sz, task, task->src_first, task->dest);
         // fflush(stdout);
+        // struct timespec start, end;
+        // clock_gettime(CLOCK_MONOTONIC, &start);
         MPIR_Memcpy(task->dest, task->src_first, task->data_sz);
+        // clock_gettime(CLOCK_MONOTONIC, &end);
+        // double time = (end.tv_sec - start.tv_sec) * 1e6 + (end.tv_nsec - start.tv_nsec) / 1e3;
+        pip_global.copy_size += task->data_sz;
+        // pip_global.all_mcp_bdw += task->data_sz / 1024.0 / 1024.0 / time;       // MB/s
+        // pip_global.copy_cnt++;
     }
-    pip_global.copy_size += task->data_sz;
+
 
     // task->next = NULL;
 

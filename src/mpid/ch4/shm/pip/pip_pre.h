@@ -33,7 +33,7 @@ typedef struct MPIDI_PIP_task {
 
     // volatile uint64_t *cur_task_id;
     // uint64_t task_id;
-    // int send_flag;
+    int send_flag;
 
     // int *completion_count;
     // MPIDI_POSIX_queue_ptr_t cellQ;
@@ -74,6 +74,11 @@ typedef struct MPIDI_PIP_global {
     int recv_empty;
     int local_numa_id;
 
+    double all_mcp_bdw;
+    uint64_t copy_cnt;
+    double ave_mcp_bdw;
+
+    int nsf_socket[2];
 } MPIDI_PIP_global_t;
 
 extern MPIDI_PIP_global_t pip_global;

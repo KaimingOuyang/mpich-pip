@@ -41,6 +41,9 @@ void MPIDI_PIP_init()
     pip_global.num_local = num_local = MPIDI_POSIX_mem_region.num_local;
     pip_global.local_rank = local_rank = MPIDI_POSIX_mem_region.local_rank;
 
+    pip_global.all_mcp_bdw = 0.0;
+    pip_global.copy_cnt = 0;
+    pip_global.nsf_socket[0] = pip_global.nsf_socket[1] = 0;
     // MPIR_CHKPMEM_MALLOC(pip_global.local_send_counter, uint64_t *,
     //                     num_local * sizeof(uint64_t), mpi_errno, "pip_local_send_counter",
     //                     MPL_MEM_SHM);
@@ -57,8 +60,7 @@ void MPIDI_PIP_init()
     // memset(pip_global.shm_recv_counter, 0, num_local * sizeof(uint64_t));
 
     MPIR_CHKPMEM_MALLOC(pip_global.task_any_queue, MPIDI_PIP_task_queue_t *,
-                        pip_global.numa_max_node * sizeof(MPIDI_PIP_task_queue_t), mpi_errno,
-                        "task_any_queue", MPL_MEM_SHM);
+                        sizeof(MPIDI_PIP_task_queue_t), mpi_errno, "task_any_queue", MPL_MEM_SHM);
     MPIR_CHKPMEM_MALLOC(pip_global.shm_task_any_queue, MPIDI_PIP_task_queue_t **,
                         num_local * sizeof(MPIDI_PIP_task_queue_t *), mpi_errno,
                         "shm_task_any_queue", MPL_MEM_SHM);
@@ -272,21 +274,21 @@ static inline int MPIDI_POSIX_mpi_init_hook(int rank, int size, int *n_vnis_prov
 
 #ifdef PROCESS_BIND_HALF_MODE
     const int comm_proc_num = 2;
-    const int cores_per_numa = 18; /* bebop node */
+    const int cores_per_numa = 18;      /* bebop node */
     int half = (num_local - comm_proc_num) / 2;
     int map_rank = local_rank - comm_proc_num;
-    if(map_rank < 0){
+    if (map_rank < 0) {
         cpu_set_t mask;
         CPU_ZERO(&mask);
         CPU_SET(local_rank, &mask);
         sched_setaffinity(getpid(), sizeof(cpu_set_t), &mask);
-    }else{
+    } else {
         cpu_set_t mask;
-        if(map_rank < half){
+        if (map_rank < half) {
             CPU_ZERO(&mask);
             CPU_SET(local_rank, &mask);
             sched_setaffinity(getpid(), sizeof(cpu_set_t), &mask);
-        }else{
+        } else {
             CPU_ZERO(&mask);
             CPU_SET(map_rank - half + cores_per_numa, &mask);
             sched_setaffinity(getpid(), sizeof(cpu_set_t), &mask);
@@ -302,9 +304,9 @@ static inline int MPIDI_POSIX_mpi_init_hook(int rank, int size, int *n_vnis_prov
     int cpu = sched_getcpu();
     int numa_id = numa_node_of_cpu(cpu);
     int max_node = numa_num_task_nodes();
-    // printf("rank %d - cpu id is %d, my numa id is %d, max_node %d\n", local_rank, cpu, numa_id,
-    //        max_node);
-    // fflush(stdout);
+    printf("rank %d - cpu id is %d, my numa id is %d, max_node %d\n", local_rank, cpu, numa_id,
+           max_node);
+    fflush(stdout);
 
     pip_global.local_numa_id = numa_id;
     pip_global.numa_max_node = max_node;
@@ -480,6 +482,30 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_mpi_finalize_hook(void)
     int mpi_errno = MPI_SUCCESS;
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_POSIX_FINALIZE);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_POSIX_FINALIZE);
+
+    // if (pip_global.copy_cnt > 0)
+    //     pip_global.ave_mcp_bdw = pip_global.all_mcp_bdw / pip_global.copy_cnt;
+    // else
+    //     pip_global.ave_mcp_bdw = 0.0;
+    // mpi_errno = MPIDU_shm_barrier(MPIDI_POSIX_mem_region.barrier, MPIDI_POSIX_mem_region.num_local);
+
+    // if (pip_global.local_rank == 0) {
+    //     int i;
+    //     // double all_mcp_time = 0.0;
+    //     // uint64_t all_mcp_amt = 0.0;
+    //     int socket_cpy[2][2] = { {0, 0}, {0, 0} };
+    //     for (i = 0; i < pip_global.num_local; ++i) {
+    //         // if (pip_global.ave_mcp_bdw)
+    //         // all_mcp_time += pip_global.shm_pip_global[i]->ave_mcp_bdw;
+    //         // all_mcp_amt += pip_global.shm_pip_global[i]->copy_size;
+    //         socket_cpy[pip_global.shm_pip_global[i]->local_numa_id][0] +=
+    //             pip_global.shm_pip_global[i]->nsf_socket[0];
+    //         socket_cpy[pip_global.shm_pip_global[i]->local_numa_id][1] +=
+    //             pip_global.shm_pip_global[i]->nsf_socket[1];
+    //     }
+    //     printf("NUMA 0 copy cnt [0: %d, 1: %d], NUMA 1 copy cnt [0: %d, 1: %d]", socket_cpy[0][0],
+    //            socket_cpy[0][1], socket_cpy[1][0], socket_cpy[1][1]);
+    // }
     // char results[1024];
     // char buffer[128];
     // sprintf(results, "rank %d - copy size %ld", pip_global.local_rank, pip_global.copy_size);
