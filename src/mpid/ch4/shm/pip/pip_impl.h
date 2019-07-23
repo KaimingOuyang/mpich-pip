@@ -380,7 +380,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_fflush_task()
     MPIDI_PIP_task_t *task;
     int i;
     while (pip_global.task_queue[pip_global.local_numa_id].head) {
-        MPIDI_PIP_Task_safe_dequeue(&pip_global.task_queue[i], &task);
+        MPIDI_PIP_Task_safe_dequeue(&pip_global.task_queue[pip_global.local_numa_id], &task);
         /* fflush local NUMA task */
         if (task) {
             MPIDI_PIP_do_task_copy(task);
