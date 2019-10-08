@@ -269,18 +269,18 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_recv(int blocking, int *comple
                         // eager_task_id = pip_global.local_recv_counter[src_local]++;
                     } else {
                         if (type == MPIDI_POSIX_TYPELMT_LAST) {
-                            int victim = 0;
-                            __sync_add_and_fetch(&pip_global.
-                                                 shm_pip_global[victim]->cur_parallelism, 1);
-                            if (pip_global.shm_pip_global[victim]->cur_parallelism >
-                                pip_global.shm_pip_global[victim]->max_parallelism) {
-                                pip_global.shm_pip_global[victim]->max_parallelism =
-                                    pip_global.shm_pip_global[victim]->cur_parallelism;
-                            }
+                            // int victim = 0;
+                            // __sync_add_and_fetch(&pip_global.
+                            //                      shm_pip_global[victim]->cur_parallelism, 1);
+                            // if (pip_global.shm_pip_global[victim]->cur_parallelism >
+                            //     pip_global.shm_pip_global[victim]->max_parallelism) {
+                            //     pip_global.shm_pip_global[victim]->max_parallelism =
+                            //         pip_global.shm_pip_global[victim]->cur_parallelism;
+                            // }
                             pip_global.copy_size += data_sz;
                             MPIR_Memcpy(recv_buffer, (void *) send_buffer, data_sz);
-                            __sync_sub_and_fetch(&pip_global.
-                                                 shm_pip_global[victim]->cur_parallelism, 1);
+                            // __sync_sub_and_fetch(&pip_global.
+                            //                      shm_pip_global[victim]->cur_parallelism, 1);
                             MPIDI_PIP_fflush_task();
                             while (pip_global.local_compl_queue->head)
                                 MPIDI_PIP_fflush_compl_task(pip_global.local_compl_queue);
@@ -587,16 +587,16 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking, int *comple
 
                 pip_global.copy_size += sz_thsd;
                 cell->pkt.mpich.type = MPIDI_POSIX_TYPELMT_LAST;
-                int victim = 0;
-                __sync_add_and_fetch(&pip_global.shm_pip_global[victim]->cur_parallelism, 1);
+                // int victim = 0;
+                // __sync_add_and_fetch(&pip_global.shm_pip_global[victim]->cur_parallelism, 1);
                 // printf("rank %d - victim %d cur_parallelism %d\n", pip_global.local_rank, victim,
                 //        pip_global.shm_pip_global[victim]->cur_parallelism);
                 // fflush(stdout);
-                if (pip_global.shm_pip_global[victim]->cur_parallelism >
-                    pip_global.shm_pip_global[victim]->max_parallelism) {
-                    pip_global.shm_pip_global[victim]->max_parallelism =
-                        pip_global.shm_pip_global[victim]->cur_parallelism;
-                }
+                // if (pip_global.shm_pip_global[victim]->cur_parallelism >
+                //     pip_global.shm_pip_global[victim]->max_parallelism) {
+                //     pip_global.shm_pip_global[victim]->max_parallelism =
+                //         pip_global.shm_pip_global[victim]->cur_parallelism;
+                // }
 
                 if (MPIDI_POSIX_REQUEST(sreq)->segment_ptr) {
                     /* non-contig */
@@ -612,7 +612,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking, int *comple
                     MPIR_Memcpy((void *) recv_buffer, MPIDI_POSIX_REQUEST(sreq)->user_buf, sz_thsd);
                     MPIDI_POSIX_REQUEST(sreq)->user_buf += sz_thsd;
                 }
-                __sync_sub_and_fetch(&pip_global.shm_pip_global[victim]->cur_parallelism, 1);
+                // __sync_sub_and_fetch(&pip_global.shm_pip_global[victim]->cur_parallelism, 1);
                 MPIDI_PIP_fflush_task();
                 while (pip_global.local_compl_queue->head)
                     MPIDI_PIP_fflush_compl_task(pip_global.local_compl_queue);

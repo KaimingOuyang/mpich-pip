@@ -236,11 +236,10 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_mpi_imrecv(void *buf,
         MPIR_Request *next_req = NULL;
         char *send_buffer = MPIDI_POSIX_REQUEST(sreq)->user_buf;
         char *recv_buffer = (char *) MPIDI_POSIX_REQUEST(rreq)->user_buf;
-
+        data_sz = MPIDI_POSIX_REQUEST(sreq)->data_sz;
         if (MPIDI_POSIX_REQUEST(sreq)->type == MPIDI_POSIX_TYPEEAGER) {
             /* eager message */
-            data_sz = MPIDI_POSIX_REQUEST(sreq)->data_sz;
-
+        
             if (MPIDI_POSIX_REQUEST(rreq)->segment_ptr) {
                 /* non-contig */
                 size_t first = MPIDI_POSIX_REQUEST(sreq)->addr_offset;
@@ -266,7 +265,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_mpi_imrecv(void *buf,
             if (MPIDI_POSIX_REQUEST(rreq)->segment_ptr) {
                 /* non-contig */
                 size_t first = MPIDI_POSIX_REQUEST(sreq)->addr_offset;
-                size_t last = first + MPIDI_POSIX_EAGER_THRESHOLD;
+                size_t last = first + data_sz;
                 MPIR_Segment_unpack(MPIDI_POSIX_REQUEST(rreq)->segment_ptr,
                                     first, (MPI_Aint *) & last, send_buffer);
                 MPIDI_POSIX_REQUEST(rreq)->segment_first = last;
@@ -274,11 +273,11 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_mpi_imrecv(void *buf,
                 /* contig */
             if (send_buffer)
                 MPIR_Memcpy(recv_buffer + MPIDI_POSIX_REQUEST(sreq)->addr_offset,
-                            (void *) send_buffer, MPIDI_POSIX_EAGER_THRESHOLD);
+                            (void *) send_buffer, data_sz);
 
-            MPIDI_POSIX_REQUEST(rreq)->data_sz -= MPIDI_POSIX_EAGER_THRESHOLD;
+            MPIDI_POSIX_REQUEST(rreq)->data_sz -= data_sz;
             // MPIDI_POSIX_REQUEST(rreq)->user_buf += MPIDI_POSIX_EAGER_THRESHOLD;
-            count = MPIR_STATUS_GET_COUNT(rreq->status) + (MPI_Count) MPIDI_POSIX_EAGER_THRESHOLD;
+            count = MPIR_STATUS_GET_COUNT(rreq->status) + (MPI_Count) data_sz;
             MPIR_STATUS_SET_COUNT(rreq->status, count);
         }
 

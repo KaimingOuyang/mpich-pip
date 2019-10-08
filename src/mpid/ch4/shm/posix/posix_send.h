@@ -12,6 +12,7 @@
 #define POSIX_SEND_H_INCLUDED
 
 #include "posix_impl.h"
+#include "../pip/pip_impl.h"
 #include "ch4_impl.h"
 #include <../mpi/pt2pt/bsendutil.h>
 /* ---------------------------------------------------- */
@@ -54,6 +55,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_do_isend(const void *buf,
     MPIDI_POSIX_REQUEST(sreq)->user_count = count;
     MPIDI_POSIX_REQUEST(sreq)->datatype = datatype;
     MPIDI_POSIX_REQUEST(sreq)->data_sz = data_sz;
+    MPIDI_POSIX_REQUEST(sreq)->addr_offset = 0;
     MPIDI_POSIX_REQUEST(sreq)->type = type;
     MPIDI_POSIX_REQUEST(sreq)->dest = rank;
     MPIDI_POSIX_REQUEST(sreq)->next = NULL;
@@ -86,6 +88,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_do_isend(const void *buf,
                      "Enqueued to grank %d from %d (comm_kind %d) in recv %d,%d,%d\n",
                      MPIDI_CH4U_rank_to_lpid(rank, comm), MPIDI_POSIX_mem_region.rank,
                      (int) comm->comm_kind, comm->rank, tag, comm->context_id + context_offset));
+
+    MPIDI_PIP_create_tasks(sreq);
 
   fn_exit:
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_POSIX_DO_ISEND);

@@ -278,7 +278,7 @@ static inline int MPIDI_POSIX_mpi_init_hook(int rank, int size, int *n_vnis_prov
     MPIDI_POSIX_mem_region.local_rank = local_rank;
     MPIDI_POSIX_mem_region.next = NULL;
     char *BIND_MODE = getenv("BIND_MODE");
-    if (strcmp(BIND_MODE, "SEQUENCE") == 0) {
+    if (BIND_MODE == NULL || strcmp(BIND_MODE, "SEQUENCE") == 0 ) {
         cpu_set_t mask;
         CPU_ZERO(&mask);
         CPU_SET(local_rank, &mask);
@@ -507,10 +507,10 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_mpi_finalize_hook(void)
 
     // printf("%s\n", results);
     // fflush(stdout);
-    if (pip_global.local_rank == 0) {
-        printf("rank (0, 1) max parallelism %d \n", pip_global.shm_pip_global[0]->max_parallelism);
-        fflush(stdout);
-    }
+    // if (pip_global.local_rank == 0) {
+    //     printf("rank (0, 1) max parallelism %d \n", pip_global.shm_pip_global[0]->max_parallelism);
+    //     fflush(stdout);
+    // }
     /* local barrier */
     mpi_errno = MPIDU_shm_barrier(MPIDI_POSIX_mem_region.barrier, MPIDI_POSIX_mem_region.num_local);
 
