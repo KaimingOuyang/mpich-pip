@@ -121,8 +121,14 @@ The Fortran binding for 'MPI_Init' has only the error return
 
 .seealso: MPI_Init_thread, MPI_Finalize
 @*/
+double start_time;
+FILE *fp;
 int MPI_Init(int *argc, char ***argv)
 {
+    struct timespec time;
+    clock_gettime(CLOCK_MONOTONIC, &time);
+    start_time = (double) time.tv_sec + time.tv_nsec / 1e9;
+
     int mpi_errno = MPI_SUCCESS;
     int rc ATTRIBUTE((unused));
     int threadLevel, provided;
@@ -200,7 +206,9 @@ int MPI_Init(int *argc, char ***argv)
         }
 #endif
     }
-
+    char filename[32];
+    sprintf(filename, "timestamp-%d", MPIR_Process.comm_world->rank);
+    fp = fopen(filename, "w");
     /* ... end of body of routine ... */
     MPIR_FUNC_TERSE_INIT_EXIT(MPID_STATE_MPI_INIT);
     return mpi_errno;

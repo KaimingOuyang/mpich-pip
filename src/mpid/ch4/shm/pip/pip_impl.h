@@ -223,6 +223,8 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_fflush_compl_task(MPIDI_PIP_task_queue_t
     return;
 }
 
+extern FILE *fp;
+extern double start_time;
 
 #undef FCNAME
 #define FCNAME MPL_QUOTE(MPIDI_PIP_do_task_copy)
@@ -231,8 +233,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_do_task_copy(MPIDI_PIP_task_t * task)
     int mpi_errno = MPI_SUCCESS;
     // int task_id = task->task_id;
     // void *recv_buffer;
-    // struct timespec start, end;
-    // clock_gettime(CLOCK_MONOTONIC, &start);
+    struct timespec cp_start, cp_end;
+    clock_gettime(CLOCK_MONOTONIC, &cp_start);
     if (task->segp) {
         DLOOP_Segment *segp = task->segp;
         size_t last = task->segment_first + task->data_sz;
@@ -270,7 +272,10 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_do_task_copy(MPIDI_PIP_task_t * task)
 
     // *task->cur_task_id = task_id + 1;
     // OPA_write_barrier();
-    // clock_gettime(CLOCK_MONOTONIC, &end);
+    clock_gettime(CLOCK_MONOTONIC, &cp_end);
+    double cp_start_time = (double) cp_start.tv_sec + cp_start.tv_nsec / 1e9 - start_time;
+    double cp_end_time = (double) cp_end.tv_sec + cp_end.tv_nsec / 1e9 - start_time;
+    fprintf(fp, "COPY: %.2lf -- %.2lf\n", cp_start_time, cp_end_time);
     // double time = (end.tv_sec - start.tv_sec) * 1e6 + (end.tv_nsec - start.tv_nsec) / 1e3;
     // printf("rank %d - copy data from %d, size %ld, time %.3lfus\n", pip_global.local_rank, task->rank,
     //        task->data_sz, time);
@@ -387,7 +392,19 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_steal_task()
 {
     int victim = rand() % pip_global.num_local;
     MPIDI_PIP_task_t *task = NULL;
+
+    struct timespec sl_time;
+    double steal_time;
+    int chances = 0, i;
+
+    clock_gettime(CLOCK_MONOTONIC, &sl_time);
+    steal_time = (double) sl_time.tv_sec + sl_time.tv_nsec / 1e9 - start_time;
+    for (i = 0; i < pip_global.num_local; ++i) {
+        chances += pip_global.shm_task_queue[i]->task_num;
+    }
+    fprintf(fp, "Stealing: %.2lf %d\n", steal_time, chances);
     if (victim != pip_global.local_rank) {
+
 #ifdef MPI_PIP_SHM_TASK_STEAL
         MPIDI_PIP_task_queue_t *victim_queue =
             &pip_global.shm_task_queue[victim][pip_global.local_numa_id];

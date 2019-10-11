@@ -149,8 +149,10 @@ thread that initialized MPI with either 'MPI_Init' or 'MPI_Init_thread'.
 .N Errors
 .N MPI_SUCCESS
 @*/
+extern FILE *fp;
 int MPI_Finalize(void)
 {
+    close(fp);
     int mpi_errno = MPI_SUCCESS;
 #if defined(HAVE_USLEEP) && defined(USE_COVERAGE)
     int rank = 0;
