@@ -411,6 +411,9 @@ void MPIR_Segment_free(DLOOP_Segment * segp);
 int MPIR_Segment_init(const DLOOP_Buffer buf,
                       DLOOP_Count count, DLOOP_Handle handle, DLOOP_Segment * segp);
 
+void segment_seek(struct DLOOP_Segment *segp, MPI_Aint position,
+                         MPI_Aint(*sizefn) (MPI_Datatype el_type));
+
 void
 MPIR_Segment_manipulate(DLOOP_Segment * segp,
                         DLOOP_Offset first,

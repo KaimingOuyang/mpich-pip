@@ -71,17 +71,15 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_create_tasks(MPIR_Request *req){
             task->cell_queue = MPIDI_POSIX_mem_region.RecvQ[grank];
             if (MPIDI_POSIX_REQUEST(req)->segment_ptr) {
                 /* non-contig */
-                size_t last = MPIDI_POSIX_REQUEST(req)->segment_first + sz_thsd;
                 task->segp = (DLOOP_Segment *) MPIR_Handle_obj_alloc(&MPIDI_Segment_mem);
                 task->segment_first = MPIDI_POSIX_REQUEST(req)->segment_first;
-                MPIR_Memcpy(task->segp, MPIDI_POSIX_REQUEST(req)->segment_ptr,
-                sizeof(DLOOP_Segment));
-                MPIR_Segment_manipulate(MPIDI_POSIX_REQUEST(req)->segment_ptr, MPIDI_POSIX_REQUEST(req)->segment_first, &last, NULL,      /* contig fn */
-                NULL,       /* vector fn */
-                NULL,       /* blkidx fn */
-                NULL,       /* index fn */
-                NULL, NULL);
-                MPIDI_POSIX_REQUEST(req)->segment_first = last;
+                MPIR_Memcpy(task->segp, MPIDI_POSIX_REQUEST(req)->segment_ptr, sizeof(DLOOP_Segment));
+                // MPIR_Segment_manipulate(MPIDI_POSIX_REQUEST(req)->segment_ptr, MPIDI_POSIX_REQUEST(req)->segment_first, &last, NULL,      /* contig fn */
+                // NULL,       /* vector fn */
+                // NULL,       /* blkidx fn */
+                // NULL,       /* index fn */
+                // NULL, NULL);
+                MPIDI_POSIX_REQUEST(req)->segment_first = MPIDI_POSIX_REQUEST(req)->segment_first + sz_thsd;
 
                 task->src = NULL;
                 task->dest = recv_buffer;
@@ -236,6 +234,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_do_task_copy(MPIDI_PIP_task_t * task)
     if (task->segp) {
         DLOOP_Segment *segp = task->segp;
         size_t last = task->segment_first + task->data_sz;
+        
+        segment_seek(segp, task->segment_first, NULL);
         if (task->send_flag) {
             MPIR_Segment_pack(segp, task->segment_first, (MPI_Aint *) & last, task->dest);
         } else {
