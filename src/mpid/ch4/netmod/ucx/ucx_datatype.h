@@ -59,7 +59,7 @@ static inline void *MPIDI_UCX_Start_unpack(void *context, void *buffer, size_t c
 
 extern MPIR_Object_alloc_t MPIDI_Task_mem;
 extern MPIR_Object_alloc_t MPIDI_Segment_mem;
-#include "../../shm/pip/pip_pre.h"
+
 #include "../../shm/pip/pip_impl.h"
 
 static inline size_t MPIDI_UCX_Packed_size(void *state)
@@ -74,6 +74,8 @@ static inline size_t MPIDI_UCX_Pack(void *state, size_t offset, void *dest, size
     struct MPIDI_UCX_pack_state *pack_state = (struct MPIDI_UCX_pack_state *) state;
     MPI_Aint last = MPL_MIN(pack_state->packsize, offset + max_length);
     MPIR_Datatype *dt_ptr;
+    printf("max_length %ld\n", max_length);
+    fflush(stdout);
     MPIR_Datatype_get_ptr(pack_state->segment_ptr->handle_dt, dt_ptr);
     if(last < pack_state->packsize - max_length){
         /* Not last data seg, I can push to queue for stealing */
@@ -91,21 +93,23 @@ static inline size_t MPIDI_UCX_Pack(void *state, size_t offset, void *dest, size
         task->segp = (DLOOP_Segment *) MPIR_Handle_obj_alloc(&MPIDI_Segment_mem);
         MPIR_Memcpy(task->segp, pack_state->segment_ptr, sizeof(DLOOP_Segment));
         task->segment_first = offset;
-        MPIR_Segment_manipulate(pack_state->segment_ptr, offset, &last, NULL,      /* contig fn */
-                                            NULL,       /* vector fn */
-                                            NULL,       /* blkidx fn */
-                                            NULL,       /* index fn */
-                                            NULL, NULL);
+        // MPIR_Segment_manipulate(pack_state->segment_ptr, offset, &last, NULL,      /* contig fn */
+        //                                     NULL,       /* vector fn */
+        //                                     NULL,       /* blkidx fn */
+        //                                     NULL,       /* index fn */
+        //                                     NULL, NULL);
         MPIDI_PIP_Task_safe_enqueue(pip_global.ucx_task_queue, task);
         MPIDI_PIP_Compl_task_enqueue(pip_global.ucx_local_compl_queue, task);
         if (pip_global.ucx_local_compl_queue->task_num >= MPIDI_MAX_TASK_THREASHOLD)
         {
+            MPIDI_PIP_exec_ucx_one_task(pip_global.ucx_task_queue);
             MPIDI_PIP_fflush_compl_task(pip_global.ucx_local_compl_queue);
         }
     }else{
         /* last one I must fflush all previous data segs */
         // printf("rank %d - SEND LAST offset %ld, max_length %ld, packsize %ld, dt_ptr %p, task_num %d, pack_state->segment_ptr %p\n", pip_global.rank, offset, max_length, pack_state->packsize, dt_ptr, pip_global.ucx_local_compl_queue->task_num, pack_state->segment_ptr);
         // fflush(stdout);
+        segment_seek(pack_state->segment_ptr, offset, NULL);
         MPIR_Segment_pack(pack_state->segment_ptr, offset, &last, dest);
         MPIDI_PIP_ucx_fflush_task(pip_global.ucx_task_queue);
         while(pip_global.ucx_local_compl_queue->head)
@@ -123,7 +127,7 @@ static inline ucs_status_t MPIDI_UCX_Unpack(void *state, size_t offset, const vo
     MPI_Aint last_pack = last;
     MPIR_Datatype *dt_ptr;
     MPIR_Datatype_get_ptr(pack_state->segment_ptr->handle_dt, dt_ptr);
-    if(offset == 0){
+    if(offset == 0 && pack_state->packsize < MPIDI_POSIX_EAGER_THRESHOLD){
         /* first seg, need to unpack myself */
         // printf("rank %d - RECV offset %ld, count %ld, packsize %ld, dt_ptr %p, task_num %d\n", pip_global.rank, offset, count, pack_state->packsize, dt_ptr, pip_global.ucx_local_compl_queue->task_num);
         // fflush(stdout);
@@ -132,6 +136,7 @@ static inline ucs_status_t MPIDI_UCX_Unpack(void *state, size_t offset, const vo
         /* last received seg */
         // printf("rank %d - RECV LAST offset %ld, count %ld, packsize %ld, dt_ptr %p, task_num %d, pack_state->segment_ptr %p\n", pip_global.rank, offset, count, pack_state->packsize, dt_ptr, pip_global.ucx_local_compl_queue->task_num, pack_state->segment_ptr);
         // fflush(stdout);
+        segment_seek(pack_state->segment_ptr, offset, NULL);
         MPIR_Segment_unpack(pack_state->segment_ptr, offset, &last, (void *) src);
         MPIDI_PIP_ucx_fflush_task(pip_global.ucx_task_queue);
         while(pip_global.ucx_local_compl_queue->head)
@@ -140,7 +145,7 @@ static inline ucs_status_t MPIDI_UCX_Unpack(void *state, size_t offset, const vo
         /* enqueue task */
         // printf("rank %d - RECV offset %ld, count %ld, packsize %ld, dt_ptr %p, task_num %d\n", pip_global.rank, offset, count, pack_state->packsize, dt_ptr, pip_global.ucx_local_compl_queue->task_num);
         // fflush(stdout);
-        MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);;
+        MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
         task->send_flag = 0;
         task->compl_flag = 0;
         task->last = last;
@@ -152,7 +157,7 @@ static inline ucs_status_t MPIDI_UCX_Unpack(void *state, size_t offset, const vo
         // task->cur_task_id = pip_global.shm_recv_counter + src_local;
         // task->completion_count = completion_count;
 
-        task->src = src;
+        task->src = (void*) src;
         task->dest = NULL;
         task->segp =
         (DLOOP_Segment *) MPIR_Handle_obj_alloc(&MPIDI_Segment_mem);
@@ -163,6 +168,7 @@ static inline ucs_status_t MPIDI_UCX_Unpack(void *state, size_t offset, const vo
         MPIDI_PIP_Compl_task_enqueue(pip_global.ucx_local_compl_queue, task);
         if (pip_global.ucx_local_compl_queue->task_num >= MPIDI_MAX_TASK_THREASHOLD)
         {
+            MPIDI_PIP_exec_ucx_one_task(pip_global.ucx_task_queue);
             MPIDI_PIP_fflush_compl_task(pip_global.ucx_local_compl_queue);
         }
     }

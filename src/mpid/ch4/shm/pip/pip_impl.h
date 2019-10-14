@@ -301,6 +301,21 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_compl_one_task(MPIDI_PIP_task_queue_t * 
     return;
 }
 
+#undef FCNAME
+#define FCNAME MPL_QUOTE(MPIDI_PIP_exec_one_task)
+MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_one_task(MPIDI_PIP_task_queue_t * task_queue)
+{
+    MPIDI_PIP_task_t *task;
+
+    if (task_queue->head) {
+        MPIDI_PIP_Task_safe_dequeue(task_queue, &task);
+        /* find my own task */
+        if (task) {
+            MPIDI_PIP_do_task_copy(task);
+        }
+    }
+    return;
+}
 
 #undef FCNAME
 #define FCNAME MPL_QUOTE(MPIDI_PIP_fflush_task)
@@ -372,6 +387,22 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_ucx_fflush_task(MPIDI_PIP_task_queue_t *
     MPIDI_PIP_task_t *task;
     int i;
     while (task_queue->head) {
+        MPIDI_PIP_Task_safe_dequeue(task_queue, &task);
+        /* find my own task */
+        if (task) {
+            MPIDI_PIP_do_ucx_task_copy(task);
+        }
+    }
+    return;
+}
+
+#undef FCNAME
+#define FCNAME MPL_QUOTE(MPIDI_PIP_exec_ucx_one_task)
+MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_ucx_one_task(MPIDI_PIP_task_queue_t * task_queue)
+{
+    MPIDI_PIP_task_t *task;
+    int i;
+    if (task_queue->head) {
         MPIDI_PIP_Task_safe_dequeue(task_queue, &task);
         /* find my own task */
         if (task) {

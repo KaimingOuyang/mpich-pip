@@ -26,6 +26,8 @@ extern MPIDI_POSIX_mem_region_t MPIDI_POSIX_mem_region;
 extern char *MPIDI_POSIX_asym_base_addr;
 extern MPIDI_PIP_global_t pip_global;
 
+#undef FCNAME
+#define FCNAME MPL_QUOTE(MPIDI_PIP_init)
 void MPIDI_PIP_init()
 {
     int mpi_errno = MPI_SUCCESS, i, err;

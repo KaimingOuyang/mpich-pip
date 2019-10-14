@@ -11,14 +11,49 @@
 
 #ifndef PIP_PRE_H_INCLUDED
 #define PIP_PRE_H_INCLUDED
+typedef struct MPIDI_PIP_task_queue MPIDI_PIP_task_queue_t;
+typedef struct MPIDI_PIP_task MPIDI_PIP_task_t;
+typedef struct MPIDI_PIP_global MPIDI_PIP_global_t;
+
+extern MPIDI_PIP_global_t pip_global;
 #include <mpidimpl.h>
+#include "mpidch4r.h"
 #include <../posix/posix_datatypes.h>
 
 #define MPIDI_TASK_PREALLOC 64
 #define MPIDI_SEGMENT_PREALLOC 64
 #define MPIDI_MAX_TASK_THREASHOLD 63
 
-struct MPIDI_PIP_task_queue;
+typedef struct MPIDI_PIP_global {
+    uint32_t num_local;
+    uint32_t local_rank;
+    uint32_t rank;
+    uint32_t numa_max_node;
+    uint64_t *shm_in_proc;
+    uint64_t *local_send_counter;
+    uint64_t *shm_send_counter;
+
+    MPIDI_PIP_task_queue_t *ucx_task_queue;     // ucx netmod queue
+    MPIDI_PIP_task_queue_t **shm_ucx_task_queue;
+    MPIDI_PIP_task_queue_t *ucx_local_compl_queue;
+
+    MPIDI_PIP_task_queue_t *task_queue; // socket aware queue
+    MPIDI_PIP_task_queue_t **shm_task_queue;
+    MPIDI_PIP_task_queue_t *local_compl_queue;
+    struct MPIDI_PIP_global **shm_pip_global;
+    uint64_t copy_size;
+    uint64_t try_steal;
+    uint64_t suc_steal;
+    // int *shm_numa_ids;
+    int *esteal_done;
+    int *esteal_try;
+    int recvQ_empty;
+    int recv_empty;
+    int local_numa_id;
+
+    int cur_parallelism;
+    int max_parallelism;
+} MPIDI_PIP_global_t;
 
 /* Use cell->pkt.mpich.type = MPIDI_POSIX_TYPEEAGER to judge the complete transfer */
 typedef struct MPIDI_PIP_task {
@@ -57,38 +92,5 @@ typedef struct MPIDI_PIP_task_queue {
     MPID_Thread_mutex_t lock;
     int task_num;
 } MPIDI_PIP_task_queue_t;
-
-typedef struct MPIDI_PIP_global {
-    uint32_t num_local;
-    uint32_t local_rank;
-    uint32_t rank;
-    uint32_t numa_max_node;
-    uint64_t *shm_in_proc;
-    uint64_t *local_send_counter;
-    uint64_t *shm_send_counter;
-
-    MPIDI_PIP_task_queue_t *ucx_task_queue;     // ucx netmod queue
-    MPIDI_PIP_task_queue_t **shm_ucx_task_queue;
-    MPIDI_PIP_task_queue_t *ucx_local_compl_queue;
-
-    MPIDI_PIP_task_queue_t *task_queue; // socket aware queue
-    MPIDI_PIP_task_queue_t **shm_task_queue;
-    MPIDI_PIP_task_queue_t *local_compl_queue;
-    struct MPIDI_PIP_global **shm_pip_global;
-    uint64_t copy_size;
-    uint64_t try_steal;
-    uint64_t suc_steal;
-    // int *shm_numa_ids;
-    int *esteal_done;
-    int *esteal_try;
-    int recvQ_empty;
-    int recv_empty;
-    int local_numa_id;
-
-    int cur_parallelism;
-    int max_parallelism;
-} MPIDI_PIP_global_t;
-
-extern MPIDI_PIP_global_t pip_global;
 
 #endif /* PIP_PRE_H_INCLUDED */

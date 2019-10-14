@@ -249,6 +249,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_recv(int blocking, int *comple
                             MPIDI_PIP_Task_safe_enqueue(&pip_global.task_queue[socket_id], task);
                             MPIDI_PIP_Compl_task_enqueue(pip_global.local_compl_queue, task);
                             if (pip_global.local_compl_queue->task_num >= MPIDI_MAX_TASK_THREASHOLD) {
+                                MPIDI_PIP_exec_one_task(pip_global.task_queue);
                                 MPIDI_PIP_fflush_compl_task(pip_global.local_compl_queue);
                             }
                         }
@@ -321,6 +322,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_recv(int blocking, int *comple
                             MPIDI_PIP_Task_safe_enqueue(&pip_global.task_queue[socket_id], task);
                             MPIDI_PIP_Compl_task_enqueue(pip_global.local_compl_queue, task);
                             if (pip_global.local_compl_queue->task_num >= MPIDI_MAX_TASK_THREASHOLD) {
+                                MPIDI_PIP_exec_one_task(pip_global.task_queue);
                                 MPIDI_PIP_fflush_compl_task(pip_global.local_compl_queue);
                             }
                         }
@@ -580,6 +582,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_progress_send(int blocking, int *comple
                 MPIDI_PIP_Compl_task_enqueue(pip_global.local_compl_queue, task);
 
                 if (pip_global.local_compl_queue->task_num >= MPIDI_MAX_TASK_THREASHOLD) {
+                    MPIDI_PIP_exec_one_task(pip_global.task_queue);
                     MPIDI_PIP_fflush_compl_task(pip_global.local_compl_queue);
                 }
             } else {
