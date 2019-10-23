@@ -18,7 +18,7 @@ doc1_src_txt =
 
 ACLOCAL_AMFLAGS = -I confdb -I tools/topo/hwloc/hwloc/config
 AM_CPPFLAGS = -I$(top_srcdir)/include $(external_includes)
-AM_CFLAGS =
+AM_CFLAGS = -fpie -pie -rdynamic -pthread
 
 noinst_HEADERS += include/hydra.h include/hydra_server.h
 
