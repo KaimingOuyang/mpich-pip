@@ -15,15 +15,17 @@
 #include "mpiimpl.h"
 
 #define MPIDI_TASK_PREALLOC 64
-#define MPIDI_MAX_TASK_THREASHOLD 63
+#define MPIDI_MAX_TASK_THRESHOLD 60
+#define MPIDI_PIP_SEC_LAST_PKT_THRESHOLD (MPIDI_PIP_PKT_SIZE << 1)      /* 64KB * 2 */
+#define MPIDI_PIP_LAST_PKT_THRESHOLD MPIDI_PIP_PKT_SIZE /* 64KB */
+#define MPIDI_PIP_PKT_SIZE 65536        /* 64KB */
 
 typedef struct MPIDI_PIP_task {
     MPIR_OBJECT_HEADER;
-    int local_rank;
     int compl_flag;
 
-    void *src_offset;
-    void *dest_offset;
+    void *src_buf;
+    void *dest_buf;
     size_t data_sz;
     struct MPIDI_PIP_task *task_next;
     struct MPIDI_PIP_task *compl_next;
@@ -64,6 +66,7 @@ typedef struct MPIDI_PIP_am_request {
 } MPIDI_PIP_am_request_t;
 
 extern MPIDI_PIP_global_t MPIDI_PIP_global;
+extern MPIR_Object_alloc_t MPIDI_Task_mem;
 
 #define MPIDI_PIP_REQUEST(req, field)      ((req)->dev.ch4.am.shm_am.pip.field)
 

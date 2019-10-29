@@ -36,11 +36,6 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_PIP_INIT_HOOK);
     MPIR_CHKPMEM_DECL(4);
 
-#ifdef MPL_USE_DBG_LOGGING
-    extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
-    MPIDI_CH4_SHM_PIP_GENERAL = MPL_dbg_class_alloc("SHM_PIP", "shm_pip");
-#endif /* MPL_USE_DBG_LOGGING */
-
     int num_local = MPIR_Process.local_size;
     MPIDI_PIP_global.num_local = num_local;
     MPIDI_PIP_global.local_rank = MPIR_Process.local_rank;

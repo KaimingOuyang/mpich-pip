@@ -12,10 +12,6 @@
 #include "mpidimpl.h"
 #include "pip_pre.h"
 
-#ifdef MPL_USE_DBG_LOGGING
-MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
-#endif
-
 MPIDI_PIP_global_t MPIDI_PIP_global;
 
 MPIDI_PIP_task_t MPIDI_Task_direct[MPIDI_TASK_PREALLOC] = { 0 };
