@@ -12,7 +12,9 @@
 #ifndef PIP_PRE_H_INCLUDED
 #define PIP_PRE_H_INCLUDED
 
+#ifdef MPL_USE_DBG_LOGGING
 extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
+#endif
 #define PIP_TRACE(...) \
     MPL_DBG_MSG_FMT(MPIDI_CH4_SHM_PIP_GENERAL,VERBOSE,(MPL_DBG_FDEST, "PIP "__VA_ARGS__))
 
@@ -55,8 +57,6 @@ typedef struct MPIDI_PIP_global {
 
     /* Info structures */
     struct MPIDI_PIP_global **pip_global_array;
-    int *idle_process;
-    int *avail_tasks;
 } MPIDI_PIP_global_t;
 
 typedef struct {
@@ -76,6 +76,8 @@ extern MPIR_Object_alloc_t MPIDI_Task_mem;
 #define NUM_CORES 36
 extern int idle_process[NUM_CORES];
 extern int avail_tasks[NUM_CORES];
+extern int *shm_idle_process;
+extern int *shm_avail_tasks;
 
 #define MPIDI_PIP_REQUEST(req, field)      ((req)->dev.ch4.am.shm_am.pip.field)
 

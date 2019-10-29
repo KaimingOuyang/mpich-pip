@@ -66,7 +66,7 @@ static int progress_recv(int blocking)
         goto fn_exit;
     } else {
         empty_recv_queue = 0;
-        MPIDI_PIP_global.idle_process[local_rank] = 0;
+        shm_idle_process[local_rank] = 0;
     }
 
     /* Process the eager message */
@@ -286,7 +286,7 @@ static int progress_send(int blocking)
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_POSIX_PROGRESS_SEND);
 
     if (MPIDI_POSIX_global.postponed_queue) {
-        MPIDI_PIP_global.idle_process[local_rank] = 0;
+        shm_idle_process[local_rank] = 0;
         /* Drain postponed queue */
         curr_sreq_hdr = MPIDI_POSIX_global.postponed_queue;
 
@@ -328,7 +328,7 @@ static int progress_send(int blocking)
             MPIDI_POSIX_am_release_req_hdr(&curr_sreq_hdr);
         }
     } else if (empty_recv_queue) {
-        MPIDI_PIP_global.idle_process[local_rank] = 1;
+        shm_idle_process[local_rank] = 1;
     }
 
   fn_exit:

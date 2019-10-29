@@ -27,3 +27,6 @@ MPIR_Object_alloc_t MPIDI_Task_mem = {
 
 int idle_process[NUM_CORES];
 int avail_tasks[NUM_CORES];
+
+int *shm_idle_process;
+int *shm_avail_tasks;

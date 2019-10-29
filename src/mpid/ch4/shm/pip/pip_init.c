@@ -13,6 +13,13 @@
 #include <numa.h>
 #include <sched.h>
 
+void MPI_Get_stealing_profile_data(int **pri_idle_process, int **pri_avail_tasks)
+{
+    *pri_idle_process = shm_idle_process;
+    *pri_avail_tasks = shm_avail_tasks;
+    return;
+}
+
 int MPIDI_PIP_mpi_init_task_queue(MPIDI_PIP_task_queue_t * task_queue)
 {
     int err;
@@ -96,12 +103,12 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
 
     MPIDU_Init_shm_put(&idle_process_ptr, sizeof(int *));
     MPIDU_Init_shm_barrier();
-    MPIDU_Init_shm_get(0, sizeof(int *), &MPIDI_PIP_global.idle_process);
+    MPIDU_Init_shm_get(0, sizeof(int *), &shm_idle_process);
     MPIDU_Init_shm_barrier();
 
     MPIDU_Init_shm_put(&avail_task_ptr, sizeof(int *));
     MPIDU_Init_shm_barrier();
-    MPIDU_Init_shm_get(0, sizeof(int *), &MPIDI_PIP_global.avail_tasks);
+    MPIDU_Init_shm_get(0, sizeof(int *), &shm_avail_tasks);
     MPIDU_Init_shm_barrier();
 
     /* For stealing rand seeds */
