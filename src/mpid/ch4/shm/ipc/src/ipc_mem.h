@@ -8,6 +8,7 @@
 #include "ch4_impl.h"
 #include "ipc_pre.h"
 #include "ipc_types.h"
+#include "../pip/pip_post.h"
 #include "../xpmem/xpmem_post.h"
 #include "../gpu/gpu_post.h"
 
@@ -20,6 +21,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_handle_unmap(MPIDI_IPCI_type_t ipc_type,
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_IPCI_HANDLE_UNMAP);
 
     switch (ipc_type) {
+        case MPIDI_IPCI_TYPE__PIP:
         case MPIDI_IPCI_TYPE__XPMEM:
             break;
         case MPIDI_IPCI_TYPE__GPU:

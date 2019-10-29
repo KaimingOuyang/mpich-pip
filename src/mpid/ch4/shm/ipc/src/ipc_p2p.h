@@ -119,9 +119,15 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_handle_lmt_recv(MPIDI_IPCI_type_t ipc_ty
 
     /* attach remote buffer */
     switch (ipc_type) {
+#ifdef MPIDI_CH4_SHM_ENABLE_PIP
+        case MPIDI_IPCI_TYPE__PIP:
+            mpi_errno = MPIDI_PIP_ipc_handle_map(ipc_handle.pip, &src_buf);
+            break;
+#else
         case MPIDI_IPCI_TYPE__XPMEM:
             mpi_errno = MPIDI_XPMEM_ipc_handle_map(ipc_handle.xpmem, &src_buf);
             break;
+#endif
         case MPIDI_IPCI_TYPE__GPU:
             mpi_errno =
                 MPIDI_GPU_ipc_handle_map(ipc_handle.gpu, attr.device,

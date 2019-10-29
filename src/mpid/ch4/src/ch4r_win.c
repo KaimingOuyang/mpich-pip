@@ -553,10 +553,17 @@ static int win_shm_alloc_impl(MPI_Aint size, int disp_unit, MPIR_Comm * comm_ptr
     if (shm_comm_ptr != NULL && MPIDIG_WIN(win, mmap_addr)) {
         char *cur_base = (char *) MPIDIG_WIN(win, mmap_addr);
         for (i = 0; i < shm_comm_ptr->local_size; i++) {
-            if (shared_table[i].size)
+            if (shared_table[i].size){
                 shared_table[i].shm_base_addr = cur_base;
-            else
+
+                /* PIP - pin the memory on local NUMA */
+                if(i == MPIR_Process.local_rank){
+                    memset(shared_table[i].shm_base_addr, 0, shared_table[i].size);
+                }
+            }
+            else{
                 shared_table[i].shm_base_addr = NULL;
+            }
 
             if (MPIDIG_WIN(win, info_args).alloc_shared_noncontig)
                 cur_base += MPIDU_shm_get_mapsize(shared_table[i].size, &page_sz);

@@ -9,7 +9,6 @@
 #include <mpi.h>
 
 #include "../posix/posix_pre.h"
-#include "../ipc/src/ipc_pre.h"
 
 #include "shm_types.h"
 

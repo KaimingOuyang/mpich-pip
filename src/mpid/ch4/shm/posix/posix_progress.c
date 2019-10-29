@@ -9,6 +9,7 @@
 #include <posix_eager.h>
 #include "shm_types.h"
 #include "shm_control.h"
+#include "../pip/pip_impl.h"
 
 /* unused prototypes to supress -Wmissing-prototypes */
 int MPIDI_POSIX_progress_test(void);
@@ -23,6 +24,8 @@ int MPIDI_POSIX_progress_deactivate(int id);
 
 static int progress_recv(int blocking);
 static int progress_send(int blocking);
+
+static int empty_recv_queue = 0;
 
 static int progress_recv(int blocking)
 {
@@ -43,7 +46,10 @@ static int progress_recv(int blocking)
     result = MPIDI_POSIX_eager_recv_begin(&transaction);
 
     if (MPIDI_POSIX_OK != result) {
+        empty_recv_queue = 1;
         goto fn_exit;
+    } else {
+        empty_recv_queue = 0;
     }
 
     /* Process the eager message */
@@ -150,6 +156,9 @@ static int progress_send(int blocking)
                 MPIR_Assert(0);
         }
 
+    } else if(empty_recv_queue){
+        /* I am idle, need to perform stealing */
+        MPIDI_PIP_steal_task();
     }
 
   fn_exit:

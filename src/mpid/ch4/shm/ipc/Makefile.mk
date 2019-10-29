@@ -6,3 +6,4 @@
 include $(top_srcdir)/src/mpid/ch4/shm/ipc/src/Makefile.mk
 include $(top_srcdir)/src/mpid/ch4/shm/ipc/xpmem/Makefile.mk
 include $(top_srcdir)/src/mpid/ch4/shm/ipc/gpu/Makefile.mk
+include $(top_srcdir)/src/mpid/ch4/shm/ipc/pip/Makefile.mk

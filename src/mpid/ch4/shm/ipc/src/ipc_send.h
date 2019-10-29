@@ -38,8 +38,13 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_try_lmt_isend(const void *buf, MPI_Aint 
         mpi_errno = MPIDI_GPU_get_ipc_attr(vaddr, rank, comm, &ipc_attr);
         MPIR_ERR_CHECK(mpi_errno);
     } else {
+#ifdef MPIDI_CH4_SHM_ENABLE_PIP
+        mpi_errno = MPIDI_PIP_get_ipc_attr(vaddr, data_sz, &ipc_attr);
+        MPIR_ERR_CHECK(mpi_errno);
+#else
         mpi_errno = MPIDI_XPMEM_get_ipc_attr(vaddr, data_sz, &ipc_attr);
         MPIR_ERR_CHECK(mpi_errno);
+#endif
     }
 
     if (rank != comm->rank && ipc_attr.ipc_type != MPIDI_IPCI_TYPE__NONE &&

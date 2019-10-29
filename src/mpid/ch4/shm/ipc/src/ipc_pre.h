@@ -6,6 +6,7 @@
 #ifndef IPC_PRE_H_INCLUDED
 #define IPC_PRE_H_INCLUDED
 
+#include "../pip/pip_pre.h"
 #include "../xpmem/xpmem_pre.h"
 #include "../gpu/gpu_pre.h"
 #include "ipc_types.h"

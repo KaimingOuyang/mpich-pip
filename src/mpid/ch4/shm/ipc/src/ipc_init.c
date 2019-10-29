@@ -29,8 +29,13 @@ int MPIDI_IPC_mpi_init_hook(int rank, int size, int *tag_bits)
 
     MPIDI_IPCI_global.node_group_ptr = NULL;
 
+#ifdef MPIDI_CH4_SHM_ENABLE_PIP
+    mpi_errno = MPIDI_PIP_mpi_init_hook(rank, size);
+    MPIR_ERR_CHECK(mpi_errno);
+#else
     mpi_errno = MPIDI_XPMEM_mpi_init_hook(rank, size, tag_bits);
     MPIR_ERR_CHECK(mpi_errno);
+#endif
 
     mpi_errno = MPIDI_GPU_mpi_init_hook(rank, size, tag_bits);
     MPIR_ERR_CHECK(mpi_errno);
@@ -48,8 +53,13 @@ int MPIDI_IPC_mpi_finalize_hook(void)
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_IPC_MPI_FINALIZE_HOOK);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_IPC_MPI_FINALIZE_HOOK);
 
+#ifdef MPIDI_CH4_SHM_ENABLE_PIP
+    mpi_errno = MPIDI_PIP_mpi_finalize_hook();
+    MPIR_ERR_CHECK(mpi_errno);
+#else
     mpi_errno = MPIDI_XPMEM_mpi_finalize_hook();
     MPIR_ERR_CHECK(mpi_errno);
+#endif
 
     mpi_errno = MPIDI_GPU_mpi_finalize_hook();
     MPIR_ERR_CHECK(mpi_errno);

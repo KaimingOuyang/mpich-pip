@@ -287,6 +287,8 @@ AC_ARG_WITH(ch4-shmmods,
                           posix        - Enable POSIX shmmod
                           xpmem        - Enable XPMEM IPC (requires posix)
                           gpudirect    - Enable GPU Direct IPC (requires posix)
+                          pip          - Enable PIP SHM for partial communication paths and use
+                                         POSIX SHM as fallback for others
                  ],
                  [with_ch4_shmmods=$withval],
                  [with_ch4_shmmods=auto])
