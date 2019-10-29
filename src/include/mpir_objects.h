@@ -159,6 +159,7 @@ typedef enum MPII_Object_kind {
     MPIR_GREQ_CLASS = 0xf,
     MPIR_XPMEM_SEG = 0x10,      /* XPMEM segment, only meaningful in CH4
                                  * when XPMEM shmmod is enabled */
+    MPIDI_TASK = 0x11
 } MPII_Object_kind;
 
 
