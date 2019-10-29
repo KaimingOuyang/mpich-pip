@@ -102,7 +102,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_handle_lmt_rts_recv(uint64_t src_offset,
     PIP_TRACE("handle_lmt_recv: handle matched rreq %p [source %d, tag %d, context_id 0x%x],"
               " copy dst %p, src %p, bytes %ld\n", rreq, MPIDIG_REQUEST(rreq, rank),
               MPIDIG_REQUEST(rreq, tag), MPIDIG_REQUEST(rreq, context_id),
-              (char *) MPIDIG_REQUEST(rreq, buffer), src_offset, recv_data_sz);
+              (char *) MPIDIG_REQUEST(rreq, buffer), (void *) src_offset, recv_data_sz);
 
     /* Set receive status */
     MPIR_STATUS_SET_COUNT(rreq->status, recv_data_sz);

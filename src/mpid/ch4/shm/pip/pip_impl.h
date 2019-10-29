@@ -134,8 +134,11 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
         MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
         if (victim_queue->head) {
             MPIDI_PIP_Task_safe_dequeue(victim_queue, &task);
-            if (task)
+            if (task) {
+                // printf("rank %d - I am stealing process %d, task data_sz %ld\n", MPIDI_PIP_global.local_rank, victim, task->data_sz);
+                // fflush(stdout);
                 MPIDI_PIP_do_task_copy(task);
+            }
         }
     }
 #endif /* MPIDI_PIP_STEALING_ENABLE */
