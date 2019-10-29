@@ -24,3 +24,6 @@ MPIR_Object_alloc_t MPIDI_Task_mem = {
     0, 0, 0, 0, MPIDI_TASK, sizeof(MPIDI_PIP_task_t), MPIDI_Task_direct,
     MPIDI_TASK_PREALLOC
 };
+
+int idle_process[NUM_CORES];
+int avail_tasks[NUM_CORES];

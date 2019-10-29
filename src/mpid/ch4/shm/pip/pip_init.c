@@ -86,6 +86,24 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
         MPIDU_Init_shm_get(i, sizeof(MPIDI_PIP_global_t *), &MPIDI_PIP_global.pip_global_array[i]);
     MPIDU_Init_shm_barrier();
 
+    /* share rank 0 global idle_process and avail_task array for stealing chance monitor */
+    int *idle_process_ptr = idle_process;
+    int *avail_task_ptr = avail_tasks;
+    if (MPIDI_PIP_global.local_rank == 0) {
+        memset(idle_process, 0, sizeof(int) * num_local);
+        memset(avail_tasks, 0, sizeof(int) * num_local);
+    }
+
+    MPIDU_Init_shm_put(&idle_process_ptr, sizeof(int *));
+    MPIDU_Init_shm_barrier();
+    MPIDU_Init_shm_get(0, sizeof(int *), &MPIDI_PIP_global.idle_process);
+    MPIDU_Init_shm_barrier();
+
+    MPIDU_Init_shm_put(&avail_task_ptr, sizeof(int *));
+    MPIDU_Init_shm_barrier();
+    MPIDU_Init_shm_get(0, sizeof(int *), &MPIDI_PIP_global.avail_tasks);
+    MPIDU_Init_shm_barrier();
+
     /* For stealing rand seeds */
     srand(time(NULL) + MPIDI_PIP_global.local_rank * MPIDI_PIP_global.local_rank);
 

@@ -55,6 +55,8 @@ typedef struct MPIDI_PIP_global {
 
     /* Info structures */
     struct MPIDI_PIP_global **pip_global_array;
+    int *idle_process;
+    int *avail_tasks;
 } MPIDI_PIP_global_t;
 
 typedef struct {
@@ -70,6 +72,10 @@ typedef struct {
 
 extern MPIDI_PIP_global_t MPIDI_PIP_global;
 extern MPIR_Object_alloc_t MPIDI_Task_mem;
+
+#define NUM_CORES 36
+extern int idle_process[NUM_CORES];
+extern int avail_tasks[NUM_CORES];
 
 #define MPIDI_PIP_REQUEST(req, field)      ((req)->dev.ch4.am.shm_am.pip.field)
 

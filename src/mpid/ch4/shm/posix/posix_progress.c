@@ -15,6 +15,7 @@
 #include <posix_eager.h>
 #include "shm_types.h"
 #include "shm_control.h"
+#include "../pip/pip_pre.h"
 
 /* unused prototypes to supress -Wmissing-prototypes */
 int MPIDI_POSIX_progress_test(void);
@@ -29,6 +30,8 @@ int MPIDI_POSIX_progress_deactivate(int id);
 
 static int progress_recv(int blocking);
 static int progress_send(int blocking);
+
+static int empty_recv_queue = 0;
 
 static int progress_recv(int blocking)
 {
@@ -50,6 +53,7 @@ static int progress_recv(int blocking)
     MPIDI_POSIX_am_header_t *msg_hdr;
     uint8_t *payload;
     size_t payload_left;
+    int local_rank = MPIDI_PIP_global.local_rank;
 
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_POSIX_PROGRESS_RECV);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_POSIX_PROGRESS_RECV);
@@ -58,7 +62,11 @@ static int progress_recv(int blocking)
     result = MPIDI_POSIX_eager_recv_begin(&transaction);
 
     if (MPIDI_POSIX_OK != result) {
+        empty_recv_queue = 1;
         goto fn_exit;
+    } else {
+        empty_recv_queue = 0;
+        MPIDI_PIP_global.idle_process[local_rank] = 0;
     }
 
     /* Process the eager message */
@@ -272,11 +280,13 @@ static int progress_send(int blocking)
     int result = MPIDI_POSIX_OK;
     MPIR_Request *sreq = NULL;
     MPIDI_POSIX_am_request_header_t *curr_sreq_hdr = NULL;
+    int local_rank = MPIDI_PIP_global.local_rank;
 
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_POSIX_PROGRESS_SEND);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_POSIX_PROGRESS_SEND);
 
     if (MPIDI_POSIX_global.postponed_queue) {
+        MPIDI_PIP_global.idle_process[local_rank] = 0;
         /* Drain postponed queue */
         curr_sreq_hdr = MPIDI_POSIX_global.postponed_queue;
 
@@ -317,6 +327,8 @@ static int progress_send(int blocking)
         } else {
             MPIDI_POSIX_am_release_req_hdr(&curr_sreq_hdr);
         }
+    } else if (empty_recv_queue) {
+        MPIDI_PIP_global.idle_process[local_rank] = 1;
     }
 
   fn_exit:
