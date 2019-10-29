@@ -86,8 +86,13 @@ int MPIDI_IPC_mpi_win_create_hook(MPIR_Win * win)
         mpi_errno = MPIDI_GPU_get_ipc_attr(win->base, shm_comm_ptr->rank, shm_comm_ptr, &ipc_attr);
         MPIR_ERR_CHECK(mpi_errno);
     } else {
+#ifndef MPIDI_CH4_SHM_ENABLE_PIP
         mpi_errno = MPIDI_XPMEM_get_ipc_attr(win->base, win->size, &ipc_attr);
         MPIR_ERR_CHECK(mpi_errno);
+#else
+        mpi_errno = MPIDI_PIP_get_ipc_attr(win->base, win->size, &ipc_attr);
+        MPIR_ERR_CHECK(mpi_errno);
+#endif
     }
 
     /* Disable local IPC for zero buffer */
@@ -159,6 +164,11 @@ int MPIDI_IPC_mpi_win_create_hook(MPIR_Win * win)
         } else {
             /* attach remote buffer */
             switch (ipc_shared_table[i].ipc_type) {
+                case MPIDI_IPCI_TYPE__PIP:
+                    mpi_errno =
+                        MPIDI_PIP_ipc_handle_map(ipc_shared_table[i].ipc_handle.pip,
+                                                 &shared_table[i].shm_base_addr);
+                    break;
                 case MPIDI_IPCI_TYPE__XPMEM:
                     mpi_errno =
                         MPIDI_XPMEM_ipc_handle_map(ipc_shared_table[i].ipc_handle.xpmem,

@@ -7,6 +7,7 @@
 #define IPC_PRE_H_INCLUDED
 
 #include "../xpmem/xpmem_pre.h"
+#include "../pip/pip_pre.h"
 #include "../gpu/gpu_pre.h"
 #include "ipc_types.h"
 
@@ -22,6 +23,9 @@ typedef struct MPIDI_IPC_am_request {
     MPIDI_IPCI_type_t ipc_type;
     union {
         MPIDI_XPMEM_am_request_t xpmem;
+#ifdef MPIDI_CH4_SHM_ENABLE_PIP
+        MPIDI_PIP_am_request_t pip;
+#endif
     } u;
     MPIDI_IPC_am_unexp_rreq_t unexp_rreq;
 } MPIDI_IPC_am_request_t;

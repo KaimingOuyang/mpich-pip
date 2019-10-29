@@ -21,6 +21,11 @@ int MPIDI_SHM_mpi_init_hook(int rank, int size, int *tag_bits)
     ret = MPIDI_IPC_mpi_init_hook(rank, size, tag_bits);
     MPIR_ERR_CHECK(ret);
 
+#ifdef MPIDI_CH4_SHM_ENABLE_PIP
+    ret = MPIDI_PIP_mpi_init_hook(rank, size);
+    MPIR_ERR_CHECK(ret);
+#endif
+
   fn_exit:
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_SHM_MPI_INIT_HOOK);
     return ret;
@@ -37,6 +42,11 @@ int MPIDI_SHM_mpi_finalize_hook(void)
 
     ret = MPIDI_IPC_mpi_finalize_hook();
     MPIR_ERR_CHECK(ret);
+
+#ifdef MPIDI_CH4_SHM_ENABLE_PIP
+    ret = MPIDI_PIP_mpi_finalize_hook();
+    MPIR_ERR_CHECK(ret);
+#endif
 
     ret = MPIDI_POSIX_mpi_finalize_hook();
     MPIR_ERR_CHECK(ret);

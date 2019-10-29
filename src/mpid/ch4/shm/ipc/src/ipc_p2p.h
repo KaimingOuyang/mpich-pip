@@ -119,6 +119,9 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_handle_lmt_recv(MPIDI_IPCI_type_t ipc_ty
 
     /* attach remote buffer */
     switch (ipc_type) {
+        case MPIDI_IPCI_TYPE__PIP:
+            mpi_errno = MPIDI_PIP_ipc_handle_map(ipc_handle.pip, &src_buf);
+            break;
         case MPIDI_IPCI_TYPE__XPMEM:
             mpi_errno = MPIDI_XPMEM_ipc_handle_map(ipc_handle.xpmem, &src_buf);
             break;

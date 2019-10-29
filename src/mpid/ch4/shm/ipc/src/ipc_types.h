@@ -11,6 +11,7 @@
 typedef enum MPIDI_IPCI_type {
     MPIDI_IPCI_TYPE__NONE,      /* avoid empty enum */
     MPIDI_IPCI_TYPE__XPMEM,
+    MPIDI_IPCI_TYPE__PIP,
     MPIDI_IPCI_TYPE__GPU
 } MPIDI_IPCI_type_t;
 
@@ -24,6 +25,7 @@ typedef struct {
  *                        IPC type, and thresholds */
 typedef union MPIDI_IPCI_ipc_handle {
     MPIDI_XPMEM_ipc_handle_t xpmem;
+    MPIDI_PIP_ipc_handle_t pip;
     MPIDI_GPU_ipc_handle_t gpu;
 } MPIDI_IPCI_ipc_handle_t;
 
