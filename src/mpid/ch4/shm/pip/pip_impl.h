@@ -131,7 +131,8 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
     int victim = rand() % MPIDI_PIP_global.num_local;
     MPIDI_PIP_task_t *task = NULL;
 #ifdef MPIDI_PIP_STEALING_SHM
-    if (victim != MPIDI_PIP_global.local_rank) {
+    if (victim != MPIDI_PIP_global.local_rank &&
+        MPIDI_PIP_global.local_rank < stealing_allowed_rank_max) {
         MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
         if (victim_queue->head) {
             MPIDI_PIP_Task_safe_dequeue(victim_queue, &task);

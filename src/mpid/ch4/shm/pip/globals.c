@@ -26,3 +26,4 @@ MPIR_Object_alloc_t MPIDI_Task_mem = {
 };
 
 int MPIDI_PIP_PKT_SIZE;
+uint32_t stealing_allowed_rank_max;

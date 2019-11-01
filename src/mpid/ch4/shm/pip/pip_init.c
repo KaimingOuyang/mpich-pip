@@ -85,8 +85,10 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
 
     MPIDI_PIP_rank_core_binding(MPIDI_PIP_global.local_rank, num_local);
     MPIDI_PIP_PKT_SIZE = atoi(getenv("MPIDI_PIP_PKT_SIZE"));
+    stealing_allowed_rank_max = atoi(getenv("STEALING_ALLOWED_RANK_MAX"));
     if (rank == 0) {
-        printf("MPIDI_PIP_PKT_SIZE %d\n", MPIDI_PIP_PKT_SIZE);
+        printf("MPIDI_PIP_PKT_SIZE %d, stealing_allowed_rank_max %d\n", MPIDI_PIP_PKT_SIZE,
+               stealing_allowed_rank_max);
     }
 
     /* NUMA info */

@@ -13,6 +13,7 @@
 #define PIP_PRE_H_INCLUDED
 
 extern int MPIDI_PIP_PKT_SIZE;
+extern uint32_t stealing_allowed_rank_max;
 
 extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 #define PIP_TRACE(...) \
