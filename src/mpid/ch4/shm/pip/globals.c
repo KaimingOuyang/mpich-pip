@@ -24,3 +24,5 @@ MPIR_Object_alloc_t MPIDI_Task_mem = {
     0, 0, 0, 0, MPIDI_TASK, sizeof(MPIDI_PIP_task_t), MPIDI_Task_direct,
     MPIDI_TASK_PREALLOC
 };
+
+int MPIDI_PIP_PKT_SIZE;

@@ -27,6 +27,43 @@ int MPIDI_PIP_mpi_init_task_queue(MPIDI_PIP_task_queue_t * task_queue)
     return mpi_errno;
 }
 
+void MPIDI_PIP_rank_core_binding(int local_rank, int num_local)
+{
+    char *BIND_MODE = getenv("BIND_MODE");
+    int total_cores = 36;
+    if (BIND_MODE == NULL || strcmp(BIND_MODE, "SEQUENCE") == 0) {
+        cpu_set_t mask;
+        CPU_ZERO(&mask);
+        CPU_SET(local_rank, &mask);
+        sched_setaffinity(getpid(), sizeof(cpu_set_t), &mask);
+    } else if (strcmp(BIND_MODE, "HALF") == 0) {
+        int half = num_local / 2;
+        if (local_rank < half) {
+            cpu_set_t mask;
+            CPU_ZERO(&mask);
+            CPU_SET(local_rank, &mask);
+            sched_setaffinity(getpid(), sizeof(cpu_set_t), &mask);
+        } else {
+            cpu_set_t mask;
+            CPU_ZERO(&mask);
+            CPU_SET(local_rank - half + (total_cores >> 1), &mask);
+            sched_setaffinity(getpid(), sizeof(cpu_set_t), &mask);
+        }
+    } else if (strcmp(BIND_MODE, "LAST") == 0) {
+        if (local_rank == num_local - 1) {
+            cpu_set_t mask;
+            CPU_ZERO(&mask);
+            CPU_SET(total_cores - 1, &mask);
+            sched_setaffinity(getpid(), sizeof(cpu_set_t), &mask);
+        } else {
+            cpu_set_t mask;
+            CPU_ZERO(&mask);
+            CPU_SET(local_rank, &mask);
+            sched_setaffinity(getpid(), sizeof(cpu_set_t), &mask);
+        }
+    }
+}
+
 int MPIDI_PIP_mpi_init_hook(int rank, int size)
 {
     int mpi_errno = MPI_SUCCESS;
@@ -45,6 +82,12 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     MPIDI_PIP_global.num_local = num_local;
     MPIDI_PIP_global.local_rank = MPIR_Process.local_rank;
     MPIDI_PIP_global.rank = rank;
+
+    MPIDI_PIP_rank_core_binding(MPIDI_PIP_global.local_rank, num_local);
+    MPIDI_PIP_PKT_SIZE = atoi(getenv("MPIDI_PIP_PKT_SIZE"));
+    if (rank == 0) {
+        printf("MPIDI_PIP_PKT_SIZE %d\n", MPIDI_PIP_PKT_SIZE);
+    }
 
     /* NUMA info */
     int cpu = sched_getcpu();
