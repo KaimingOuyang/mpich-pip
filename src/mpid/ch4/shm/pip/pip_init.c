@@ -13,7 +13,7 @@
 #include <numa.h>
 #include <sched.h>
 
-void MPI_Get_stealing_profile_data(int **pri_idle_process, int **pri_avail_tasks)
+__attribute__ ((visibility ("default"))) void MPI_Get_stealing_profile_data(int **pri_idle_process, int **pri_avail_tasks)
 {
     *pri_idle_process = shm_idle_process;
     *pri_avail_tasks = shm_avail_tasks;
