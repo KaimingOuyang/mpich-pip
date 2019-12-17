@@ -108,7 +108,10 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_one_task(MPIDI_PIP_task_queue_t * t
         if (task)
             MPIDI_PIP_do_task_copy(task);
     }
-    MPIDI_PIP_fflush_compl_task(compl_queue);
+
+    MPIDI_PIP_task_t *old_head = compl_queue->head;
+    while (old_head != NULL && old_head == compl_queue->head)
+        MPIDI_PIP_fflush_compl_task(compl_queue);
     return;
 }
 
@@ -127,15 +130,21 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_fflush_task()
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
 {
 #ifdef MPIDI_PIP_STEALING_ENABLE
-    int victim = rand() % MPIDI_PIP_global.num_local;
+    int numa_id = MPIDI_PIP_global.local_numa_id;
+    int numa_num_procs = MPIDI_PIP_global.numa_num_procs[numa_id];
+    int victim = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][rand() % numa_num_procs];
     MPIDI_PIP_task_t *task = NULL;
 
     if (victim != MPIDI_PIP_global.local_rank) {
         MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
         if (victim_queue->head) {
             MPIDI_PIP_Task_safe_dequeue(victim_queue, &task);
+
             if (task) {
-                // printf("rank %d - I am stealing process %d, task data_sz %ld\n", MPIDI_PIP_global.local_rank, victim, task->data_sz);
+                // printf("rank %d - victim %d, task data_sz %ld, victim_numa_id %d, my_numa_id %d\n",
+                //        MPIDI_PIP_global.local_rank, victim, task->data_sz,
+                //        MPIDI_PIP_global.pip_global_array[victim]->local_numa_id,
+                //        MPIDI_PIP_global.local_numa_id);
                 // fflush(stdout);
                 MPIDI_PIP_do_task_copy(task);
             }
