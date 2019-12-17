@@ -25,6 +25,7 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 typedef struct MPIDI_PIP_task {
     MPIR_OBJECT_HEADER;
     int compl_flag;
+    int locality;
 
     void *src_buf;
     void *dest_buf;
@@ -55,6 +56,13 @@ typedef struct MPIDI_PIP_global {
 
     /* Info structures */
     struct MPIDI_PIP_global **pip_global_array;
+
+    /* NUMA info */
+    int **numa_cores_to_ranks;
+    int *numa_num_procs;
+
+    /* finalized procs cnt */
+    OPA_int_t fin_procs;
 } MPIDI_PIP_global_t;
 
 typedef struct {

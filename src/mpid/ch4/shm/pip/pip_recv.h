@@ -13,9 +13,10 @@
 #include "pip_impl.h"
 
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_task(MPIDI_PIP_task_t * task, void *src_buf,
-                                                  size_t copy_sz, void *dest_buf)
+                                                  size_t copy_sz, void *dest_buf, int locality)
 {
     task->compl_flag = 0;
+    task->locality = locality;
     task->src_buf = src_buf;
     task->dest_buf = dest_buf;
 
@@ -30,14 +31,9 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_lmt_rts_recv_enqueue_tasks(char *src_buf
 {
     uint64_t copy_sz;
     do {
-        if (data_sz < MPIDI_PIP_LAST_PKT_THRESHOLD) {
+        if (data_sz <= MPIDI_PIP_LAST_PKT_THRESHOLD) {
             /* Last packet, I need to copy it myself. */
             copy_sz = data_sz;
-            MPIR_Memcpy((void *) dest_buf, (void *) src_buf, copy_sz);
-
-        } else if (data_sz < MPIDI_PIP_SEC_LAST_PKT_THRESHOLD) {
-            /* Second last packet, I need to copy it myself and flush all previous tasks. */
-            copy_sz = MPIDI_PIP_PKT_SIZE;
             MPIR_Memcpy((void *) dest_buf, (void *) src_buf, copy_sz);
             MPIDI_PIP_fflush_task();
             while (MPIDI_PIP_global.compl_queue->head)
@@ -47,7 +43,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_lmt_rts_recv_enqueue_tasks(char *src_buf
             MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
 
             copy_sz = MPIDI_PIP_PKT_SIZE;
-            MPIDI_PIP_init_task(task, src_buf, copy_sz, dest_buf);
+            MPIDI_PIP_init_task(task, src_buf, copy_sz, dest_buf, MPIDI_PIP_global.local_numa_id);
             MPIDI_PIP_Task_safe_enqueue(MPIDI_PIP_global.task_queue, task);
             MPIDI_PIP_Compl_task_enqueue(MPIDI_PIP_global.compl_queue, task);
 
@@ -58,7 +54,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_lmt_rts_recv_enqueue_tasks(char *src_buf
         src_buf += copy_sz;
         dest_buf += copy_sz;
         data_sz -= copy_sz;
-    } while (data_sz);
+    } while (data_sz > 0);
     return;
 }
 
