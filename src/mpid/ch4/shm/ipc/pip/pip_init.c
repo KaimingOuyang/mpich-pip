@@ -12,6 +12,7 @@
 
 #include <numa.h>
 #include <sched.h>
+#include <sys/sysinfo.h>
 
 int MPIDI_PIP_mpi_init_task_queue(MPIDI_PIP_task_queue_t * task_queue)
 {
@@ -41,12 +42,32 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     MPIDI_PIP_global.local_rank = MPIR_Process.local_rank;
     MPIDI_PIP_global.rank = rank;
 
-    /* NUMA info */
+    /* bind rank to cpu */
+    int num_numa_node = numa_num_task_nodes();
+    char *MODE = getenv("BIND_MODE");
+
+    if(strcmp(MODE, "INTER-P2P") == 0){
+        int cpus_per_numa = get_nprocs() / num_numa_node;
+        if(rank == 1){
+            // printf("cpus/numa - %d\n", cpus_per_numa);
+            cpu_set_t mask;
+            CPU_ZERO(&mask);
+            CPU_SET(cpus_per_numa, &mask);
+            sched_setaffinity(getpid(), sizeof(cpu_set_t), &mask);
+        }else if(rank == cpus_per_numa){
+            cpu_set_t mask;
+            CPU_ZERO(&mask);
+            CPU_SET(1, &mask);
+            sched_setaffinity(getpid(), sizeof(cpu_set_t), &mask);
+        }
+    }
+
+     /* NUMA info */
     int cpu = sched_getcpu();
     int local_numa_id = numa_node_of_cpu(cpu);
-    int num_numa_node = numa_num_task_nodes();
     MPIDI_PIP_global.num_numa_node = num_numa_node;
     MPIDI_PIP_global.local_numa_id = local_numa_id;
+
     /* Get NUMA info */
     MPIR_CHKPMEM_MALLOC(MPIDI_PIP_global.numa_cores_to_ranks, int **,
                         sizeof(int *) * num_numa_node, mpi_errno, "num numa array", MPL_MEM_SHM);
@@ -74,28 +95,29 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     }
     MPIDU_Init_shm_barrier();
 
-    if (rank == 0) {
-        for (i = 0; i < num_numa_node; ++i) {
-            printf("NUMA %d [number %d] - ", i, MPIDI_PIP_global.numa_num_procs[i]);
-            int j;
-            for (j = 0; j < MPIDI_PIP_global.numa_num_procs[i]; ++j) {
-                printf("%d ", MPIDI_PIP_global.numa_cores_to_ranks[i][j]);
-            }
-            printf("\n");
-        }
-    }
+    /* Debug */
+    // if (rank == 0) {
+    //     for (i = 0; i < num_numa_node; ++i) {
+    //         printf("NUMA %d [number %d] - ", i, MPIDI_PIP_global.numa_num_procs[i]);
+    //         int j;
+    //         for (j = 0; j < MPIDI_PIP_global.numa_num_procs[i]; ++j) {
+    //             printf("%d ", MPIDI_PIP_global.numa_cores_to_ranks[i][j]);
+    //         }
+    //         printf("\n");
+    //     }
+    // }
 
-    MPIDU_Init_shm_barrier();
-    if (rank == 1) {
-        for (i = 0; i < num_numa_node; ++i) {
-            printf("NUMA %d [number %d] - ", i, MPIDI_PIP_global.numa_num_procs[i]);
-            int j;
-            for (j = 0; j < MPIDI_PIP_global.numa_num_procs[i]; ++j) {
-                printf("%d ", MPIDI_PIP_global.numa_cores_to_ranks[i][j]);
-            }
-            printf("\n");
-        }
-    }
+    // MPIDU_Init_shm_barrier();
+    // if (rank == 1) {
+    //     for (i = 0; i < num_numa_node; ++i) {
+    //         printf("NUMA %d [number %d] - ", i, MPIDI_PIP_global.numa_num_procs[i]);
+    //         int j;
+    //         for (j = 0; j < MPIDI_PIP_global.numa_num_procs[i]; ++j) {
+    //             printf("%d ", MPIDI_PIP_global.numa_cores_to_ranks[i][j]);
+    //         }
+    //         printf("\n");
+    //     }
+    // }
 
     /* Allocate task queue */
     MPIR_CHKPMEM_MALLOC(MPIDI_PIP_global.task_queue, MPIDI_PIP_task_queue_t *,
