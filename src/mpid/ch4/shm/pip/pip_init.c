@@ -51,15 +51,15 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     int num_numa_node = numa_num_task_nodes();
     char *MODE = getenv("BIND_MODE");
 
-    if(strcmp(MODE, "INTER-P2P") == 0){
+    if (strcmp(MODE, "INTER-P2P") == 0) {
         int cpus_per_numa = get_nprocs() / num_numa_node;
-        if(rank == 1){
+        if (rank == 1) {
             // printf("cpus/numa - %d\n", cpus_per_numa);
             cpu_set_t mask;
             CPU_ZERO(&mask);
             CPU_SET(cpus_per_numa, &mask);
             sched_setaffinity(getpid(), sizeof(cpu_set_t), &mask);
-        }else if(rank == cpus_per_numa){
+        } else if (rank == cpus_per_numa) {
             cpu_set_t mask;
             CPU_ZERO(&mask);
             CPU_SET(1, &mask);
@@ -67,7 +67,7 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
         }
     }
 
-     /* NUMA info */
+    /* NUMA info */
     int cpu = sched_getcpu();
     int local_numa_id = numa_node_of_cpu(cpu);
     MPIDI_PIP_global.num_numa_node = num_numa_node;
@@ -183,8 +183,8 @@ int MPIDI_PIP_mpi_finalize_hook(void)
     OPA_add_int(&MPIDI_PIP_global.pip_global_array[0]->fin_procs, 1);
     while (OPA_load_int(&MPIDI_PIP_global.pip_global_array[0]->fin_procs) !=
            MPIDI_PIP_global.num_local);
-    printf("rank %d - finalize pip\n", MPIDI_PIP_global.local_rank);
-    fflush(stdout);
+    // printf("rank %d - finalize pip\n", MPIDI_PIP_global.local_rank);
+    // fflush(stdout);
     MPIR_Assert(MPIDI_PIP_global.task_queue->task_num == 0);
     MPL_free(MPIDI_PIP_global.task_queue);
 
