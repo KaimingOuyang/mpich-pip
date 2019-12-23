@@ -93,8 +93,12 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_fflush_compl_task(MPIDI_PIP_task_queue_t
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_do_task_copy(MPIDI_PIP_task_t * task)
 {
     /* Note: now we only consider contiguous data copy */
+    int task_kind = task->task_kind;
+    int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
+    MPIDI_PIP_global.local_copy_state[task_kind][numa_local_rank] = 1;
     MPIR_Memcpy(task->dest_buf, task->src_buf, task->data_sz);
     OPA_write_barrier();
+    MPIDI_PIP_global.local_copy_state[task_kind][numa_local_rank] = 0;
     task->compl_flag = 1;
     return;
 }
@@ -126,6 +130,58 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_fflush_task()
     return;
 }
 
+MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_Task_safe_dequeue_and_thd_test(MPIDI_PIP_task_queue_t *
+                                                                       task_queue,
+                                                                       int numa_num_procs,
+                                                                       int cur_rmt_stealing_procs,
+                                                                       MPIDI_PIP_global_t *
+                                                                       victim_pip_global,
+                                                                       MPIDI_PIP_task_t ** task)
+{
+    int err;
+    MPIDI_PIP_task_t *old_head;
+    int i;
+    int cur_local_intra_copy = 0;
+    int cur_local_inter_copy = 0;
+    int **local_copy_array = victim_pip_global->local_copy_state;
+    int *local_idle_array = victim_pip_global->local_idle_state;
+    for (i = 0; i < numa_num_procs; ++i) {
+        /* intra local copy */
+        if (local_copy_array[MPIDI_PIP_INTRA_TASK][i] || local_idle_array[i])
+            cur_local_intra_copy++;
+        /* inter local copy */
+        if (local_copy_array[MPIDI_PIP_INTER_TASK][i])
+            cur_local_inter_copy++;
+    }
+
+    if (cur_local_intra_copy < MPIDI_PIP_upperbound_threshold[MPIDI_PIP_INTRA_TASK] &&
+        cur_rmt_stealing_procs < MPIDI_RMT_COPY_PROCS_THRESHOLD &&
+        (cur_rmt_stealing_procs + cur_local_inter_copy) <
+        MPIDI_PIP_thp_map[MPIDI_PIP_INTRA_TASK][cur_local_intra_copy]) {
+        MPID_Thread_mutex_lock(&task_queue->lock, &err);
+        old_head = task_queue->head;
+        if (old_head) {
+            // int task_kind = old_head->task_kind;
+            // printf("rmt rank %d - victim %d, cur_local_intra_copy %d (threshold %d), "
+            //        " cur_local_inter_copy %d, cur_rmt_stealing_procs %d (threshold %d)\n",
+            //        MPIDI_PIP_global.local_rank, victim_pip_global->local_rank, cur_local_intra_copy,
+            //        MPIDI_PIP_upperbound_threshold[MPIDI_PIP_INTRA_TASK], cur_local_inter_copy,
+            //        cur_rmt_stealing_procs,
+            //        MPIDI_PIP_thp_map[MPIDI_PIP_INTRA_TASK][cur_local_intra_copy]);
+            // fflush(stdout);
+            task_queue->head = old_head->task_next;
+            if (task_queue->head == NULL)
+                task_queue->tail = NULL;
+            task_queue->task_num--;
+        }
+        MPID_Thread_mutex_unlock(&task_queue->lock, &err);
+    } else
+        old_head = NULL;
+
+    *task = old_head;
+    return;
+}
+
 /* Stealing procedure */
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
 {
@@ -153,22 +209,34 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
         }
     }
 
+    /* check whether local tasks exists */
+    int i, j;
+    for (i = 0; i < numa_num_procs; ++i) {
+        j = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][i];
+        if (MPIDI_PIP_global.task_queue_array[j]->head)
+            return;
+    }
+
     /* remote stealing */
     numa_id = rand() % MPIDI_PIP_global.num_numa_node;
     numa_num_procs = MPIDI_PIP_global.numa_num_procs[numa_id];
+
     if (numa_num_procs != 0 && numa_id != MPIDI_PIP_global.local_numa_id) {
         victim = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][rand() % numa_num_procs];
         MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
+
         if (victim_queue->head) {
-            // printf("remote stealing rank %d - victim %d, victim_numa_id %d, my_numa_id %d\n",
-            //        MPIDI_PIP_global.local_rank, victim,
-            //        MPIDI_PIP_global.pip_global_array[victim]->local_numa_id,
-            //        MPIDI_PIP_global.local_numa_id);
-            // fflush(stdout);
-            MPIDI_PIP_Task_safe_dequeue(victim_queue, &task);
+            MPIDI_PIP_global_t *victim_pip_global = MPIDI_PIP_global.pip_global_array[victim];
+            int cur_rmt_stealing_procs =
+                OPA_fetch_and_add_int(victim_pip_global->rmt_steal_procs_ptr, 1);
+            MPIDI_PIP_Task_safe_dequeue_and_thd_test(victim_queue, numa_num_procs,
+                                                     cur_rmt_stealing_procs, victim_pip_global,
+                                                     &task);
+            // task = NULL;
             if (task) {
                 MPIDI_PIP_do_task_copy(task);
             }
+            OPA_decr_int(victim_pip_global->rmt_steal_procs_ptr);
         }
     }
 #endif /* MPIDI_PIP_STEALING_ENABLE */
