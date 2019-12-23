@@ -35,7 +35,7 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
 
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_PIP_INIT_HOOK);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_PIP_INIT_HOOK);
-    MPIR_CHKPMEM_DECL(6);
+    MPIR_CHKPMEM_DECL(7);
 
 #ifdef MPL_USE_DBG_LOGGING
     extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
@@ -43,9 +43,21 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
 #endif /* MPL_USE_DBG_LOGGING */
 
     int num_local = MPIR_Process.local_size;
+    int local_rank = MPIR_Process.local_rank;
     MPIDI_PIP_global.num_local = num_local;
-    MPIDI_PIP_global.local_rank = MPIR_Process.local_rank;
+    MPIDI_PIP_global.local_rank = local_rank;
     MPIDI_PIP_global.rank = rank;
+
+    /* Share MPIDI_PIP_global for future information inquiry purpose */
+    uint64_t pip_global_addr = (uint64_t) & MPIDI_PIP_global;
+    MPIDU_Init_shm_put(&pip_global_addr, sizeof(MPIDI_PIP_global_t *));
+    MPIDU_Init_shm_barrier();
+    MPIR_CHKPMEM_MALLOC(MPIDI_PIP_global.pip_global_array, MPIDI_PIP_global_t **,
+                        sizeof(MPIDI_PIP_global_t *) * num_local,
+                        mpi_errno, "pip global array", MPL_MEM_SHM);
+    for (i = 0; i < num_local; i++)
+        MPIDU_Init_shm_get(i, sizeof(MPIDI_PIP_global_t *), &MPIDI_PIP_global.pip_global_array[i]);
+    MPIDU_Init_shm_barrier();
 
     /* bind rank to cpu */
     int num_numa_node = numa_num_task_nodes();
@@ -53,13 +65,13 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
 
     if (strcmp(MODE, "INTER-P2P") == 0) {
         int cpus_per_numa = get_nprocs() / num_numa_node;
-        if (rank == 1) {
+        if (local_rank == 1) {
             // printf("cpus/numa - %d\n", cpus_per_numa);
             cpu_set_t mask;
             CPU_ZERO(&mask);
             CPU_SET(cpus_per_numa, &mask);
             sched_setaffinity(getpid(), sizeof(cpu_set_t), &mask);
-        } else if (rank == cpus_per_numa) {
+        } else if (local_rank == cpus_per_numa) {
             cpu_set_t mask;
             CPU_ZERO(&mask);
             CPU_SET(1, &mask);
@@ -95,10 +107,43 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     for (i = 0; i < num_local; ++i) {
         int numa_id;
         MPIDU_Init_shm_get(i, sizeof(int), &numa_id);
+        if (i == local_rank)
+            MPIDI_PIP_global.numa_local_rank = MPIDI_PIP_global.numa_num_procs[numa_id];
         MPIDI_PIP_global.numa_cores_to_ranks[numa_id][MPIDI_PIP_global.numa_num_procs[numa_id]++] =
             i;
     }
     MPIDU_Init_shm_barrier();
+
+    MPIDI_PIP_global.numa_root_rank = MPIDI_PIP_global.numa_cores_to_ranks[local_numa_id][0];
+
+    int local_root = MPIDI_PIP_global.numa_root_rank;
+    if (local_root == local_rank) {
+        /* root process in eahc NUMA node */
+        OPA_store_int(&MPIDI_PIP_global.rmt_steal_procs, 0);
+        for (i = 0; i < MPIDI_STEALING_CASE; ++i) {
+            MPIDI_PIP_global.local_copy_state[i] =
+                (int *) MPL_malloc(sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id],
+                                   MPL_MEM_OTHER);
+            memset(MPIDI_PIP_global.local_copy_state[i], 0,
+                   sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id]);
+        }
+
+        MPIDI_PIP_global.local_idle_state =
+            (int *) MPL_malloc(sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id],
+                               MPL_MEM_OTHER);
+        memset(MPIDI_PIP_global.local_idle_state, 0,
+               sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id]);
+        MPIDU_Init_shm_barrier();
+    } else {
+        MPIDU_Init_shm_barrier();
+        for (i = 0; i < MPIDI_STEALING_CASE; ++i)
+            MPIDI_PIP_global.local_copy_state[i] =
+                MPIDI_PIP_global.pip_global_array[local_root]->local_copy_state[i];
+        MPIDI_PIP_global.local_idle_state =
+            MPIDI_PIP_global.pip_global_array[local_root]->local_idle_state;
+    }
+    MPIDI_PIP_global.rmt_steal_procs_ptr =
+        &MPIDI_PIP_global.pip_global_array[local_root]->rmt_steal_procs;
 
     /* Debug */
     // if (rank == 0) {
@@ -147,20 +192,10 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
                            &MPIDI_PIP_global.task_queue_array[i]);
     MPIDU_Init_shm_barrier();
 
-    /* Share MPIDI_PIP_global for future information inquiry purpose */
-    uint64_t pip_global_addr = (uint64_t) & MPIDI_PIP_global;
-    MPIDU_Init_shm_put(&pip_global_addr, sizeof(MPIDI_PIP_global_t *));
-    MPIDU_Init_shm_barrier();
-    MPIR_CHKPMEM_MALLOC(MPIDI_PIP_global.pip_global_array, MPIDI_PIP_global_t **,
-                        sizeof(MPIDI_PIP_global_t *) * num_local,
-                        mpi_errno, "pip global array", MPL_MEM_SHM);
-    for (i = 0; i < num_local; i++)
-        MPIDU_Init_shm_get(i, sizeof(MPIDI_PIP_global_t *), &MPIDI_PIP_global.pip_global_array[i]);
-    MPIDU_Init_shm_barrier();
-
     /* one-time barrier */
     OPA_store_int(&MPIDI_PIP_global.fin_procs, 0);
     MPIDU_Init_shm_barrier();
+    MPIDI_PIP_global.fin_procs_ptr = &MPIDI_PIP_global.pip_global_array[0]->fin_procs;
 
     /* For stealing rand seeds */
     srand(time(NULL) + MPIDI_PIP_global.local_rank * MPIDI_PIP_global.local_rank);
@@ -180,9 +215,8 @@ int MPIDI_PIP_mpi_finalize_hook(void)
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_XPMEM_FINALIZE_HOOK);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_XPMEM_FINALIZE_HOOK);
 
-    OPA_add_int(&MPIDI_PIP_global.pip_global_array[0]->fin_procs, 1);
-    while (OPA_load_int(&MPIDI_PIP_global.pip_global_array[0]->fin_procs) !=
-           MPIDI_PIP_global.num_local);
+    OPA_add_int(MPIDI_PIP_global.fin_procs_ptr, 1);
+    while (OPA_load_int(MPIDI_PIP_global.fin_procs_ptr) != MPIDI_PIP_global.num_local);
     // printf("rank %d - finalize pip\n", MPIDI_PIP_global.local_rank);
     // fflush(stdout);
     MPIR_Assert(MPIDI_PIP_global.task_queue->task_num == 0);
@@ -193,6 +227,12 @@ int MPIDI_PIP_mpi_finalize_hook(void)
 
     MPL_free(MPIDI_PIP_global.task_queue_array);
     MPL_free(MPIDI_PIP_global.pip_global_array);
+
+    if (MPIDI_PIP_global.local_rank == MPIDI_PIP_global.numa_root_rank) {
+        for (i = 0; i < MPIDI_STEALING_CASE; ++i)
+            MPL_free(MPIDI_PIP_global.local_copy_state[i]);
+        MPL_free(MPIDI_PIP_global.local_idle_state);
+    }
 
     MPL_free(MPIDI_PIP_global.numa_num_procs);
     for (i = 0; i < MPIDI_PIP_global.num_numa_node; ++i)
