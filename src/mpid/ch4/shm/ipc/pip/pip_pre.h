@@ -20,10 +20,22 @@
 #define MPIDI_PIP_LAST_PKT_THRESHOLD MPIDI_PIP_PKT_SIZE /* 64KB */
 #define MPIDI_PIP_PKT_SIZE 65536        /* 64KB */
 
+#define MPIDI_INTRA_COPY_LOCAL_PROCS_THRESHOLD 5        /* #local process threshold for intra-NUMA copy on bebop */
+#define MPIDI_INTER_COPY_LOCAL_PROCS_THRESHOLD 8        /* #local process threshold for inter-NUMA copy on bebop */
+#define MPIDI_NUM_COPY_LOCAL_PROCS_ARRAY MPIDI_INTER_COPY_LOCAL_PROCS_THRESHOLD
+#define MPIDI_RMT_COPY_PROCS_THRESHOLD 5        /* max #remote process in stealing on bebop */
+#define MPIDI_PROC_COPY 1
+#define MPIDI_PROC_NOT_COPY 0
+
+/* Task kind */
+#define MPIDI_STEALING_CASE 2
+#define MPIDI_PIP_INTRA_TASK 0
+#define MPIDI_PIP_INTER_TASK 1
+
 typedef struct MPIDI_PIP_task {
     MPIR_OBJECT_HEADER;
     int compl_flag;
-    int locality;
+    int task_kind;
 
     void *src_buf;
     void *dest_buf;
@@ -56,11 +68,24 @@ typedef struct MPIDI_PIP_global {
     struct MPIDI_PIP_global **pip_global_array;
 
     /* NUMA info */
-    int **numa_cores_to_ranks;
-    int *numa_num_procs;
+    int **numa_cores_to_ranks;  /* map between core id to rank */
+    int *numa_num_procs;        /* #processes in each NUMA node */
+    int numa_root_rank;         /* rank of root process in my NUMA node */
+    int numa_local_rank;
 
     /* finalized procs cnt */
     OPA_int_t fin_procs;
+    OPA_int_t *fin_procs_ptr;
+
+    /* current #remote stealing processes */
+    OPA_int_t rmt_steal_procs;  /* #remote stealing processes, valid only in root process */
+    OPA_int_t *rmt_steal_procs_ptr;
+
+    /* copy state */
+    int *local_copy_state[MPIDI_STEALING_CASE]; /* copy state of processes in eahc NUMA node */
+    /* idle state */
+    int *local_idle_state;
+
 } MPIDI_PIP_global_t;
 
 typedef struct MPIDI_PIP_ipc_handle {
@@ -75,6 +100,8 @@ typedef struct MPIDI_PIP_am_request {
 
 extern MPIDI_PIP_global_t MPIDI_PIP_global;
 extern MPIR_Object_alloc_t MPIDI_Task_mem;
+extern const int MPIDI_PIP_upperbound_threshold[MPIDI_STEALING_CASE];
+extern const int MPIDI_PIP_thp_map[MPIDI_STEALING_CASE][MPIDI_NUM_COPY_LOCAL_PROCS_ARRAY];
 
 #define MPIDI_PIP_REQUEST(req, field)      ((req)->dev.ch4.am.shm_am.pip.field)
 
