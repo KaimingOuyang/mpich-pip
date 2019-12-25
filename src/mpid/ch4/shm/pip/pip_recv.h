@@ -31,6 +31,8 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_lmt_rts_recv_enqueue_tasks(char *src_buf
                                                                    int task_kind)
 {
     uint64_t copy_sz;
+    char *revs_src_buf = src_buf + data_sz;
+    char *revs_dest_buf = dest_buf + data_sz;
     do {
         if (data_sz <= MPIDI_PIP_LAST_PKT_THRESHOLD) {
             /* Last packet, I need to copy it myself. */
@@ -44,7 +46,9 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_lmt_rts_recv_enqueue_tasks(char *src_buf
             MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
 
             copy_sz = MPIDI_PIP_PKT_SIZE;
-            MPIDI_PIP_init_task(task, src_buf, copy_sz, dest_buf, task_kind);
+            revs_src_buf -= copy_sz;
+            revs_dest_buf -= copy_sz;
+            MPIDI_PIP_init_task(task, revs_src_buf, copy_sz, revs_dest_buf, task_kind);
             MPIDI_PIP_Task_safe_enqueue(MPIDI_PIP_global.task_queue, task);
             MPIDI_PIP_Compl_task_enqueue(MPIDI_PIP_global.compl_queue, task);
 
@@ -52,8 +56,6 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_lmt_rts_recv_enqueue_tasks(char *src_buf
                 MPIDI_PIP_exec_one_task(MPIDI_PIP_global.task_queue, MPIDI_PIP_global.compl_queue);
         }
 
-        src_buf += copy_sz;
-        dest_buf += copy_sz;
         data_sz -= copy_sz;
     } while (data_sz > 0);
     return;
@@ -83,8 +85,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_handle_lmt_rts_recv(uint64_t src_offset,
     if (dt_contig) {
         int task_kind =
             MPIDI_PIP_global.local_numa_id ==
-            MPIDI_PIP_global.
-            pip_global_array[src_lrank]->local_numa_id ? MPIDI_PIP_INTRA_TASK :
+            MPIDI_PIP_global.pip_global_array[src_lrank]->local_numa_id ? MPIDI_PIP_INTRA_TASK :
             MPIDI_PIP_INTER_TASK;
 
         /* Note: for now, just consider contiguous stealing [Need to fix this issue] */
