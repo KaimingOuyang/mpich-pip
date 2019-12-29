@@ -21,6 +21,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_lmt_rts_isend(const void *buf, MPI_Aint c
     size_t data_sz;
     MPI_Aint true_lb;
     bool is_contig;
+    MPIR_Datatype *src_datatype = NULL;
     MPIDI_SHM_ctrl_hdr_t ctrl_hdr;
     MPIDI_SHM_ctrl_pip_send_lmt_rts_t *slmt_rts_hdr = &ctrl_hdr.pip_slmt_rts;
 
@@ -32,14 +33,21 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_lmt_rts_isend(const void *buf, MPI_Aint c
     *request = sreq;
 
     MPIDI_Datatype_check_contig_size_lb(datatype, count, is_contig, data_sz, true_lb);
+    MPIR_Datatype_get_ptr(datatype, src_datatype);
 
-    MPIR_Assert(is_contig && data_sz > 0);
+    MPIR_Assert(data_sz > MPIR_CVAR_CH4_PIP_LMT_MSG_SIZE);
 
-    /* XPMEM internal info */
-    slmt_rts_hdr->src_offset = (uint64_t) buf + true_lb;
+    /* pip internal info */
+    if (is_contig)
+        slmt_rts_hdr->src_offset = (uint64_t) buf + true_lb;
+    else
+        slmt_rts_hdr->src_offset = (uint64_t) buf;
     slmt_rts_hdr->data_sz = data_sz;
     slmt_rts_hdr->sreq_ptr = (uint64_t) sreq;
     slmt_rts_hdr->src_lrank = MPIDI_PIP_global.local_rank;
+    slmt_rts_hdr->is_contig = is_contig;
+    slmt_rts_hdr->src_dt_ptr = src_datatype;
+    slmt_rts_hdr->src_count = count;
 
     /* message matching info */
     slmt_rts_hdr->src_rank = comm->rank;

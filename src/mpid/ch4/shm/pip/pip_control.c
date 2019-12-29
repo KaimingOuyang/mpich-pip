@@ -84,9 +84,11 @@ int MPIDI_PIP_ctrl_send_lmt_rts_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr)
         MPIDIG_REQUEST(rreq, context_id) = slmt_rts_hdr->context_id;
 
         /* Complete XPMEM receive */
-        mpi_errno = MPIDI_PIP_handle_lmt_rts_recv(slmt_rts_hdr->src_offset, slmt_rts_hdr->data_sz,
-                                                  slmt_rts_hdr->sreq_ptr, slmt_rts_hdr->src_lrank,
-                                                  rreq);
+        mpi_errno = MPIDI_PIP_handle_lmt_rts_recv(slmt_rts_hdr->src_offset, slmt_rts_hdr->src_count,
+                                                  slmt_rts_hdr->data_sz,
+                                                  slmt_rts_hdr->sreq_ptr, slmt_rts_hdr->is_contig,
+                                                  slmt_rts_hdr->src_dt_ptr,
+                                                  slmt_rts_hdr->src_lrank, rreq);
         MPIR_ERR_CHECK(mpi_errno);
     } else {
         /* Enqueue unexpected receive request */
@@ -107,6 +109,10 @@ int MPIDI_PIP_ctrl_send_lmt_rts_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr)
         MPIDI_PIP_REQUEST(rreq, unexp_rreq).data_sz = slmt_rts_hdr->data_sz;
         MPIDI_PIP_REQUEST(rreq, unexp_rreq).sreq_ptr = slmt_rts_hdr->sreq_ptr;
         MPIDI_PIP_REQUEST(rreq, unexp_rreq).src_lrank = slmt_rts_hdr->src_lrank;
+        MPIDI_PIP_REQUEST(rreq, unexp_rreq).is_contig = slmt_rts_hdr->is_contig;
+        MPIDI_PIP_REQUEST(rreq, unexp_rreq).src_dt_ptr = slmt_rts_hdr->src_dt_ptr;
+        MPIDI_PIP_REQUEST(rreq, unexp_rreq).src_count = slmt_rts_hdr->src_count;
+        
         MPIDI_SHM_REQUEST(rreq, status) |= MPIDI_SHM_REQ_PIP_SEND_LMT;
 
         if (root_comm) {

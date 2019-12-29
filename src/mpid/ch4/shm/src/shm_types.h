@@ -48,10 +48,13 @@ typedef struct MPIDI_SHM_ctrl_xpmem_send_lmt_ack {
 /* PIP structure definitions */
 #ifdef MPIDI_CH4_SHM_ENABLE_PIP
 typedef struct MPIDI_SHM_ctrl_pip_send_lmt_rts {
-    uint64_t src_offset;        /* send data starting address (buffer + true_lb) */
+    uint64_t src_offset;        /* send data starting address (buffer + true_lb) or buffer (non-contig) */
     uint64_t data_sz;           /* data size in bytes */
     uint64_t sreq_ptr;          /* send request pointer */
     int src_lrank;              /* sender rank on local node */
+    int is_contig;              /* indicate the contiguity of data */
+    MPIR_Datatype *src_dt_ptr;
+    MPI_Aint src_count;
 
     /* matching info */
     int src_rank;

@@ -30,8 +30,14 @@ const int MPIDI_PIP_thp_map[MPIDI_STEALING_CASE][MPIDI_NUM_COPY_LOCAL_PROCS_ARRA
 MPIDI_PIP_global_t MPIDI_PIP_global;
 
 MPIDI_PIP_task_t MPIDI_Task_direct[MPIDI_TASK_PREALLOC] = { 0 };
+MPIDI_PIP_cell_t MPIDI_Cell_direct[MPIDI_CELL_PREALLOC] = { 0 };
 
 MPIR_Object_alloc_t MPIDI_Task_mem = {
     0, 0, 0, 0, MPIDI_TASK, sizeof(MPIDI_PIP_task_t), MPIDI_Task_direct,
     MPIDI_TASK_PREALLOC
+};
+
+MPIR_Object_alloc_t MPIDI_Cell_mem = {
+    0, 0, 0, 0, MPIDI_TASK, sizeof(MPIDI_PIP_cell_t), MPIDI_Cell_direct,
+    MPIDI_CELL_PREALLOC
 };

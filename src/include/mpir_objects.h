@@ -157,9 +157,10 @@ typedef enum MPII_Object_kind {
     MPIR_VCONN = 0xd,
     MPIR_WORKQ_ELEM = 0xe,      /* Work queue element, currently only meaningful in CH4 */
     MPIR_GREQ_CLASS = 0xf,
-    MPIR_XPMEM_SEG = 0x10,      /* XPMEM segment, only meaningful in CH4
+    MPIR_XPMEM_SEG = 0x0,       /* XPMEM segment, only meaningful in CH4
                                  * when XPMEM shmmod is enabled */
-    MPIDI_TASK = 0x11
+    MPIDI_TASK = 0x0,
+    MPIDI_CELL = 0x0,
 } MPII_Object_kind;
 
 
