@@ -17,8 +17,7 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
     MPL_DBG_MSG_FMT(MPIDI_CH4_SHM_PIP_GENERAL,VERBOSE,(MPL_DBG_FDEST, "PIP "__VA_ARGS__))
 
 #define MPIDI_TASK_PREALLOC 64
-#define MPIDI_CELL_PREALLOC 60
-#define MPIDI_MAX_TASK_THRESHOLD 32
+#define MPIDI_MAX_TASK_THRESHOLD 60
 #define MPIDI_PIP_PKT_SIZE 65536        /* 64KB */
 #define MPIDI_PIP_L2_CACHE_THRESHOLD 131072     /* 64KB * 2 this size has two considerations, one is keeping head data in L2 cache in receiver, the other is reducing the chances of remote process stealing, lock contention and remote data access overhead that will slow down the copy due to small data_sz. */
 #define MPIDI_PIP_LAST_PKT_THRESHOLD MPIDI_PIP_PKT_SIZE /* 64KB */
@@ -44,8 +43,7 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 
 /* Complete status */
 #define MPIDI_PIP_NOT_COMPLETE  0
-#define MPIDI_PIP_NEED_UNPACK   1
-#define MPIDI_PIP_COMPLETE      2
+#define MPIDI_PIP_COMPLETE      1
 
 typedef struct MPIDI_PIP_cell {
     MPIR_OBJECT_HEADER;
@@ -75,8 +73,6 @@ typedef struct MPIDI_PIP_task {
     MPI_Aint dest_count;
     MPIR_Datatype *dest_dt_ptr;
     size_t dest_offset;
-
-    MPIDI_PIP_cell_t *cell;
 } MPIDI_PIP_task_t;
 
 typedef struct MPIDI_PIP_task_queue {
@@ -98,7 +94,6 @@ typedef struct MPIDI_PIP_global {
     MPIDI_PIP_task_queue_t *task_queue;
     MPIDI_PIP_task_queue_t **task_queue_array;
     MPIDI_PIP_task_queue_t *compl_queue;
-    MPIDI_PIP_task_queue_t *intermediate_queue;
 
     /* Info structures */
     struct MPIDI_PIP_global **pip_global_array;
@@ -122,6 +117,8 @@ typedef struct MPIDI_PIP_global {
     /* idle state */
     int *local_idle_state;
 
+    /* pack/unpack load for stealing */
+    char pkt_load[MPIDI_PIP_PKT_SIZE];
 } MPIDI_PIP_global_t;
 
 typedef struct {

@@ -16,7 +16,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_memcpy_task(MPIDI_PIP_task_t * task
                                                          size_t copy_sz, void *dest_buf,
                                                          int task_kind)
 {
-    task->compl_flag = 0;
+    task->compl_flag = MPIDI_PIP_NOT_COMPLETE;
     task->task_next = NULL;
     task->compl_next = NULL;
 
@@ -69,7 +69,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_pack_task(MPIDI_PIP_task_t * task, 
                                                        MPIR_Datatype * src_dt_ptr, void *dest_buf,
                                                        MPI_Aint max_pack_bytes, int task_kind)
 {
-    task->compl_flag = 0;
+    task->compl_flag = MPIDI_PIP_NOT_COMPLETE;
     task->task_next = NULL;
     task->compl_next = NULL;
 
@@ -138,7 +138,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_unpack_task(MPIDI_PIP_task_t * task
                                                          MPI_Aint dest_count, MPI_Aint outoffset,
                                                          MPIR_Datatype * dest_dt_ptr, int task_kind)
 {
-    task->compl_flag = 0;
+    task->compl_flag = MPIDI_PIP_NOT_COMPLETE;
     task->task_next = NULL;
     task->compl_next = NULL;
 
@@ -243,7 +243,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_unpack_task_enqueue(void *src_buf,
     // printf("rank %d - pack/unpack src_dt_ptr->typerep %p\n", MPIDI_PIP_global.local_rank, src_dt_ptr->typerep);
     // fflush(stdout);
     MPIR_PIP_Type_dup(src_dt_ptr, &src_dt_dup);
-    
+
     MPIR_Datatype_get_ptr(src_dt_dup, src_dt_dup_ptr);
     MPIR_Datatype_get_ptr(dest_dt, dest_dt_ptr);
 
@@ -251,50 +251,45 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_unpack_task_enqueue(void *src_buf,
     // fflush(stdout);
     /* pack enqueue */
     do {
-        if (data_sz < MPIDI_PIP_PKT_SIZE)
+        if (data_sz <= MPIDI_PIP_LAST_PKT_THRESHOLD) {
+            MPI_Aint actual_bytes;
+
             copy_sz = data_sz;
-        else
-            copy_sz = MPIDI_PIP_PKT_SIZE;
+            MPIR_Typerep_pack(src_buf, src_count, src_dt_dup, 0, MPIDI_PIP_global.pkt_load, copy_sz,
+                              &actual_bytes);
+            MPIR_Assert(actual_bytes == copy_sz);
 
-        MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
-        MPIDI_PIP_cell_t *cell = (MPIDI_PIP_cell_t *) MPIR_Handle_obj_alloc(&MPIDI_Cell_mem);
-
-        inoffset -= copy_sz;
-        outoffset -= copy_sz;
-
-        MPIDI_PIP_init_pack_unpack_task(task, src_buf, src_count, inoffset, src_dt_dup_ptr,
-                                        dest_buf, dest_count, outoffset, dest_dt_ptr, copy_sz,
-                                        task_kind);
-        task->cell = cell;
-
-        MPIDI_PIP_Task_safe_enqueue(MPIDI_PIP_global.task_queue, task);
-        MPIDI_PIP_Compl_task_enqueue(MPIDI_PIP_global.intermediate_queue, task);
-
-        if (MPIDI_PIP_global.compl_queue->task_num >= MPIDI_MAX_TASK_THRESHOLD) {
-            MPIDI_PIP_fflush_task();
-            while (MPIDI_PIP_global.intermediate_queue->head) {
-                MPIDI_PIP_fflush_intermediate_task(MPIDI_PIP_global.intermediate_queue);
-            }
+            MPIR_Typerep_unpack(MPIDI_PIP_global.pkt_load, copy_sz, dest_buf, dest_count, dest_dt,
+                                0, &actual_bytes);
+            MPIR_Assert(actual_bytes == copy_sz);
 
             MPIDI_PIP_fflush_task();
-            while (MPIDI_PIP_global.compl_queue->head) {
+            while (MPIDI_PIP_global.compl_queue->head)
                 MPIDI_PIP_fflush_compl_task(MPIDI_PIP_global.compl_queue);
+            MPIR_Type_free_impl(&src_dt_dup);
+        } else {
+            copy_sz = MPIDI_PIP_PKT_SIZE;
+            MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
+
+            inoffset -= copy_sz;
+            outoffset -= copy_sz;
+
+            MPIDI_PIP_init_pack_unpack_task(task, src_buf, src_count, inoffset, src_dt_dup_ptr,
+                                            dest_buf, dest_count, outoffset, dest_dt_ptr, copy_sz,
+                                            task_kind);
+
+            MPIDI_PIP_Task_safe_enqueue(MPIDI_PIP_global.task_queue, task);
+            MPIDI_PIP_Compl_task_enqueue(MPIDI_PIP_global.compl_queue, task);
+
+            if (MPIDI_PIP_global.compl_queue->task_num >= MPIDI_MAX_TASK_THRESHOLD) {
+                MPIDI_PIP_exec_one_task(MPIDI_PIP_global.task_queue, MPIDI_PIP_global.compl_queue);
             }
         }
 
         data_sz -= copy_sz;
     } while (data_sz > 0);
 
-    MPIDI_PIP_fflush_task();
-    while (MPIDI_PIP_global.intermediate_queue->head) {
-        MPIDI_PIP_fflush_intermediate_task(MPIDI_PIP_global.intermediate_queue);
-    }
 
-    MPIDI_PIP_fflush_task();
-    while (MPIDI_PIP_global.compl_queue->head) {
-        MPIDI_PIP_fflush_compl_task(MPIDI_PIP_global.compl_queue);
-    }
-    MPIR_Type_free_impl(&src_dt_dup);
     return;
 }
 
