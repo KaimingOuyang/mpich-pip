@@ -35,7 +35,7 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
 
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_PIP_INIT_HOOK);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_PIP_INIT_HOOK);
-    MPIR_CHKPMEM_DECL(7);
+    MPIR_CHKPMEM_DECL(6);
 
     int num_local = MPIR_Process.local_size;
     int local_rank = MPIR_Process.local_rank;
@@ -176,13 +176,6 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     mpi_errno = MPIDI_PIP_mpi_init_task_queue(MPIDI_PIP_global.compl_queue);
     MPIR_ERR_CHECK(mpi_errno);
 
-    /* Init local completion queue */
-    MPIR_CHKPMEM_MALLOC(MPIDI_PIP_global.intermediate_queue, MPIDI_PIP_task_queue_t *,
-                        sizeof(MPIDI_PIP_task_queue_t), mpi_errno, "pip intermediate queue",
-                        MPL_MEM_SHM);
-    mpi_errno = MPIDI_PIP_mpi_init_task_queue(MPIDI_PIP_global.intermediate_queue);
-    MPIR_ERR_CHECK(mpi_errno);
-
     /* Get task queue array */
     MPIDU_Init_shm_put(&MPIDI_PIP_global.task_queue, sizeof(MPIDI_PIP_task_queue_t *));
     MPIDU_Init_shm_barrier();
@@ -226,9 +219,6 @@ int MPIDI_PIP_mpi_finalize_hook(void)
 
     MPIR_Assert(MPIDI_PIP_global.compl_queue->task_num == 0);
     MPL_free(MPIDI_PIP_global.compl_queue);
-
-    MPIR_Assert(MPIDI_PIP_global.intermediate_queue->task_num == 0);
-    MPL_free(MPIDI_PIP_global.intermediate_queue);
 
     MPL_free(MPIDI_PIP_global.task_queue_array);
     MPL_free(MPIDI_PIP_global.pip_global_array);

@@ -156,31 +156,12 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_Compl_task_delete_head(MPIDI_PIP_task_que
     return mpi_errno;
 }
 
-MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_fflush_intermediate_task(MPIDI_PIP_task_queue_t *
-                                                                 intermediate_queue)
-{
-    MPIDI_PIP_task_t *task = intermediate_queue->head;
-    while (task && task->compl_flag) {
-        MPIDI_PIP_Compl_task_delete_head(intermediate_queue);
-        /* task is in intermediate queue */
-        task->task_next = NULL;
-        task->compl_next = NULL;
-        MPIDI_PIP_Task_safe_enqueue(MPIDI_PIP_global.task_queue, task);
-        MPIDI_PIP_Compl_task_enqueue(MPIDI_PIP_global.compl_queue, task);
-        task = intermediate_queue->head;
-    }
-    return;
-}
-
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_fflush_compl_task(MPIDI_PIP_task_queue_t * compl_queue)
 {
     MPIDI_PIP_task_t *task = compl_queue->head;
     while (task && task->compl_flag == MPIDI_PIP_COMPLETE) {
         MPIDI_PIP_Compl_task_delete_head(compl_queue);
-        if (task->copy_kind == MPIDI_PIP_PACK_UNPACK)
-            MPIR_Handle_obj_free(&MPIDI_Cell_mem, task->cell);
         MPIR_Handle_obj_free(&MPIDI_Task_mem, task);
-
         task = compl_queue->head;
     }
     return;
@@ -238,50 +219,47 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_self_task_unpack(MPIDI_PIP_task_t * task
 
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task_pack_unpack(MPIDI_PIP_task_t * task)
 {
-    if (task->compl_flag == MPIDI_PIP_NOT_COMPLETE) {
-        MPI_Datatype src_dt_dup;
-        MPI_Aint actual_bytes;
-        // printf("steal rank %d - pack task->src_dt_ptr->typerep %p\n", MPIDI_PIP_global.local_rank, task->src_dt_ptr->typerep);
-        // fflush(stdout);
-        MPIR_PIP_Type_dup(task->src_dt_ptr, &src_dt_dup);
-        // printf("steal rank %d - pack done\n", MPIDI_PIP_global.local_rank);
-        // fflush(stdout);
-        MPIR_Typerep_pack(task->src_buf, task->src_count, src_dt_dup, task->src_offset,
-                          task->cell->load, task->data_sz, &actual_bytes);
-        MPIR_Assert(actual_bytes == task->data_sz);
 
-        MPIR_Type_free_impl(&src_dt_dup);
-    } else {
-        MPI_Datatype dest_dt_dup;
-        MPI_Aint actual_bytes;
-        // printf("steal rank %d - unpack task->dest_dt_ptr->typerep %p\n", MPIDI_PIP_global.local_rank, task->dest_dt_ptr->typerep);
-        // fflush(stdout);
-        MPIR_PIP_Type_dup(task->dest_dt_ptr, &dest_dt_dup);
-        // printf("steal rank %d - unpack done\n", MPIDI_PIP_global.local_rank);
-        // fflush(stdout);
-        MPIR_Typerep_unpack(task->cell->load, task->data_sz, task->dest_buf, task->dest_count,
-                            dest_dt_dup, task->dest_offset, &actual_bytes);
-        MPIR_Assert(actual_bytes == task->data_sz);
+    MPI_Datatype src_dt_dup;
+    MPI_Datatype dest_dt_dup;
+    MPI_Aint actual_bytes;
+    // printf("steal rank %d - pack task->src_dt_ptr->typerep %p\n", MPIDI_PIP_global.local_rank, task->src_dt_ptr->typerep);
+    // fflush(stdout);
+    MPIR_PIP_Type_dup(task->src_dt_ptr, &src_dt_dup);
+    // printf("steal rank %d - pack done\n", MPIDI_PIP_global.local_rank);
+    // fflush(stdout);
+    MPIR_Typerep_pack(task->src_buf, task->src_count, src_dt_dup, task->src_offset,
+                      MPIDI_PIP_global.pkt_load, task->data_sz, &actual_bytes);
+    MPIR_Assert(actual_bytes == task->data_sz);
 
-        MPIR_Type_free_impl(&dest_dt_dup);
-    }
+    MPIR_Type_free_impl(&src_dt_dup);
+
+    // printf("steal rank %d - unpack task->dest_dt_ptr->typerep %p\n", MPIDI_PIP_global.local_rank, task->dest_dt_ptr->typerep);
+    // fflush(stdout);
+    MPIR_PIP_Type_dup(task->dest_dt_ptr, &dest_dt_dup);
+    // printf("steal rank %d - unpack done\n", MPIDI_PIP_global.local_rank);
+    // fflush(stdout);
+    MPIR_Typerep_unpack(MPIDI_PIP_global.pkt_load, task->data_sz, task->dest_buf, task->dest_count,
+                        dest_dt_dup, task->dest_offset, &actual_bytes);
+    MPIR_Assert(actual_bytes == task->data_sz);
+
+    MPIR_Type_free_impl(&dest_dt_dup);
 
     return;
 }
 
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_self_task_pack_unpack(MPIDI_PIP_task_t * task)
 {
-    if (task->compl_flag == MPIDI_PIP_NOT_COMPLETE) {
-        MPI_Aint actual_bytes;
-        MPIR_Typerep_pack(task->src_buf, task->src_count, task->src_dt_ptr->handle,
-                          task->src_offset, task->cell->load, task->data_sz, &actual_bytes);
-        MPIR_Assert(actual_bytes == task->data_sz);
-    } else {
-        MPI_Aint actual_bytes;
-        MPIR_Typerep_unpack(task->cell->load, task->data_sz, task->dest_buf, task->dest_count,
-                            task->dest_dt_ptr->handle, task->dest_offset, &actual_bytes);
-        MPIR_Assert(actual_bytes == task->data_sz);
-    }
+
+    MPI_Aint actual_bytes;
+    MPIR_Typerep_pack(task->src_buf, task->src_count, task->src_dt_ptr->handle,
+                      task->src_offset, MPIDI_PIP_global.pkt_load, task->data_sz, &actual_bytes);
+    MPIR_Assert(actual_bytes == task->data_sz);
+
+    MPIR_Typerep_unpack(MPIDI_PIP_global.pkt_load, task->data_sz, task->dest_buf, task->dest_count,
+                        task->dest_dt_ptr->handle, task->dest_offset, &actual_bytes);
+    MPIR_Assert(actual_bytes == task->data_sz);
+
 
     return;
 }
@@ -307,14 +285,9 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_do_task_copy(MPIDI_PIP_task_t * task)
             MPIDI_PIP_steal_task_pack_unpack(task);
             break;
     }
-
     OPA_write_barrier();
     MPIDI_PIP_global.local_copy_state[task_kind][numa_local_rank] = 0;
-    if (copy_kind == MPIDI_PIP_PACK_UNPACK && task->compl_flag == MPIDI_PIP_NOT_COMPLETE) {
-        task->compl_flag = MPIDI_PIP_NEED_UNPACK;
-    } else {
-        task->compl_flag = MPIDI_PIP_COMPLETE;
-    }
+    task->compl_flag = MPIDI_PIP_COMPLETE;
 
     return;
 }
@@ -343,12 +316,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_do_self_task_copy(MPIDI_PIP_task_t * tas
 
     OPA_write_barrier();
     MPIDI_PIP_global.local_copy_state[task_kind][numa_local_rank] = 0;
-    if (copy_kind == MPIDI_PIP_PACK_UNPACK && task->compl_flag == MPIDI_PIP_NOT_COMPLETE) {
-        task->compl_flag = MPIDI_PIP_NEED_UNPACK;
-    } else {
-        task->compl_flag = MPIDI_PIP_COMPLETE;
-    }
-
+    task->compl_flag = MPIDI_PIP_COMPLETE;
     return;
 }
 
