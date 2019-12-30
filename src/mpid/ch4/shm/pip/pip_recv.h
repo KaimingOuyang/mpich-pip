@@ -31,7 +31,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_lmt_rts_recv_enqueue_tasks(char *src_buf
 {
     uint64_t copy_sz;
     do {
-        if (data_sz <= MPIDI_PIP_LAST_PKT_THRESHOLD) {
+        if (data_sz <= MPIDI_PIP_global.pkt_size) {
             /* Last packet, I need to copy it myself. */
             copy_sz = data_sz;
             MPIR_Memcpy((void *) dest_buf, (void *) src_buf, copy_sz);
