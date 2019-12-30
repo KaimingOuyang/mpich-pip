@@ -63,6 +63,8 @@ typedef struct MPIDI_PIP_global {
 
     /* finalized procs cnt */
     OPA_int_t fin_procs;
+
+    size_t pkt_size;
 } MPIDI_PIP_global_t;
 
 typedef struct {

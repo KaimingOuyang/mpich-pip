@@ -42,7 +42,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_lmt_rts_recv_enqueue_tasks(char *src_buf
             /* I have a lot of tasks to do, enqueue tasks and hope others steal them. */
             MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
 
-            copy_sz = MPIDI_PIP_PKT_SIZE;
+            copy_sz = MPIDI_PIP_global.pkt_size;
             MPIDI_PIP_init_task(task, src_buf, copy_sz, dest_buf, MPIDI_PIP_global.local_numa_id);
             MPIDI_PIP_Task_safe_enqueue(MPIDI_PIP_global.task_queue, task);
             MPIDI_PIP_Compl_task_enqueue(MPIDI_PIP_global.compl_queue, task);
