@@ -37,7 +37,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_memcpy_task_enqueue(char *src_buf,
     char *revs_src_buf = src_buf + data_sz;
     char *revs_dest_buf = dest_buf + data_sz;
     do {
-        if (data_sz <= MPIDI_PIP_LAST_PKT_THRESHOLD) {
+        if (data_sz <= MPIDI_PIP_global.pkt_size) {
             /* Last packet, I need to copy it myself. */
             copy_sz = data_sz;
             MPIR_Memcpy((void *) dest_buf, (void *) src_buf, copy_sz);
@@ -48,7 +48,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_memcpy_task_enqueue(char *src_buf,
             /* I have a lot of tasks to do, enqueue tasks and hope others steal them. */
             MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
 
-            copy_sz = MPIDI_PIP_PKT_SIZE;
+            copy_sz = MPIDI_PIP_global.pkt_size;
             revs_src_buf -= copy_sz;
             revs_dest_buf -= copy_sz;
             MPIDI_PIP_init_memcpy_task(task, revs_src_buf, copy_sz, revs_dest_buf, task_kind);
@@ -104,7 +104,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_task_enqueue(void *src_buf,
     // printf("rank %d - END pack enqueue routine, src_dt_dup_ptr->typerep %p\n", MPIDI_PIP_global.local_rank, src_dt_dup_ptr->typerep);
     // fflush(stdout);
     do {
-        if (data_sz <= MPIDI_PIP_LAST_PKT_THRESHOLD) {
+        if (data_sz <= MPIDI_PIP_global.pkt_size) {
             MPI_Aint actual_bytes;
             copy_sz = data_sz;
             MPIR_Typerep_pack(src_buf, src_count, src_dt_dup, 0, dest_buf, copy_sz, &actual_bytes);
@@ -117,7 +117,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_task_enqueue(void *src_buf,
             MPIR_Type_free_impl(&src_dt_dup);
         } else {
             MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
-            copy_sz = MPIDI_PIP_PKT_SIZE;
+            copy_sz = MPIDI_PIP_global.pkt_size;
             inoffset -= copy_sz;
             revs_dest_buf -= copy_sz;
             MPIDI_PIP_init_pack_task(task, src_buf, src_count, inoffset, src_dt_dup_ptr,
@@ -166,7 +166,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_unpack_task_enqueue(char *src_buf,
     MPIR_Datatype *dest_dt_ptr;
     MPIR_Datatype_get_ptr(dest_dt, dest_dt_ptr);
     do {
-        if (data_sz <= MPIDI_PIP_LAST_PKT_THRESHOLD) {
+        if (data_sz <= MPIDI_PIP_global.pkt_size) {
             MPI_Aint actual_bytes;
             copy_sz = data_sz;
             MPIR_Typerep_unpack(src_buf, copy_sz, dest_buf, dest_count, dest_dt, 0, &actual_bytes);
@@ -178,7 +178,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_unpack_task_enqueue(char *src_buf,
                 MPIDI_PIP_fflush_compl_task(MPIDI_PIP_global.compl_queue);
         } else {
             MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
-            copy_sz = MPIDI_PIP_PKT_SIZE;
+            copy_sz = MPIDI_PIP_global.pkt_size;
             revs_src_buf -= copy_sz;
             outoffset -= copy_sz;
             MPIDI_PIP_init_unpack_task(task, revs_src_buf, copy_sz, dest_buf, dest_count, outoffset,
@@ -251,7 +251,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_unpack_task_enqueue(void *src_buf,
     // fflush(stdout);
     /* pack enqueue */
     do {
-        if (data_sz <= MPIDI_PIP_LAST_PKT_THRESHOLD) {
+        if (data_sz <= MPIDI_PIP_global.pkt_size) {
             MPI_Aint actual_bytes;
 
             copy_sz = data_sz;
@@ -268,7 +268,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_unpack_task_enqueue(void *src_buf,
                 MPIDI_PIP_fflush_compl_task(MPIDI_PIP_global.compl_queue);
             MPIR_Type_free_impl(&src_dt_dup);
         } else {
-            copy_sz = MPIDI_PIP_PKT_SIZE;
+            copy_sz = MPIDI_PIP_global.pkt_size;
             MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
 
             inoffset -= copy_sz;

@@ -119,6 +119,7 @@ typedef struct MPIDI_PIP_global {
 
     /* pack/unpack load for stealing */
     char pkt_load[MPIDI_PIP_PKT_SIZE];
+    size_t pkt_size;
 } MPIDI_PIP_global_t;
 
 typedef struct {

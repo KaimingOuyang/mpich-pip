@@ -79,6 +79,13 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
         }
     }
 
+    char *PKT_SIZE = getenv("PKT_SIZE");
+    if (PKT_SIZE) {
+        MPIDI_PIP_global.pkt_size = atol(PKT_SIZE);
+    } else {
+        MPIDI_PIP_global.pkt_size = MPIDI_PIP_PKT_SIZE;
+    }
+
     /* NUMA info */
     int cpu = sched_getcpu();
     int local_numa_id = numa_node_of_cpu(cpu);
