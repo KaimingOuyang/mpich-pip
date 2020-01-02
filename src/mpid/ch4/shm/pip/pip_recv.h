@@ -374,4 +374,108 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_handle_lmt_rts_recv(uint64_t src_offset, 
 }
 
 
+MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_pack(void *inbuf, MPI_Aint incount, MPI_Datatype datatype,
+                                            MPI_Aint inoffset,
+                                            void *outbuf, MPI_Aint max_pack_bytes,
+                                            MPI_Aint * actual_pack_bytes)
+{
+    int mpi_errno = MPI_SUCCESS;
+    MPI_Aint copy_sz, src_offset;
+    MPI_Aint data_sz, orig_data_sz;
+    MPIR_Datatype *src_dt_ptr;
+    char *revs_dest_buf;
+
+    MPIDI_Datatype_get_size_dt_ptr(incount, datatype, orig_data_sz, src_dt_ptr);
+    orig_data_sz = orig_data_sz - inoffset;
+    if (orig_data_sz > max_pack_bytes) {
+        mpi_errno = MPI_ERR_TRUNCATE;
+        data_sz = max_pack_bytes;
+    } else
+        data_sz = orig_data_sz;
+
+    *actual_pack_bytes = data_sz;
+    revs_dest_buf = outbuf + data_sz;
+    src_offset = data_sz + inoffset;
+    do {
+        if (data_sz <= MPIDI_PIP_LAST_PKT_THRESHOLD) {
+            MPI_Aint actual_bytes;
+            copy_sz = data_sz;
+            MPIR_Typerep_pack(inbuf, incount, datatype, inoffset, outbuf, copy_sz, &actual_bytes);
+            MPIR_Assert(actual_bytes == copy_sz);
+
+            MPIDI_PIP_fflush_task();
+
+            while (MPIDI_PIP_global.compl_queue->head)
+                MPIDI_PIP_fflush_compl_task(MPIDI_PIP_global.compl_queue);
+        } else {
+            MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
+            copy_sz = MPIDI_PIP_PKT_SIZE;
+            src_offset -= copy_sz;
+            revs_dest_buf -= copy_sz;
+            MPIDI_PIP_init_pack_task(task, inbuf, incount, src_offset, src_dt_ptr,
+                                     revs_dest_buf, copy_sz, MPIDI_PIP_PACK);
+            MPIDI_PIP_Task_safe_enqueue(MPIDI_PIP_global.task_queue, task);
+            MPIDI_PIP_Compl_task_enqueue(MPIDI_PIP_global.compl_queue, task);
+
+            if (MPIDI_PIP_global.compl_queue->task_num >= MPIDI_MAX_TASK_THRESHOLD)
+                MPIDI_PIP_exec_one_task(MPIDI_PIP_global.task_queue, MPIDI_PIP_global.compl_queue);
+        }
+        data_sz -= copy_sz;
+    } while (data_sz > 0);
+
+    return mpi_errno;
+}
+
+MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_unpack(void *inbuf, MPI_Aint insize,
+                                              void *outbuf, MPI_Aint outcount,
+                                              MPI_Datatype datatype, MPI_Aint outoffset,
+                                              MPI_Aint * actual_unpack_bytes)
+{
+    int mpi_errno = MPI_SUCCESS;
+    MPI_Aint copy_sz, dest_offset;
+    MPI_Aint data_sz, orig_data_sz;
+    char *revs_src_buf;
+    MPIR_Datatype *dest_dt_ptr;
+
+    MPIDI_Datatype_get_size_dt_ptr(outcount, datatype, orig_data_sz, dest_dt_ptr);
+    orig_data_sz = orig_data_sz - outoffset;
+    if (orig_data_sz < insize) {
+        mpi_errno = MPI_ERR_TRUNCATE;
+        data_sz = orig_data_sz;
+    } else
+        data_sz = insize;
+
+    *actual_unpack_bytes = data_sz;
+    revs_src_buf = inbuf + data_sz;
+    dest_offset = data_sz + outoffset;
+    do {
+        if (data_sz <= MPIDI_PIP_LAST_PKT_THRESHOLD) {
+            MPI_Aint actual_bytes;
+            copy_sz = data_sz;
+            MPIR_Typerep_unpack(inbuf, copy_sz, outbuf, outcount, datatype, outoffset, &actual_bytes);
+            MPIR_Assert(actual_bytes == copy_sz);
+
+            MPIDI_PIP_fflush_task();
+
+            while (MPIDI_PIP_global.compl_queue->head)
+                MPIDI_PIP_fflush_compl_task(MPIDI_PIP_global.compl_queue);
+        } else {
+            MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
+            copy_sz = MPIDI_PIP_PKT_SIZE;
+            dest_offset -= copy_sz;
+            revs_src_buf -= copy_sz;
+            MPIDI_PIP_init_unpack_task(task, revs_src_buf, copy_sz, outbuf, outcount, dest_offset,
+                                       dest_dt_ptr, MPIDI_PIP_UNPACK);
+            MPIDI_PIP_Task_safe_enqueue(MPIDI_PIP_global.task_queue, task);
+            MPIDI_PIP_Compl_task_enqueue(MPIDI_PIP_global.compl_queue, task);
+
+            if (MPIDI_PIP_global.compl_queue->task_num >= MPIDI_MAX_TASK_THRESHOLD)
+                MPIDI_PIP_exec_one_task(MPIDI_PIP_global.task_queue, MPIDI_PIP_global.compl_queue);
+        }
+        data_sz -= copy_sz;
+    } while (data_sz > 0);
+
+    return mpi_errno;
+}
+
 #endif /* PIP_RECV_H_INCLUDED */

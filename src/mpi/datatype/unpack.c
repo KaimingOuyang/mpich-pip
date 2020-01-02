@@ -6,6 +6,7 @@
  */
 
 #include "mpiimpl.h"
+#include "../mpid/ch4/shm/pip/pip_recv.h"
 
 /* -- Begin Profiling Symbol Block for routine MPI_Unpack */
 #if defined(HAVE_PRAGMA_WEAK)
@@ -123,8 +124,9 @@ int MPI_Unpack(const void *inbuf, int insize, int *position,
 
     MPI_Aint actual_unpack_bytes;
     void *buf = (void *) ((char *) inbuf + position_x);
-    mpi_errno =
-        MPIR_Typerep_unpack(buf, insize, outbuf, outcount, datatype, 0, &actual_unpack_bytes);
+    mpi_errno = MPIDI_PIP_unpack(buf, insize, outbuf, outcount, datatype, 0, &actual_unpack_bytes);
+    // mpi_errno =
+    //     MPIR_Typerep_unpack(buf, insize, outbuf, outcount, datatype, 0, &actual_unpack_bytes);
     if (mpi_errno)
         goto fn_fail;
 

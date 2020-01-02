@@ -10,6 +10,7 @@
 #include "mpidimpl.h"
 #include "ucx_impl.h"
 #include <ucp/api/ucp.h>
+#include "../../shm/pip/pip_recv.h"
 #ifdef HAVE_LIBHCOLL
 #include "../../../common/hcoll/hcoll.h"
 #endif
@@ -69,9 +70,15 @@ static size_t pack(void *state, size_t offset, void *dest, size_t max_length)
 {
     struct pack_state *pack_state = (struct pack_state *) state;
     MPI_Aint actual_pack_bytes;
-
-    MPIR_Typerep_pack(pack_state->buffer, pack_state->count, pack_state->datatype, offset,
-                      dest, max_length, &actual_pack_bytes);
+    int mpi_errno = MPI_SUCCESS;
+    mpi_errno = MPIDI_PIP_Pack(pack_state->buffer, pack_state->count, pack_state->datatype, offset, 
+        dest, max_length, &actual_pack_bytes);
+    if(mpi_errno != MPI_SUCCESS){
+        printf("UCX pack failed (actual_pack_bytes = %ld)\n", actual_pack_bytes);
+        fflush(stdout);
+    }
+    // MPIR_Typerep_pack(pack_state->buffer, pack_state->count, pack_state->datatype, offset,
+    //                   dest, max_length, &actual_pack_bytes);
 
     return actual_pack_bytes;
 }
@@ -86,8 +93,16 @@ static ucs_status_t unpack(void *state, size_t offset, const void *src, size_t c
     MPIR_Pack_size_impl(pack_state->count, pack_state->datatype, &packsize);
     max_unpack_bytes = MPL_MIN(packsize, count);
 
-    MPIR_Typerep_unpack(src, max_unpack_bytes, pack_state->buffer, pack_state->count,
+    int mpi_errno = MPI_SUCCESS;
+    mpi_errno = MPIDI_PIP_unpack(src, max_unpack_bytes, pack_state->buffer, pack_state->count,
                         pack_state->datatype, offset, &actual_unpack_bytes);
+    if(mpi_errno != MPI_SUCCESS){
+        printf("UCX unpack failed (actual_pack_bytes = %ld)\n", actual_pack_bytes);
+        fflush(stdout);
+    }
+
+    // MPIR_Typerep_unpack(src, max_unpack_bytes, pack_state->buffer, pack_state->count,
+    //                     pack_state->datatype, offset, &actual_unpack_bytes);
     if (unlikely(actual_unpack_bytes != max_unpack_bytes)) {
         return UCS_ERR_MESSAGE_TRUNCATED;
     }
