@@ -16,12 +16,13 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 #define PIP_TRACE(...) \
     MPL_DBG_MSG_FMT(MPIDI_CH4_SHM_PIP_GENERAL,VERBOSE,(MPL_DBG_FDEST, "PIP "__VA_ARGS__))
 
-#define MPIDI_TASK_PREALLOC 64
+#define MPIDI_TASK_PREALLOC 8
 #define MPIDI_MAX_TASK_THRESHOLD 60
-#define MPIDI_PIP_PKT_SIZE 65536        /* 64KB */
+#define MPIDI_PIP_MAX_PKT_SIZE 98304
+#define MPIDI_PIP_PKT_32KB 32768
+
 #define MPIDI_PIP_L2_CACHE_THRESHOLD 131072     /* 64KB * 2 this size has two considerations, one is keeping head data in L2 cache in receiver, the other is reducing the chances of remote process stealing, lock contention and remote data access overhead that will slow down the copy due to small data_sz. */
 #define MPIDI_PIP_LAST_PKT_THRESHOLD MPIDI_PIP_PKT_SIZE /* 64KB */
-#define MPIDI_PIP_CELL_SIZE 65536
 
 #define MPIDI_INTRA_COPY_LOCAL_PROCS_THRESHOLD 5        /* #local process threshold for intra-NUMA copy on bebop */
 #define MPIDI_INTER_COPY_LOCAL_PROCS_THRESHOLD 8        /* #local process threshold for inter-NUMA copy on bebop */
@@ -35,28 +36,18 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 #define MPIDI_PIP_INTRA_TASK 0
 #define MPIDI_PIP_INTER_TASK 1
 
+/* Local or remote stealing */
+#define MPIDI_PIP_LOCAL_STEALING 0
+#define MPIDI_PIP_REMOTE_STEALING 1
+
 /* Copy kind */
 #define MPIDI_PIP_MEMCPY 0
 #define MPIDI_PIP_PACK 1
 #define MPIDI_PIP_UNPACK 2
 #define MPIDI_PIP_PACK_UNPACK 3
 
-/* Complete status */
-#define MPIDI_PIP_NOT_COMPLETE  0
-#define MPIDI_PIP_COMPLETE      1
-
-typedef struct MPIDI_PIP_cell {
-    MPIR_OBJECT_HEADER;
-    char load[MPIDI_PIP_CELL_SIZE];
-} MPIDI_PIP_cell_t;
-
 typedef struct MPIDI_PIP_task {
     MPIR_OBJECT_HEADER;
-    /* task header info */
-    int compl_flag;
-    struct MPIDI_PIP_task *task_next;
-    struct MPIDI_PIP_task *compl_next;
-
     /* kind info */
     int task_kind;              /* describe inter-NUMA or intra-NUMA copy task */
     int copy_kind;              /* describe pack or unpack operations */
@@ -64,24 +55,22 @@ typedef struct MPIDI_PIP_task {
     /* basic buffer and size */
     void *src_buf;
     void *dest_buf;
-    size_t data_sz;
+    MPI_Aint cur_offset;
+    int orig_data_sz;
+    OPA_int_t done_data_sz;
 
     /* non-contig copy attributes */
     MPI_Aint src_count;
     MPIR_Datatype *src_dt_ptr;
-    size_t src_offset;
+    MPI_Aint init_src_offset;   /* source initial offset */
     MPI_Aint dest_count;
     MPIR_Datatype *dest_dt_ptr;
-    size_t dest_offset;
+    MPI_Aint init_dest_offset;  /* dest initial offset */
 } MPIDI_PIP_task_t;
 
 typedef struct MPIDI_PIP_task_queue {
     MPIDI_PIP_task_t *head;
-    MPIDI_PIP_task_t *tail;
     MPID_Thread_mutex_t lock;
-
-    /* Info structures */
-    int task_num;
 } MPIDI_PIP_task_queue_t;
 
 typedef struct MPIDI_PIP_global {
@@ -89,11 +78,10 @@ typedef struct MPIDI_PIP_global {
     uint32_t local_rank;
     uint32_t rank;
     uint32_t num_numa_node;
-    uint32_t local_numa_id;
+    uint32_t local_numa_id;     /* id of numa node I locate at */
 
     MPIDI_PIP_task_queue_t *task_queue;
     MPIDI_PIP_task_queue_t **task_queue_array;
-    MPIDI_PIP_task_queue_t *compl_queue;
 
     /* Info structures */
     struct MPIDI_PIP_global **pip_global_array;
@@ -102,7 +90,7 @@ typedef struct MPIDI_PIP_global {
     int **numa_cores_to_ranks;  /* map between core id to rank */
     int *numa_num_procs;        /* #processes in each NUMA node */
     int numa_root_rank;         /* rank of root process in my NUMA node */
-    int numa_local_rank;
+    int numa_local_rank;        /* my rank on the numa node */
 
     /* finalized procs cnt */
     OPA_int_t fin_procs;
@@ -118,7 +106,7 @@ typedef struct MPIDI_PIP_global {
     int *local_idle_state;
 
     /* pack/unpack load for stealing */
-    char pkt_load[MPIDI_PIP_PKT_SIZE];
+    char pkt_load[MPIDI_PIP_MAX_PKT_SIZE];
 } MPIDI_PIP_global_t;
 
 typedef struct {

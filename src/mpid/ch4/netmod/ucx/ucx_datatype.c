@@ -10,7 +10,7 @@
 #include "mpidimpl.h"
 #include "ucx_impl.h"
 #include <ucp/api/ucp.h>
-#include "../../shm/pip/pip_recv.h"
+#include "../../shm/pip/pip_impl.h"
 #ifdef HAVE_LIBHCOLL
 #include "../../../common/hcoll/hcoll.h"
 #endif

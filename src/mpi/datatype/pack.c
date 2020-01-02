@@ -6,7 +6,7 @@
  */
 
 #include "mpiimpl.h"
-#include "../mpid/ch4/shm/pip/pip_recv.h"
+#include "../mpid/ch4/shm/pip/pip_impl.h"
 
 /* -- Begin Profiling Symbol Block for routine MPI_Pack */
 #if defined(HAVE_PRAGMA_WEAK)
@@ -158,7 +158,8 @@ int MPI_Pack(const void *inbuf,
 
     MPI_Aint actual_pack_bytes;
     void *buf = (void *) ((char *) outbuf + position_x);
-    mpi_errno = MPIDI_PIP_pack((void *) inbuf, incount, datatype, 0, buf, outsize, &actual_pack_bytes);
+    mpi_errno =
+        MPIDI_PIP_pack((void *) inbuf, incount, datatype, 0, buf, outsize, &actual_pack_bytes);
     // mpi_errno = MPIR_Typerep_pack(inbuf, incount, datatype, 0, buf, outsize, &actual_pack_bytes);
     if (mpi_errno)
         goto fn_fail;

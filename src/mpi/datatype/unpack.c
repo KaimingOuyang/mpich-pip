@@ -6,7 +6,7 @@
  */
 
 #include "mpiimpl.h"
-#include "../mpid/ch4/shm/pip/pip_recv.h"
+#include "../mpid/ch4/shm/pip/pip_impl.h"
 
 /* -- Begin Profiling Symbol Block for routine MPI_Unpack */
 #if defined(HAVE_PRAGMA_WEAK)
