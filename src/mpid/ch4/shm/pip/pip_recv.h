@@ -13,8 +13,8 @@
 #include "pip_impl.h"
 
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_memcpy_task(MPIDI_PIP_task_t * task, void *src_buf,
-                                                         size_t copy_sz, void *dest_buf,
-                                                         int task_kind)
+                                                         size_t data_sz, void *dest_buf,
+                                                         int task_kind, int local_rank)
 {
     task->compl_flag = MPIDI_PIP_NOT_COMPLETE;
     task->task_next = NULL;
@@ -25,7 +25,10 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_memcpy_task(MPIDI_PIP_task_t * task
 
     task->src_buf = src_buf;
     task->dest_buf = dest_buf;
-    task->data_sz = copy_sz;
+    task->cur_offset = data_sz;
+    task->orig_data_sz = data_sz;
+    task->local_rank = local_rank;
+    OPA_store_int(&task->done_data_sz, 0);
     return;
 }
 
@@ -34,33 +37,54 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_memcpy_task_enqueue(char *src_buf,
                                                             int task_kind)
 {
     MPI_Aint copy_sz;
-    char *revs_src_buf = src_buf + data_sz;
-    char *revs_dest_buf = dest_buf + data_sz;
-    do {
-        if (data_sz <= MPIDI_PIP_LAST_PKT_THRESHOLD) {
-            /* Last packet, I need to copy it myself. */
-            copy_sz = data_sz;
-            MPIR_Memcpy((void *) dest_buf, (void *) src_buf, copy_sz);
-            MPIDI_PIP_fflush_task();
-            while (MPIDI_PIP_global.compl_queue->head)
-                MPIDI_PIP_fflush_compl_task(MPIDI_PIP_global.compl_queue);
-        } else {
-            /* I have a lot of tasks to do, enqueue tasks and hope others steal them. */
-            MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
+    // char *revs_src_buf = src_buf + data_sz;
+    // char *revs_dest_buf = dest_buf + data_sz;
+    if(data_sz <= MPIDI_PIP_PKT_32KB){
+        MPIDI_PIP_global.local_copy_state[task_kind][MPIDI_PIP_global.numa_local_rank] = 1;
+        MPIR_Memcpy(src_buf, dest_buf, data_sz);
+        OPA_write_barrier();
+        MPIDI_PIP_global.local_copy_state[task_kind][MPIDI_PIP_global.numa_local_rank] = 0;
+    }else{
+        MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
+        MPIDI_PIP_init_memcpy_task(task, src_buf, data_sz, dest_buf, task_kind,
+        MPIDI_PIP_global.local_rank);
+        MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task);
+        do {
+            if (task->cur_offset != 0)
+                MPIDI_PIP_exec_task(MPIDI_PIP_global.task_queue, MPIDI_PIP_LOCAL_STEALING,
+                MPIDI_PIP_global.local_rank);
+        } while (OPA_load_int(&task->done_data_sz) != task->orig_data_sz);
 
-            copy_sz = MPIDI_PIP_PKT_SIZE;
-            revs_src_buf -= copy_sz;
-            revs_dest_buf -= copy_sz;
-            MPIDI_PIP_init_memcpy_task(task, revs_src_buf, copy_sz, revs_dest_buf, task_kind);
-            MPIDI_PIP_Task_safe_enqueue(MPIDI_PIP_global.task_queue, task);
-            MPIDI_PIP_Compl_task_enqueue(MPIDI_PIP_global.compl_queue, task);
+        MPIDI_PIP_cancel_task(MPIDI_PIP_global.task_queue);
+        MPIR_Handle_obj_free(&MPIDI_Task_mem, task);
+    }
+    
+    // do {
 
-            if (MPIDI_PIP_global.compl_queue->task_num >= MPIDI_MAX_TASK_THRESHOLD)
-                MPIDI_PIP_exec_one_task(MPIDI_PIP_global.task_queue, MPIDI_PIP_global.compl_queue);
-        }
+    //     if (data_sz <= MPIDI_PIP_LAST_PKT_THRESHOLD) {
+    //         /* Last packet, I need to copy it myself. */
+    //         copy_sz = data_sz;
+    //         MPIR_Memcpy((void *) dest_buf, (void *) src_buf, copy_sz);
+    //         MPIDI_PIP_fflush_task();
+    //         while (MPIDI_PIP_global.compl_queue->head)
+    //             MPIDI_PIP_fflush_compl_task(MPIDI_PIP_global.compl_queue);
+    //     } else {
+    //         /* I have a lot of tasks to do, enqueue tasks and hope others steal them. */
+    //         MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
 
-        data_sz -= copy_sz;
-    } while (data_sz > 0);
+    //         copy_sz = MPIDI_PIP_PKT_SIZE;
+    //         revs_src_buf -= copy_sz;
+    //         revs_dest_buf -= copy_sz;
+    //         MPIDI_PIP_init_memcpy_task(task, revs_src_buf, copy_sz, revs_dest_buf, task_kind);
+    //         MPIDI_PIP_Task_safe_enqueue(MPIDI_PIP_global.task_queue, task);
+    //         MPIDI_PIP_Compl_task_enqueue(MPIDI_PIP_global.compl_queue, task);
+
+    //         if (MPIDI_PIP_global.compl_queue->task_num >= MPIDI_MAX_TASK_THRESHOLD)
+    //             MPIDI_PIP_exec_one_task(MPIDI_PIP_global.task_queue, MPIDI_PIP_global.compl_queue);
+    //     }
+
+    //     data_sz -= copy_sz;
+    // } while (data_sz > 0);
     return;
 }
 
@@ -452,7 +476,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_unpack(void *inbuf, MPI_Aint insize,
         if (data_sz <= MPIDI_PIP_LAST_PKT_THRESHOLD) {
             MPI_Aint actual_bytes;
             copy_sz = data_sz;
-            MPIR_Typerep_unpack(inbuf, copy_sz, outbuf, outcount, datatype, outoffset, &actual_bytes);
+            MPIR_Typerep_unpack(inbuf, copy_sz, outbuf, outcount, datatype, outoffset,
+                                &actual_bytes);
             MPIR_Assert(actual_bytes == copy_sz);
 
             MPIDI_PIP_fflush_task();

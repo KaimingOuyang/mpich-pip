@@ -19,6 +19,8 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 #define MPIDI_TASK_PREALLOC 64
 #define MPIDI_MAX_TASK_THRESHOLD 60
 #define MPIDI_PIP_PKT_SIZE 65536        /* 64KB */
+#define MPIDI_PIP_PKT_32KB 32768
+
 #define MPIDI_PIP_L2_CACHE_THRESHOLD 131072     /* 64KB * 2 this size has two considerations, one is keeping head data in L2 cache in receiver, the other is reducing the chances of remote process stealing, lock contention and remote data access overhead that will slow down the copy due to small data_sz. */
 #define MPIDI_PIP_LAST_PKT_THRESHOLD MPIDI_PIP_PKT_SIZE /* 64KB */
 #define MPIDI_PIP_CELL_SIZE 65536
@@ -34,6 +36,9 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 #define MPIDI_STEALING_CASE 2
 #define MPIDI_PIP_INTRA_TASK 0
 #define MPIDI_PIP_INTER_TASK 1
+
+#define MPIDI_PIP_LOCAL_STEALING 2
+#define MPIDI_PIP_REMOTE_STEALING 3
 
 /* Copy kind */
 #define MPIDI_PIP_MEMCPY 0
@@ -52,6 +57,9 @@ typedef struct MPIDI_PIP_cell {
 
 typedef struct MPIDI_PIP_task {
     MPIR_OBJECT_HEADER;
+    int local_rank;
+    // int src_numa_id;
+    // int dest_numa_id;
     /* task header info */
     int compl_flag;
     struct MPIDI_PIP_task *task_next;
@@ -64,15 +72,18 @@ typedef struct MPIDI_PIP_task {
     /* basic buffer and size */
     void *src_buf;
     void *dest_buf;
-    size_t data_sz;
+    int data_sz;
+    int cur_offset;
+    int orig_data_sz;
+    OPA_int_t done_data_sz;
 
     /* non-contig copy attributes */
     MPI_Aint src_count;
     MPIR_Datatype *src_dt_ptr;
-    size_t src_offset;
+    int src_offset;
     MPI_Aint dest_count;
     MPIR_Datatype *dest_dt_ptr;
-    size_t dest_offset;
+    int dest_offset;
 } MPIDI_PIP_task_t;
 
 typedef struct MPIDI_PIP_task_queue {
