@@ -18,24 +18,27 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_copy_size_decision(MPIDI_PIP_task_t * tas
                                                           int local_remote_flag)
 {
     int copy_sz;
-    static const int PKT_16KB = 1 << 14;
-    static const int PKT_32KB = 1 << 15;
-    static const int PKT_64KB = 1 << 16;
-    static const int PKT_96KB = PKT_32KB + PKT_64KB;
-    static const int PKT_128KB = 1 << 17;
-    static const int PKT_160KB = PKT_128KB + PKT_32KB;
-    static const int PKT_4MB = 1 << 22;
-    if (task->cur_offset <= PKT_16KB)
+    // static const int PKT_16KB = 1 << 14;
+    // static const int PKT_32KB = 1 << 15;
+    // static const int PKT_64KB = 1 << 16;
+    // static const int PKT_96KB = PKT_32KB + PKT_64KB;
+    // static const int PKT_128KB = 1 << 17;
+    // static const int PKT_160KB = PKT_128KB + PKT_32KB;
+    // static const int PKT_4MB = 1 << 22;
+    // if (task->cur_offset <= PKT_16KB)
+    //     copy_sz = task->cur_offset;
+    // else if (task->cur_offset <= PKT_32KB)
+    //     copy_sz = PKT_16KB;
+    // else if (task->cur_offset <= PKT_160KB || local_remote_flag == MPIDI_PIP_REMOTE_STEALING)
+    //     copy_sz = PKT_32KB;
+    // else if (task->cur_offset <= PKT_4MB)
+    //     copy_sz = PKT_96KB;
+    // else
+    //     copy_sz = PKT_64KB;
+    if(task->cur_offset < MPIDI_PIP_global.pkt_size)
         copy_sz = task->cur_offset;
-    else if (task->cur_offset <= PKT_32KB)
-        copy_sz = PKT_16KB;
-    else if (task->cur_offset <= PKT_160KB || local_remote_flag == MPIDI_PIP_REMOTE_STEALING)
-        copy_sz = PKT_32KB;
-    else if (task->cur_offset <= PKT_4MB)
-        copy_sz = PKT_96KB;
     else
-        copy_sz = PKT_64KB;
-
+        copy_sz = MPIDI_PIP_global.pkt_size;
     return copy_sz;
 }
 
