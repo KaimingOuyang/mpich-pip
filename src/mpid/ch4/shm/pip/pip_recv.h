@@ -34,34 +34,33 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_handle_lmt_rts_recv(uint64_t src_offset, 
 
     /* Copy data to receive buffer */
     recv_data_sz = MPL_MIN(src_data_sz, data_sz);
-    int task_kind =
-        MPIDI_PIP_global.local_numa_id ==
-        MPIDI_PIP_global.pip_global_array[src_lrank]->local_numa_id ? MPIDI_PIP_INTRA_TASK :
-        MPIDI_PIP_INTER_TASK;
+    // int task_kind =
+    //     MPIDI_PIP_global.local_numa_id ==
+    //     MPIDI_PIP_global.pip_global_array[src_lrank]->local_numa_id ? MPIDI_PIP_INTRA_TASK :
+    //     MPIDI_PIP_INTER_TASK;
 
     int copy_kind;
     if (src_is_contig && dest_dt_contig) {
         /* both are contiguous */
         MPIDI_PIP_memcpy_task_enqueue((char *) src_offset,
                                       (char *) MPIDIG_REQUEST(rreq, buffer) + true_lb,
-                                      recv_data_sz, task_kind);
+                                      recv_data_sz);
     } else if (!src_is_contig && dest_dt_contig) {
         /* src data is non-contig */
         MPIDI_PIP_pack_task_enqueue((void *) src_offset, src_count, src_dt_ptr,
-                                    (char *) MPIDIG_REQUEST(rreq, buffer) + true_lb, recv_data_sz,
-                                    task_kind);
+                                    (char *) MPIDIG_REQUEST(rreq, buffer) + true_lb, recv_data_sz);
     } else if (src_is_contig && !dest_dt_contig) {
         /* dest data is non-contig */
         MPIDI_PIP_unpack_task_enqueue((void *) src_offset,
                                       MPIDIG_REQUEST(rreq, buffer), MPIDIG_REQUEST(rreq, count),
-                                      MPIDIG_REQUEST(rreq, datatype), recv_data_sz, task_kind);
+                                      MPIDIG_REQUEST(rreq, datatype), recv_data_sz);
     } else {
         /* both are non-contig */
         MPIDI_PIP_pack_unpack_task_enqueue((void *) src_offset,
                                            src_count, src_dt_ptr, MPIDIG_REQUEST(rreq, buffer),
                                            MPIDIG_REQUEST(rreq, count), MPIDIG_REQUEST(rreq,
                                                                                        datatype),
-                                           recv_data_sz, task_kind);
+                                           recv_data_sz);
     }
 
     PIP_TRACE("handle_lmt_recv: handle matched rreq %p [source %d, tag %d, context_id 0x%x],"

@@ -34,7 +34,7 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
 
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_PIP_INIT_HOOK);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_PIP_INIT_HOOK);
-    MPIR_CHKPMEM_DECL(5);
+    MPIR_CHKPMEM_DECL(7);
 
 #ifdef MPL_USE_DBG_LOGGING
     extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
@@ -118,14 +118,17 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     int local_root = MPIDI_PIP_global.numa_root_rank;
     if (local_root == local_rank) {
         /* root process in eahc NUMA node */
-        OPA_store_int(&MPIDI_PIP_global.rmt_steal_procs, 0);
-        for (i = 0; i < MPIDI_STEALING_CASE; ++i) {
-            MPIDI_PIP_global.local_copy_state[i] =
-                (int *) MPL_malloc(sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id],
-                                   MPL_MEM_OTHER);
-            memset(MPIDI_PIP_global.local_copy_state[i], 0,
-                   sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id]);
-        }
+        // MPIR_CHKPMEM_MALLOC(MPIDI_PIP_global.numa_rmt_access, OPA_int_t *,
+        //                     sizeof(OPA_int_t) * num_numa_node, mpi_errno, "numa_rmt_access",
+        //                     MPL_MEM_OTHER);
+        // for (i = 0; i < num_numa_node; ++i)
+        //     OPA_store_int(&MPIDI_PIP_global.numa_rmt_access[i], 0);
+
+        MPIR_CHKPMEM_MALLOC(MPIDI_PIP_global.local_copy_state, int *,
+                            sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id], mpi_errno,
+                            "local copy state", MPL_MEM_OTHER);
+        memset(MPIDI_PIP_global.local_copy_state, 0,
+               sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id]);
 
         MPIDI_PIP_global.local_idle_state =
             (int *) MPL_malloc(sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id],
@@ -135,14 +138,13 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
         MPIDU_Init_shm_barrier();
     } else {
         MPIDU_Init_shm_barrier();
-        for (i = 0; i < MPIDI_STEALING_CASE; ++i)
-            MPIDI_PIP_global.local_copy_state[i] =
-                MPIDI_PIP_global.pip_global_array[local_root]->local_copy_state[i];
+        // MPIDI_PIP_global.numa_rmt_access =
+        //     MPIDI_PIP_global.pip_global_array[local_root]->numa_rmt_access;
+        MPIDI_PIP_global.local_copy_state =
+            MPIDI_PIP_global.pip_global_array[local_root]->local_copy_state;
         MPIDI_PIP_global.local_idle_state =
             MPIDI_PIP_global.pip_global_array[local_root]->local_idle_state;
     }
-    MPIDI_PIP_global.rmt_steal_procs_ptr =
-        &MPIDI_PIP_global.pip_global_array[local_root]->rmt_steal_procs;
 
     /* Debug */
     // if (rank == 0) {
@@ -205,8 +207,8 @@ int MPIDI_PIP_mpi_finalize_hook(void)
 {
     int mpi_errno = MPI_SUCCESS;
     int i, ret = 0;
-    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_XPMEM_FINALIZE_HOOK);
-    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_XPMEM_FINALIZE_HOOK);
+    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_PIP_FINALIZE_HOOK);
+    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_PIP_FINALIZE_HOOK);
 
     OPA_add_int(MPIDI_PIP_global.fin_procs_ptr, 1);
     while (OPA_load_int(MPIDI_PIP_global.fin_procs_ptr) != MPIDI_PIP_global.num_local);
@@ -219,8 +221,8 @@ int MPIDI_PIP_mpi_finalize_hook(void)
     MPL_free(MPIDI_PIP_global.pip_global_array);
 
     if (MPIDI_PIP_global.local_rank == MPIDI_PIP_global.numa_root_rank) {
-        for (i = 0; i < MPIDI_STEALING_CASE; ++i)
-            MPL_free(MPIDI_PIP_global.local_copy_state[i]);
+        // MPL_free(MPIDI_PIP_global.numa_rmt_access);
+        MPL_free(MPIDI_PIP_global.local_copy_state);
         MPL_free(MPIDI_PIP_global.local_idle_state);
     }
 
@@ -230,7 +232,7 @@ int MPIDI_PIP_mpi_finalize_hook(void)
     MPL_free(MPIDI_PIP_global.numa_cores_to_ranks);
 
   fn_exit:
-    MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_XPMEM_FINALIZE_HOOK);
+    MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_PIP_FINALIZE_HOOK);
     return mpi_errno;
   fn_fail:
     goto fn_exit;
