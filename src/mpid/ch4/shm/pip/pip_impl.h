@@ -14,14 +14,11 @@
 
 #include "pip_pre.h"
 
-MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t * task_queue,
-                                                         int local_remote_flag);
-MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * task_queue,
-                                                       int local_remote_flag);
-MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_copy_size_decision(MPIDI_PIP_task_t * task,
-                                                          int local_remote_flag);
+MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t * task_queue);
+MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * task_queue);
+MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_copy_size_decision(MPIDI_PIP_task_t * task);
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_memcpy_task(MPIDI_PIP_task_t * task, int copy_sz,
-                                                         MPI_Aint offset, int local_remote_flag);
+                                                         MPI_Aint offset);
 
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_publish_task(MPIDI_PIP_task_queue_t * task_queue,
                                                      MPIDI_PIP_task_t * task)
@@ -118,28 +115,16 @@ MPL_STATIC_INLINE_PREFIX int MPIR_PIP_Type_dup(MPIR_Datatype * old_dtp, MPI_Data
 /********** process exec its own tasks ***********/
 /*************************************************/
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_pack_task(MPIDI_PIP_task_t * task, int copy_sz,
-                                                            MPI_Aint offset, int local_remote_flag)
+                                                            MPI_Aint offset)
 {
     MPI_Datatype src_dt_dup = task->src_dt_ptr->handle;
     MPI_Aint actual_bytes;
     int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
     void *cur_dest_buf = (void *) ((uint64_t) task->dest_buf + offset);
 
-    if (local_remote_flag == MPIDI_PIP_LOCAL_STEALING || task->task_kind == MPIDI_PIP_INTER_TASK) {
-        int task_kind = task->task_kind;
-
-        MPIDI_PIP_global.local_copy_state[task_kind][numa_local_rank] = 1;
-        MPIR_Typerep_pack(task->src_buf, task->src_count, src_dt_dup,
-                          task->init_src_offset + offset, cur_dest_buf, copy_sz, &actual_bytes);
-        OPA_write_barrier();
-        MPIDI_PIP_global.local_copy_state[task_kind][numa_local_rank] = 0;
-    } else {
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_INTER_TASK][numa_local_rank] = 1;
-        MPIR_Typerep_pack(task->src_buf, task->src_count, src_dt_dup,
-                          task->init_src_offset + offset, cur_dest_buf, copy_sz, &actual_bytes);
-        OPA_write_barrier();
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_INTER_TASK][numa_local_rank] = 0;
-    }
+    MPIR_Typerep_pack(task->src_buf, task->src_count, src_dt_dup,
+                      task->init_src_offset + offset, cur_dest_buf, copy_sz, &actual_bytes);
+    OPA_write_barrier();
 
     OPA_add_int(&task->done_data_sz, copy_sz);
     MPIR_Assert(actual_bytes == copy_sz);
@@ -148,28 +133,16 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_pack_task(MPIDI_PIP_task_t * t
 
 
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_unpack_task(MPIDI_PIP_task_t * task, int copy_sz,
-                                                              MPI_Aint offset,
-                                                              int local_remote_flag)
+                                                              MPI_Aint offset)
 {
     MPI_Datatype dest_dt_dup = task->dest_dt_ptr->handle;
     MPI_Aint actual_bytes;
     int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
     void *cur_src_buf = (void *) ((uint64_t) task->src_buf + offset);
 
-    if (local_remote_flag == MPIDI_PIP_LOCAL_STEALING || task->task_kind == MPIDI_PIP_INTER_TASK) {
-        int task_kind = task->task_kind;
-
-        MPIDI_PIP_global.local_copy_state[task_kind][numa_local_rank] = 1;
-        MPIR_Typerep_unpack(cur_src_buf, copy_sz, task->dest_buf, task->dest_count, dest_dt_dup,
-                            task->init_dest_offset + offset, &actual_bytes);
-        OPA_write_barrier();
-        MPIDI_PIP_global.local_copy_state[task_kind][numa_local_rank] = 0;
-    } else {
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_INTER_TASK][numa_local_rank] = 1;
-        MPIR_Typerep_unpack(cur_src_buf, copy_sz, task->dest_buf, task->dest_count, dest_dt_dup,
-                            task->init_dest_offset + offset, &actual_bytes);
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_INTER_TASK][numa_local_rank] = 0;
-    }
+    MPIR_Typerep_unpack(cur_src_buf, copy_sz, task->dest_buf, task->dest_count, dest_dt_dup,
+                        task->init_dest_offset + offset, &actual_bytes);
+    OPA_write_barrier();
 
     OPA_add_int(&task->done_data_sz, copy_sz);
     MPIR_Assert(actual_bytes == copy_sz);
@@ -178,8 +151,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_unpack_task(MPIDI_PIP_task_t *
 
 
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_pack_unpack_task(MPIDI_PIP_task_t * task,
-                                                                   int copy_sz, MPI_Aint offset,
-                                                                   int local_remote_flag)
+                                                                   int copy_sz, MPI_Aint offset)
 {
 
     MPI_Datatype src_dt_dup = task->src_dt_ptr->handle;
@@ -187,40 +159,22 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_pack_unpack_task(MPIDI_PIP_tas
     MPI_Aint actual_bytes;
     int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
 
-    if (local_remote_flag == MPIDI_PIP_LOCAL_STEALING || task->task_kind == MPIDI_PIP_INTER_TASK) {
-        int task_kind = task->task_kind;
+    MPIR_Typerep_pack(task->src_buf, task->src_count, src_dt_dup,
+                      task->init_src_offset + offset, MPIDI_PIP_global.pkt_load, copy_sz,
+                      &actual_bytes);
+    MPIR_Assert(actual_bytes == copy_sz);
 
-        MPIDI_PIP_global.local_copy_state[task_kind][numa_local_rank] = 1;
-        MPIR_Typerep_pack(task->src_buf, task->src_count, src_dt_dup,
-                          task->init_src_offset + offset, MPIDI_PIP_global.pkt_load, copy_sz,
-                          &actual_bytes);
-        MPIR_Assert(actual_bytes == copy_sz);
+    MPIR_Typerep_unpack(MPIDI_PIP_global.pkt_load, copy_sz, task->dest_buf, task->dest_count,
+                        dest_dt_dup, task->init_dest_offset + offset, &actual_bytes);
+    MPIR_Assert(actual_bytes == copy_sz);
+    OPA_write_barrier();
 
-        MPIR_Typerep_unpack(MPIDI_PIP_global.pkt_load, copy_sz, task->dest_buf, task->dest_count,
-                            dest_dt_dup, task->init_dest_offset + offset, &actual_bytes);
-        MPIR_Assert(actual_bytes == copy_sz);
-        OPA_write_barrier();
-        MPIDI_PIP_global.local_copy_state[task_kind][numa_local_rank] = 0;
-    } else {
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_INTER_TASK][numa_local_rank] = 1;
-        MPIR_Typerep_pack(task->src_buf, task->src_count, src_dt_dup,
-                          task->init_src_offset + offset, MPIDI_PIP_global.pkt_load, copy_sz,
-                          &actual_bytes);
-        MPIR_Assert(actual_bytes == copy_sz);
-
-        MPIR_Typerep_unpack(MPIDI_PIP_global.pkt_load, copy_sz, task->dest_buf, task->dest_count,
-                            dest_dt_dup, task->init_dest_offset + offset, &actual_bytes);
-        MPIR_Assert(actual_bytes == copy_sz);
-        OPA_write_barrier();
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_INTER_TASK][numa_local_rank] = 0;
-    }
     OPA_add_int(&task->done_data_sz, copy_sz);
     return;
 }
 
 
-MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * task_queue,
-                                                       int local_remote_flag)
+MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * task_queue)
 {
     void *src_buf, *dest_buf;
     int copy_sz, err, copy_kind;
@@ -230,7 +184,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * 
     MPID_Thread_mutex_lock(&task_queue->lock, &err);
     task = task_queue->head;
     if (task && task->cur_offset != 0) {
-        copy_sz = MPIDI_PIP_copy_size_decision(task, local_remote_flag);
+        copy_sz = MPIDI_PIP_copy_size_decision(task);
         task->cur_offset -= copy_sz;
         offset = task->cur_offset;
         copy_kind = task->copy_kind;
@@ -240,20 +194,23 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * 
     MPID_Thread_mutex_unlock(&task_queue->lock, &err);
 
     if (copy_sz) {
+        int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
+        MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
         switch (copy_kind) {
             case MPIDI_PIP_MEMCPY:
-                MPIDI_PIP_exec_memcpy_task(task, copy_sz, offset, local_remote_flag);
+                MPIDI_PIP_exec_memcpy_task(task, copy_sz, offset);
                 break;
             case MPIDI_PIP_PACK:
-                MPIDI_PIP_exec_self_pack_task(task, copy_sz, offset, local_remote_flag);
+                MPIDI_PIP_exec_self_pack_task(task, copy_sz, offset);
                 break;
             case MPIDI_PIP_UNPACK:
-                MPIDI_PIP_exec_self_unpack_task(task, copy_sz, offset, local_remote_flag);
+                MPIDI_PIP_exec_self_unpack_task(task, copy_sz, offset);
                 break;
             case MPIDI_PIP_PACK_UNPACK:
-                MPIDI_PIP_exec_self_pack_unpack_task(task, copy_sz, offset, local_remote_flag);
+                MPIDI_PIP_exec_self_pack_unpack_task(task, copy_sz, offset);
                 break;
         }
+        MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
     }
 
     return;
@@ -261,10 +218,8 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * 
 
 
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_memcpy_task(MPIDI_PIP_task_t * task, void *src_buf,
-                                                         void *dest_buf, MPI_Aint data_sz,
-                                                         int task_kind)
+                                                         void *dest_buf, MPI_Aint data_sz)
 {
-    task->task_kind = task_kind;
     task->copy_kind = MPIDI_PIP_MEMCPY;
 
     task->src_buf = src_buf;
@@ -277,21 +232,20 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_memcpy_task(MPIDI_PIP_task_t * task
 
 
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_memcpy_task_enqueue(char *src_buf,
-                                                            char *dest_buf, MPI_Aint data_sz,
-                                                            int task_kind)
+                                                            char *dest_buf, MPI_Aint data_sz)
 {
     if (data_sz <= MPIDI_PIP_PKT_32KB) {
-        MPIDI_PIP_global.local_copy_state[task_kind][MPIDI_PIP_global.numa_local_rank] = 1;
+        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
         MPIR_Memcpy(dest_buf, src_buf, data_sz);
         OPA_write_barrier();
-        MPIDI_PIP_global.local_copy_state[task_kind][MPIDI_PIP_global.numa_local_rank] = 0;
+        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
     } else {
         MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
-        MPIDI_PIP_init_memcpy_task(task, src_buf, dest_buf, data_sz, task_kind);
+        MPIDI_PIP_init_memcpy_task(task, src_buf, dest_buf, data_sz);
         MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task);
         do {
             if (task->cur_offset != 0)
-                MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue, MPIDI_PIP_LOCAL_STEALING);
+                MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue);
         } while (OPA_load_int(&task->done_data_sz) != task->orig_data_sz);
 
         MPIDI_PIP_cancel_task(MPIDI_PIP_global.task_queue);
@@ -304,9 +258,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_memcpy_task_enqueue(char *src_buf,
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_pack_task(MPIDI_PIP_task_t * task, void *src_buf,
                                                        MPI_Aint src_count, MPI_Aint inoffset,
                                                        MPIR_Datatype * src_dt_ptr, void *dest_buf,
-                                                       MPI_Aint data_sz, int task_kind)
-{
-    task->task_kind = task_kind;
+                                                       MPI_Aint data_sz) {
     task->copy_kind = MPIDI_PIP_PACK;
 
     task->src_buf = src_buf;
@@ -320,34 +272,29 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_pack_task(MPIDI_PIP_task_t * task, 
     task->init_src_offset = inoffset;
     return;
 }
-
-
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_task_enqueue(void *src_buf, MPI_Aint src_count,
                                                           MPIR_Datatype * src_dt_ptr,
-                                                          char *dest_buf, MPI_Aint data_sz,
-                                                          int task_kind)
-{
+                                                          char *dest_buf, MPI_Aint data_sz) {
     MPI_Datatype src_dt_dup;
 
-    MPIR_PIP_Type_dup(src_dt_ptr, &src_dt_dup);
+     MPIR_PIP_Type_dup(src_dt_ptr, &src_dt_dup);
     if (data_sz <= MPIDI_PIP_PKT_32KB) {
         MPI_Aint actual_bytes;
-        MPIDI_PIP_global.local_copy_state[task_kind][MPIDI_PIP_global.numa_local_rank] = 1;
-        MPIR_Typerep_pack(src_buf, src_count, src_dt_dup, 0, dest_buf, data_sz, &actual_bytes);
-        OPA_write_barrier();
-        MPIDI_PIP_global.local_copy_state[task_kind][MPIDI_PIP_global.numa_local_rank] = 0;
-        MPIR_Assert(actual_bytes == data_sz);
+         MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
+         MPIR_Typerep_pack(src_buf, src_count, src_dt_dup, 0, dest_buf, data_sz, &actual_bytes);
+         OPA_write_barrier();
+         MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
+         MPIR_Assert(actual_bytes == data_sz);
     } else {
         MPIR_Datatype *src_dt_dup_ptr;
         MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
         MPIR_Datatype_get_ptr(src_dt_dup, src_dt_dup_ptr);
 
-        MPIDI_PIP_init_pack_task(task, src_buf, src_count, 0, src_dt_dup_ptr, dest_buf, data_sz,
-                                 task_kind);
+        MPIDI_PIP_init_pack_task(task, src_buf, src_count, 0, src_dt_dup_ptr, dest_buf, data_sz);
         MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task);
         do {
             if (task->cur_offset != 0)
-                MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue, MPIDI_PIP_LOCAL_STEALING);
+                MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue);
         } while (OPA_load_int(&task->done_data_sz) != task->orig_data_sz);
 
         MPIDI_PIP_cancel_task(MPIDI_PIP_global.task_queue);
@@ -363,9 +310,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_unpack_task(MPIDI_PIP_task_t * task
                                                          void *dest_buf, MPI_Aint dest_count,
                                                          MPI_Aint outoffset,
                                                          MPIR_Datatype * dest_dt_ptr,
-                                                         MPI_Aint data_sz, int task_kind)
-{
-    task->task_kind = task_kind;
+                                                         MPI_Aint data_sz) {
     task->copy_kind = MPIDI_PIP_UNPACK;
 
     task->src_buf = src_buf;
@@ -379,31 +324,27 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_unpack_task(MPIDI_PIP_task_t * task
     task->init_dest_offset = outoffset;
     return;
 }
-
-
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_unpack_task_enqueue(void *src_buf,
                                                             void *dest_buf, MPI_Aint dest_count,
-                                                            MPI_Datatype dest_dt, MPI_Aint data_sz,
-                                                            int task_kind)
-{
+                                                            MPI_Datatype dest_dt,
+                                                            MPI_Aint data_sz) {
     if (data_sz <= MPIDI_PIP_PKT_32KB) {
         MPI_Aint actual_bytes;
-        MPIDI_PIP_global.local_copy_state[task_kind][MPIDI_PIP_global.numa_local_rank] = 1;
-        MPIR_Typerep_unpack(src_buf, data_sz, dest_buf, dest_count, dest_dt, 0, &actual_bytes);
-        OPA_write_barrier();
-        MPIDI_PIP_global.local_copy_state[task_kind][MPIDI_PIP_global.numa_local_rank] = 0;
-        MPIR_Assert(actual_bytes == data_sz);
+         MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
+         MPIR_Typerep_unpack(src_buf, data_sz, dest_buf, dest_count, dest_dt, 0, &actual_bytes);
+         OPA_write_barrier();
+         MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
+         MPIR_Assert(actual_bytes == data_sz);
     } else {
         MPIR_Datatype *dest_dt_ptr;
         MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
         MPIR_Datatype_get_ptr(dest_dt, dest_dt_ptr);
 
-        MPIDI_PIP_init_unpack_task(task, src_buf, dest_buf, dest_count, 0, dest_dt_ptr, data_sz,
-                                   task_kind);
+        MPIDI_PIP_init_unpack_task(task, src_buf, dest_buf, dest_count, 0, dest_dt_ptr, data_sz);
         MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task);
         do {
             if (task->cur_offset != 0)
-                MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue, MPIDI_PIP_LOCAL_STEALING);
+                MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue);
         } while (OPA_load_int(&task->done_data_sz) != task->orig_data_sz);
 
         MPIDI_PIP_cancel_task(MPIDI_PIP_global.task_queue);
@@ -420,9 +361,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_pack_unpack_task(MPIDI_PIP_task_t *
                                                               void *dest_buf, MPI_Aint dest_count,
                                                               MPI_Aint outoffset,
                                                               MPIR_Datatype * dest_dt_ptr,
-                                                              MPI_Aint data_sz, int task_kind)
-{
-    task->task_kind = task_kind;
+                                                              MPI_Aint data_sz) {
     task->copy_kind = MPIDI_PIP_PACK_UNPACK;
 
     task->src_buf = src_buf;
@@ -440,30 +379,27 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_pack_unpack_task(MPIDI_PIP_task_t *
     task->init_dest_offset = outoffset;
     return;
 }
-
-
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_unpack_task_enqueue(void *src_buf,
                                                                  MPI_Aint src_count,
                                                                  MPIR_Datatype * src_dt_ptr,
                                                                  void *dest_buf,
                                                                  MPI_Aint dest_count,
                                                                  MPI_Datatype dest_dt,
-                                                                 MPI_Aint data_sz, int task_kind)
-{
+                                                                 MPI_Aint data_sz) {
     MPI_Datatype src_dt_dup;
 
-    MPIR_PIP_Type_dup(src_dt_ptr, &src_dt_dup);
+     MPIR_PIP_Type_dup(src_dt_ptr, &src_dt_dup);
     if (data_sz <= MPIDI_PIP_PKT_32KB) {
         MPI_Aint actual_bytes;
-        MPIDI_PIP_global.local_copy_state[task_kind][MPIDI_PIP_global.numa_local_rank] = 1;
-        MPIR_Typerep_pack(src_buf, src_count, src_dt_dup, 0, MPIDI_PIP_global.pkt_load, data_sz,
-                          &actual_bytes);
-        MPIR_Assert(actual_bytes == data_sz);
-        MPIR_Typerep_unpack(MPIDI_PIP_global.pkt_load, data_sz, dest_buf, dest_count, dest_dt, 0,
-                            &actual_bytes);
-        MPIR_Assert(actual_bytes == data_sz);
-        OPA_write_barrier();
-        MPIDI_PIP_global.local_copy_state[task_kind][MPIDI_PIP_global.numa_local_rank] = 0;
+         MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
+         MPIR_Typerep_pack(src_buf, src_count, src_dt_dup, 0, MPIDI_PIP_global.pkt_load, data_sz,
+                           &actual_bytes);
+         MPIR_Assert(actual_bytes == data_sz);
+         MPIR_Typerep_unpack(MPIDI_PIP_global.pkt_load, data_sz, dest_buf, dest_count, dest_dt, 0,
+                             &actual_bytes);
+         MPIR_Assert(actual_bytes == data_sz);
+         OPA_write_barrier();
+         MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
     } else {
         MPIR_Datatype *src_dt_dup_ptr;
         MPIR_Datatype *dest_dt_ptr;
@@ -472,11 +408,11 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_unpack_task_enqueue(void *src_buf,
         MPIR_Datatype_get_ptr(src_dt_dup, src_dt_dup_ptr);
 
         MPIDI_PIP_init_pack_unpack_task(task, src_buf, src_count, 0, src_dt_dup_ptr,
-                                        dest_buf, dest_count, 0, dest_dt_ptr, data_sz, task_kind);
+                                        dest_buf, dest_count, 0, dest_dt_ptr, data_sz);
         MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task);
         do {
             if (task->cur_offset != 0)
-                MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue, MPIDI_PIP_LOCAL_STEALING);
+                MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue);
         } while (OPA_load_int(&task->done_data_sz) != task->orig_data_sz);
 
         MPIDI_PIP_cancel_task(MPIDI_PIP_global.task_queue);
@@ -488,9 +424,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_unpack_task_enqueue(void *src_buf,
 }
 
 
-MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_copy_size_decision(MPIDI_PIP_task_t * task,
-                                                          int local_remote_flag)
-{
+MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_copy_size_decision(MPIDI_PIP_task_t * task) {
     int copy_sz;
     /* This size decision function is only for bebop machine */
     static const int PKT_16KB = 1 << 14;
@@ -502,7 +436,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_copy_size_decision(MPIDI_PIP_task_t * tas
         copy_sz = task->cur_offset;
     else if (task->cur_offset <= PKT_96KB)
         copy_sz = PKT_16KB;
-    else if (task->cur_offset <= PKT_512KB || local_remote_flag == MPIDI_PIP_REMOTE_STEALING)
+    else if (task->cur_offset <= PKT_512KB)
         copy_sz = PKT_32KB;
     else
         copy_sz = PKT_96KB;
@@ -512,143 +446,80 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_copy_size_decision(MPIDI_PIP_task_t * tas
 
 
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_memcpy_task(MPIDI_PIP_task_t * task, int copy_sz,
-                                                         MPI_Aint offset, int local_remote_flag)
-{
+                                                         MPI_Aint offset) {
     int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
     void *cur_src_buf = (void *) ((uint64_t) task->src_buf + offset);
     void *cur_dest_buf = (void *) ((uint64_t) task->dest_buf + offset);
-    if (local_remote_flag == MPIDI_PIP_LOCAL_STEALING || task->task_kind == MPIDI_PIP_INTER_TASK) {
-        int task_kind = task->task_kind;
-        MPIDI_PIP_global.local_copy_state[task_kind][numa_local_rank] = 1;
-        MPIR_Memcpy(cur_dest_buf, cur_src_buf, copy_sz);
-        OPA_write_barrier();
-        MPIDI_PIP_global.local_copy_state[task_kind][numa_local_rank] = 0;
-    } else {
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_INTER_TASK][numa_local_rank] = 1;
-        MPIR_Memcpy(cur_dest_buf, cur_src_buf, copy_sz);
-        OPA_write_barrier();
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_INTER_TASK][numa_local_rank] = 0;
-    }
-    OPA_add_int(&task->done_data_sz, copy_sz);
-    return;
+
+     MPIR_Memcpy(cur_dest_buf, cur_src_buf, copy_sz);
+     OPA_write_barrier();
+
+     OPA_add_int(&task->done_data_sz, copy_sz);
+     return;
 }
-
-
-MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_stolen_pack_task(MPIDI_PIP_task_t * task, int copy_sz,
-                                                              MPI_Aint offset,
-                                                              int local_remote_flag)
-{
+MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_stolen_pack_task(MPIDI_PIP_task_t * task,
+                                                              int copy_sz, MPI_Aint offset) {
     MPI_Datatype src_dt_dup;
     MPI_Aint actual_bytes;
     int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
     void *cur_dest_buf = (void *) ((uint64_t) task->dest_buf + offset);
 
-    MPIR_PIP_Type_dup(task->src_dt_ptr, &src_dt_dup);
-    if (local_remote_flag == MPIDI_PIP_LOCAL_STEALING || task->task_kind == MPIDI_PIP_INTER_TASK) {
-        int task_kind = task->task_kind;
+     MPIR_PIP_Type_dup(task->src_dt_ptr, &src_dt_dup);
 
-        MPIDI_PIP_global.local_copy_state[task_kind][numa_local_rank] = 1;
-        MPIR_Typerep_pack(task->src_buf, task->src_count, src_dt_dup,
-                          task->init_src_offset + offset, cur_dest_buf, copy_sz, &actual_bytes);
-        OPA_write_barrier();
-        MPIDI_PIP_global.local_copy_state[task_kind][numa_local_rank] = 0;
-    } else {
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_INTER_TASK][numa_local_rank] = 1;
-        MPIR_Typerep_pack(task->src_buf, task->src_count, src_dt_dup,
-                          task->init_src_offset + offset, cur_dest_buf, copy_sz, &actual_bytes);
-        OPA_write_barrier();
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_INTER_TASK][numa_local_rank] = 0;
-    }
+     MPIR_Typerep_pack(task->src_buf, task->src_count, src_dt_dup,
+                       task->init_src_offset + offset, cur_dest_buf, copy_sz, &actual_bytes);
+     OPA_write_barrier();
 
-    OPA_add_int(&task->done_data_sz, copy_sz);
-    MPIR_Assert(actual_bytes == copy_sz);
-    MPIR_Type_free_impl(&src_dt_dup);
-    return;
+     OPA_add_int(&task->done_data_sz, copy_sz);
+     MPIR_Assert(actual_bytes == copy_sz);
+     MPIR_Type_free_impl(&src_dt_dup);
+     return;
 }
-
-
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_stolen_unpack_task(MPIDI_PIP_task_t * task,
-                                                                int copy_sz, MPI_Aint offset,
-                                                                int local_remote_flag)
-{
+                                                                int copy_sz, MPI_Aint offset) {
     MPI_Datatype dest_dt_dup;
     MPI_Aint actual_bytes;
     int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
     void *cur_src_buf = (void *) ((uint64_t) task->src_buf + offset);
 
-    MPIR_PIP_Type_dup(task->dest_dt_ptr, &dest_dt_dup);
-    if (local_remote_flag == MPIDI_PIP_LOCAL_STEALING || task->task_kind == MPIDI_PIP_INTER_TASK) {
-        int task_kind = task->task_kind;
+     MPIR_PIP_Type_dup(task->dest_dt_ptr, &dest_dt_dup);
 
-        MPIDI_PIP_global.local_copy_state[task_kind][numa_local_rank] = 1;
-        MPIR_Typerep_unpack(cur_src_buf, copy_sz, task->dest_buf, task->dest_count, dest_dt_dup,
-                            task->init_dest_offset + offset, &actual_bytes);
-        OPA_write_barrier();
-        MPIDI_PIP_global.local_copy_state[task_kind][numa_local_rank] = 0;
-    } else {
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_INTER_TASK][numa_local_rank] = 1;
-        MPIR_Typerep_unpack(cur_src_buf, copy_sz, task->dest_buf, task->dest_count, dest_dt_dup,
-                            task->init_dest_offset + offset, &actual_bytes);
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_INTER_TASK][numa_local_rank] = 0;
-    }
+     MPIR_Typerep_unpack(cur_src_buf, copy_sz, task->dest_buf, task->dest_count, dest_dt_dup,
+                         task->init_dest_offset + offset, &actual_bytes);
+     OPA_write_barrier();
 
-    OPA_add_int(&task->done_data_sz, copy_sz);
-    MPIR_Assert(actual_bytes == copy_sz);
-    MPIR_Type_free_impl(&dest_dt_dup);
-    return;
+     OPA_add_int(&task->done_data_sz, copy_sz);
+     MPIR_Assert(actual_bytes == copy_sz);
+     MPIR_Type_free_impl(&dest_dt_dup);
+     return;
 }
-
-
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_stolen_pack_unpack_task(MPIDI_PIP_task_t * task,
-                                                                     int copy_sz, MPI_Aint offset,
-                                                                     int local_remote_flag)
-{
+                                                                     int copy_sz, MPI_Aint offset) {
 
     MPI_Datatype src_dt_dup;
     MPI_Datatype dest_dt_dup;
     MPI_Aint actual_bytes;
     int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
 
-    MPIR_PIP_Type_dup(task->src_dt_ptr, &src_dt_dup);
-    MPIR_PIP_Type_dup(task->dest_dt_ptr, &dest_dt_dup);
-    if (local_remote_flag == MPIDI_PIP_LOCAL_STEALING || task->task_kind == MPIDI_PIP_INTER_TASK) {
-        int task_kind = task->task_kind;
+     MPIR_PIP_Type_dup(task->src_dt_ptr, &src_dt_dup);
+     MPIR_PIP_Type_dup(task->dest_dt_ptr, &dest_dt_dup);
 
-        MPIDI_PIP_global.local_copy_state[task_kind][numa_local_rank] = 1;
-        MPIR_Typerep_pack(task->src_buf, task->src_count, src_dt_dup,
-                          task->init_src_offset + offset, MPIDI_PIP_global.pkt_load, copy_sz,
-                          &actual_bytes);
-        MPIR_Assert(actual_bytes == copy_sz);
+     MPIR_Typerep_pack(task->src_buf, task->src_count, src_dt_dup,
+                       task->init_src_offset + offset, MPIDI_PIP_global.pkt_load, copy_sz,
+                       &actual_bytes);
+     MPIR_Assert(actual_bytes == copy_sz);
 
-        MPIR_Typerep_unpack(MPIDI_PIP_global.pkt_load, copy_sz, task->dest_buf, task->dest_count,
-                            dest_dt_dup, task->init_dest_offset + offset, &actual_bytes);
-        MPIR_Assert(actual_bytes == copy_sz);
-        OPA_write_barrier();
-        MPIDI_PIP_global.local_copy_state[task_kind][numa_local_rank] = 0;
-    } else {
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_INTER_TASK][numa_local_rank] = 1;
-        MPIR_Typerep_pack(task->src_buf, task->src_count, src_dt_dup,
-                          task->init_src_offset + offset, MPIDI_PIP_global.pkt_load, copy_sz,
-                          &actual_bytes);
-        MPIR_Assert(actual_bytes == copy_sz);
+     MPIR_Typerep_unpack(MPIDI_PIP_global.pkt_load, copy_sz, task->dest_buf, task->dest_count,
+                         dest_dt_dup, task->init_dest_offset + offset, &actual_bytes);
+     MPIR_Assert(actual_bytes == copy_sz);
+     OPA_write_barrier();
 
-        MPIR_Typerep_unpack(MPIDI_PIP_global.pkt_load, copy_sz, task->dest_buf, task->dest_count,
-                            dest_dt_dup, task->init_dest_offset + offset, &actual_bytes);
-        MPIR_Assert(actual_bytes == copy_sz);
-        OPA_write_barrier();
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_INTER_TASK][numa_local_rank] = 0;
-    }
-
-    OPA_add_int(&task->done_data_sz, copy_sz);
-    MPIR_Type_free_impl(&src_dt_dup);
-    MPIR_Type_free_impl(&dest_dt_dup);
-    return;
+     OPA_add_int(&task->done_data_sz, copy_sz);
+     MPIR_Type_free_impl(&src_dt_dup);
+     MPIR_Type_free_impl(&dest_dt_dup);
+     return;
 }
-
-
-MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t * task_queue,
-                                                         int local_remote_flag)
-{
+MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t * task_queue) {
     void *src_buf, *dest_buf;
     int copy_sz, err, copy_kind;
     MPI_Aint offset;
@@ -657,7 +528,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t 
     MPID_Thread_mutex_lock(&task_queue->lock, &err);
     task = task_queue->head;
     if (task && task->cur_offset != 0) {
-        copy_sz = MPIDI_PIP_copy_size_decision(task, local_remote_flag);
+        copy_sz = MPIDI_PIP_copy_size_decision(task);
         task->cur_offset -= copy_sz;
         offset = task->cur_offset;
         copy_kind = task->copy_kind;
@@ -669,16 +540,16 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t 
     if (copy_sz) {
         switch (copy_kind) {
             case MPIDI_PIP_MEMCPY:
-                MPIDI_PIP_exec_memcpy_task(task, copy_sz, offset, local_remote_flag);
+                MPIDI_PIP_exec_memcpy_task(task, copy_sz, offset);
                 break;
             case MPIDI_PIP_PACK:
-                MPIDI_PIP_exec_stolen_pack_task(task, copy_sz, offset, local_remote_flag);
+                MPIDI_PIP_exec_stolen_pack_task(task, copy_sz, offset);
                 break;
             case MPIDI_PIP_UNPACK:
-                MPIDI_PIP_exec_stolen_unpack_task(task, copy_sz, offset, local_remote_flag);
+                MPIDI_PIP_exec_stolen_unpack_task(task, copy_sz, offset);
                 break;
             case MPIDI_PIP_PACK_UNPACK:
-                MPIDI_PIP_exec_stolen_pack_unpack_task(task, copy_sz, offset, local_remote_flag);
+                MPIDI_PIP_exec_stolen_pack_unpack_task(task, copy_sz, offset);
                 break;
         }
     }
@@ -690,14 +561,12 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t 
 MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_pack(void *src_buf, MPI_Aint src_count,
                                             MPI_Datatype src_dt, MPI_Aint inoffset,
                                             void *dest_buf, MPI_Aint max_pack_bytes,
-                                            MPI_Aint * actual_pack_bytes)
-{
+                                            MPI_Aint * actual_pack_bytes) {
     int mpi_errno = MPI_SUCCESS;
-    int task_kind = MPIDI_PIP_INTRA_TASK;
     MPI_Aint data_sz, orig_data_sz;
 
-    MPIDI_Datatype_check_size(src_dt, src_count, orig_data_sz);
-    orig_data_sz = orig_data_sz - inoffset;
+     MPIDI_Datatype_check_size(src_dt, src_count, orig_data_sz);
+     orig_data_sz = orig_data_sz - inoffset;
     if (orig_data_sz > max_pack_bytes) {
         mpi_errno = MPI_ERR_TRUNCATE;
         data_sz = max_pack_bytes;
@@ -708,22 +577,21 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_pack(void *src_buf, MPI_Aint src_count,
     *actual_pack_bytes = data_sz;
     if (data_sz <= MPIDI_PIP_PKT_32KB) {
         MPI_Aint actual_bytes;
-        MPIDI_PIP_global.local_copy_state[task_kind][MPIDI_PIP_global.numa_local_rank] = 1;
+        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
         MPIR_Typerep_pack(src_buf, src_count, src_dt, inoffset, dest_buf, data_sz, &actual_bytes);
         OPA_write_barrier();
-        MPIDI_PIP_global.local_copy_state[task_kind][MPIDI_PIP_global.numa_local_rank] = 0;
+        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
         MPIR_Assert(actual_bytes == data_sz);
     } else {
         MPIR_Datatype *src_dt_ptr;
         MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
         MPIR_Datatype_get_ptr(src_dt, src_dt_ptr);
 
-        MPIDI_PIP_init_pack_task(task, src_buf, src_count, inoffset, src_dt_ptr, dest_buf, data_sz,
-                                 task_kind);
+        MPIDI_PIP_init_pack_task(task, src_buf, src_count, inoffset, src_dt_ptr, dest_buf, data_sz);
         MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task);
         do {
             if (task->cur_offset != 0)
-                MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue, MPIDI_PIP_LOCAL_STEALING);
+                MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue);
         } while (OPA_load_int(&task->done_data_sz) != task->orig_data_sz);
 
         MPIDI_PIP_cancel_task(MPIDI_PIP_global.task_queue);
@@ -737,14 +605,12 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_pack(void *src_buf, MPI_Aint src_count,
 MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_unpack(void *src_buf, MPI_Aint insize,
                                               void *dest_buf, MPI_Aint dest_count,
                                               MPI_Datatype dest_dt, MPI_Aint outoffset,
-                                              MPI_Aint * actual_unpack_bytes)
-{
+                                              MPI_Aint * actual_unpack_bytes) {
     int mpi_errno = MPI_SUCCESS;
-    int task_kind = MPIDI_PIP_INTRA_TASK;
     MPI_Aint data_sz, orig_data_sz;
 
-    MPIDI_Datatype_check_size(dest_dt, dest_count, orig_data_sz);
-    orig_data_sz = orig_data_sz - outoffset;
+     MPIDI_Datatype_check_size(dest_dt, dest_count, orig_data_sz);
+     orig_data_sz = orig_data_sz - outoffset;
     if (orig_data_sz < insize) {
         mpi_errno = MPI_ERR_TRUNCATE;
         data_sz = orig_data_sz;
@@ -755,11 +621,11 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_unpack(void *src_buf, MPI_Aint insize,
     *actual_unpack_bytes = data_sz;
     if (data_sz <= MPIDI_PIP_PKT_32KB) {
         MPI_Aint actual_bytes;
-        MPIDI_PIP_global.local_copy_state[task_kind][MPIDI_PIP_global.numa_local_rank] = 1;
+        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
         MPIR_Typerep_unpack(src_buf, data_sz, dest_buf, dest_count, dest_dt, outoffset,
                             &actual_bytes);
         OPA_write_barrier();
-        MPIDI_PIP_global.local_copy_state[task_kind][MPIDI_PIP_global.numa_local_rank] = 0;
+        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
         MPIR_Assert(actual_bytes == data_sz);
     } else {
         MPIR_Datatype *dest_dt_ptr;
@@ -767,11 +633,11 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_unpack(void *src_buf, MPI_Aint insize,
         MPIR_Datatype_get_ptr(dest_dt, dest_dt_ptr);
 
         MPIDI_PIP_init_unpack_task(task, src_buf, dest_buf, dest_count, outoffset, dest_dt_ptr,
-                                   data_sz, task_kind);
+                                   data_sz);
         MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task);
         do {
             if (task->cur_offset != 0)
-                MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue, MPIDI_PIP_LOCAL_STEALING);
+                MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue);
         } while (OPA_load_int(&task->done_data_sz) != task->orig_data_sz);
 
         MPIDI_PIP_cancel_task(MPIDI_PIP_global.task_queue);
@@ -784,48 +650,41 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_unpack(void *src_buf, MPI_Aint insize,
 
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_Task_remote_check_and_steal(MPIDI_PIP_task_queue_t *
                                                                     task_queue, int numa_num_procs,
-                                                                    int cur_rmt_stealing_procs,
                                                                     MPIDI_PIP_global_t *
-                                                                    victim_pip_global)
-{
+                                                                    victim_pip_global) {
     int err, i;
     int cur_local_intra_copy = 0;
-    int cur_local_inter_copy = 0;
-    int **local_copy_array = victim_pip_global->local_copy_state;
+    int *local_copy_array = victim_pip_global->local_copy_state;
     int *local_idle_array = victim_pip_global->local_idle_state;
     for (i = 0; i < numa_num_procs; ++i) {
         /* intra local copy */
-        if (local_copy_array[MPIDI_PIP_INTRA_TASK][i] || local_idle_array[i])
+        if (local_copy_array[i] || local_idle_array[i])
             cur_local_intra_copy++;
-        /* inter local copy */
-        if (local_copy_array[MPIDI_PIP_INTER_TASK][i])
-            cur_local_inter_copy++;
     }
-
-    if (cur_local_intra_copy < MPIDI_PIP_upperbound_threshold[MPIDI_PIP_INTRA_TASK] &&
-        cur_rmt_stealing_procs < MPIDI_RMT_COPY_PROCS_THRESHOLD &&
-        (cur_rmt_stealing_procs + cur_local_inter_copy) <
-        MPIDI_PIP_thp_map[MPIDI_PIP_INTRA_TASK][cur_local_intra_copy]) {
-        MPIDI_PIP_exec_stolen_task(task_queue, MPIDI_PIP_REMOTE_STEALING);
+    if (cur_local_intra_copy < MPIDI_INTRA_COPY_LOCAL_PROCS_THRESHOLD) {
+        MPIDI_PIP_exec_stolen_task(task_queue);
     }
     return;
 }
 
 
 /* Stealing procedure */
-MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
-{
+MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task() {
 #ifdef MPIDI_PIP_STEALING_ENABLE
     /* local stealing */
     int numa_id = MPIDI_PIP_global.local_numa_id;
     int numa_num_procs = MPIDI_PIP_global.numa_num_procs[numa_id];
+    int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
     int victim = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][rand() % numa_num_procs];
     MPIDI_PIP_task_t *task = NULL;
 
     if (victim != MPIDI_PIP_global.local_rank) {
         MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
         if (victim_queue->head) {
-            MPIDI_PIP_exec_stolen_task(victim_queue, MPIDI_PIP_LOCAL_STEALING);
+            MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
+            MPIDI_PIP_exec_stolen_task(victim_queue);
+            MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
+            return;
         }
     }
 
@@ -842,17 +701,18 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
     numa_num_procs = MPIDI_PIP_global.numa_num_procs[numa_id];
 
     if (numa_num_procs != 0 && numa_id != MPIDI_PIP_global.local_numa_id) {
-        victim = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][rand() % numa_num_procs];
-        MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
+        int rmt_access = OPA_fetch_and_add_int(&MPIDI_PIP_global.numa_rmt_access[numa_id], 1);
+        if (rmt_access < MPIDI_MAX_RMT_PEEKING_PROCS) {
+            victim = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][rand() % numa_num_procs];
+            MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
 
-        if (victim_queue->head) {
-            MPIDI_PIP_global_t *victim_pip_global = MPIDI_PIP_global.pip_global_array[victim];
-            int cur_rmt_stealing_procs =
-                OPA_fetch_and_add_int(victim_pip_global->rmt_steal_procs_ptr, 1);
-            MPIDI_PIP_Task_remote_check_and_steal(victim_queue, numa_num_procs,
-                                                  cur_rmt_stealing_procs, victim_pip_global);
-            OPA_decr_int(victim_pip_global->rmt_steal_procs_ptr);
+            if (victim_queue->head) {
+                MPIDI_PIP_global_t *victim_pip_global = MPIDI_PIP_global.pip_global_array[victim];
+                MPIDI_PIP_Task_remote_check_and_steal(victim_queue, numa_num_procs,
+                                                      victim_pip_global);
+            }
         }
+        OPA_decr_int(&MPIDI_PIP_global.numa_rmt_access[numa_id]);
     }
 #endif /* MPIDI_PIP_STEALING_ENABLE */
     return;
