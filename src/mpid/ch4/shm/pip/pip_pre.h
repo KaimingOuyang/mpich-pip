@@ -22,6 +22,14 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 #define MPIDI_PIP_LAST_PKT_THRESHOLD MPIDI_PIP_PKT_SIZE /* 64KB */
 #define MPIDI_PIP_PKT_SIZE 65536        /* 64KB */
 
+#ifdef BEBOP
+#define NUM_PHYSICAL_CORES 36
+#elif KNL
+#define NUM_PHYSICAL_CORES 64
+#else
+#define NUM_PHYSICAL_CORES 36
+#endif
+
 typedef struct MPIDI_PIP_task {
     MPIR_OBJECT_HEADER;
     int compl_flag;

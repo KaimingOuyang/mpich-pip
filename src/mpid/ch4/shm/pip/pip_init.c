@@ -51,15 +51,15 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     int num_numa_node = numa_num_task_nodes();
     char *MODE = getenv("BIND_MODE");
 
-    if(strcmp(MODE, "INTER-P2P") == 0){
-        int cpus_per_numa = get_nprocs() / num_numa_node;
-        if(rank == 1){
+    if (strcmp(MODE, "INTER-P2P") == 0) {
+        int exchg_id = NUM_PHYSICAL_CORES - 1;
+        if (rank == 1) {
             // printf("cpus/numa - %d\n", cpus_per_numa);
             cpu_set_t mask;
             CPU_ZERO(&mask);
-            CPU_SET(cpus_per_numa, &mask);
+            CPU_SET(exchg_id, &mask);
             sched_setaffinity(getpid(), sizeof(cpu_set_t), &mask);
-        }else if(rank == cpus_per_numa){
+        } else if (rank == exchg_id) {
             cpu_set_t mask;
             CPU_ZERO(&mask);
             CPU_SET(1, &mask);
@@ -67,7 +67,7 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
         }
     }
 
-     /* NUMA info */
+    /* NUMA info */
     int cpu = sched_getcpu();
     int local_numa_id = numa_node_of_cpu(cpu);
     MPIDI_PIP_global.num_numa_node = num_numa_node;
