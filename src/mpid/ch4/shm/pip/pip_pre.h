@@ -31,6 +31,7 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 #define MPIDI_MAX_RMT_PEEKING_PROCS 5
 #define MPIDI_PROC_COPY 1
 #define MPIDI_PROC_NOT_COPY 0
+#define MPIDI_REVERSE_ENQUEUE_THRESHOLD 8388608 // 8MB
 
 /* Task kind */
 // #define MPIDI_STEALING_CASE 2
@@ -66,6 +67,7 @@ typedef struct MPIDI_PIP_task {
     MPI_Aint dest_count;
     MPIR_Datatype *dest_dt_ptr;
     MPI_Aint init_dest_offset;  /* dest initial offset */
+    int reverse_enqueue;
 } MPIDI_PIP_task_t;
 
 typedef struct MPIDI_PIP_task_queue {
