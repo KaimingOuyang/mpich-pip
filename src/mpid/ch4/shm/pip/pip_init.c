@@ -52,14 +52,14 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     char *MODE = getenv("BIND_MODE");
 
     if (strcmp(MODE, "INTER-P2P") == 0) {
-        int cpus_per_numa = get_nprocs() / num_numa_node;
+        int exchg = NUM_PHYSICAL_CORES - 1;
         if (rank == 1) {
             // printf("cpus/numa - %d\n", cpus_per_numa);
             cpu_set_t mask;
             CPU_ZERO(&mask);
-            CPU_SET(cpus_per_numa, &mask);
+            CPU_SET(exchg, &mask);
             sched_setaffinity(getpid(), sizeof(cpu_set_t), &mask);
-        } else if (rank == cpus_per_numa) {
+        } else if (rank == exchg) {
             cpu_set_t mask;
             CPU_ZERO(&mask);
             CPU_SET(1, &mask);
