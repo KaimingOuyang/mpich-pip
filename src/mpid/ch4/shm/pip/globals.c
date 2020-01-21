@@ -16,6 +16,11 @@
 MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 #endif
 
+
+const int MPIDI_PIP_local_stealing_num[MPIDI_PIP_THRESHOLD_CASE] = { 4, 5, 8, 12, 16 }; // #local stealing threshold
+const int MPIDI_PIP_local_stealing_map[MPIDI_PIP_THRESHOLD_CASE] = { 16, 10, 8, 5, 1 }; // max remote stealing map
+
+
 /* array 0 is intra threshold, 1 is inter */
 const int MPIDI_PIP_upperbound_threshold[MPIDI_STEALING_CASE] =
     { MPIDI_INTRA_COPY_LOCAL_PROCS_THRESHOLD, MPIDI_INTER_COPY_LOCAL_PROCS_THRESHOLD };

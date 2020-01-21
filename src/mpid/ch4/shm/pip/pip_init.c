@@ -120,13 +120,13 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     if (local_root == local_rank) {
         /* root process in eahc NUMA node */
         OPA_store_int(&MPIDI_PIP_global.rmt_steal_procs, 0);
-        for (i = 0; i < MPIDI_STEALING_CASE; ++i) {
-            MPIDI_PIP_global.local_copy_state[i] =
-                (int *) MPL_malloc(sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id],
-                                   MPL_MEM_OTHER);
-            memset(MPIDI_PIP_global.local_copy_state[i], 0,
-                   sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id]);
-        }
+
+        MPIDI_PIP_global.local_copy_state =
+            (int *) MPL_malloc(sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id],
+                               MPL_MEM_OTHER);
+        memset(MPIDI_PIP_global.local_copy_state, 0,
+               sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id]);
+
 
         MPIDI_PIP_global.local_idle_state =
             (int *) MPL_malloc(sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id],
@@ -136,9 +136,8 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
         MPIDU_Init_shm_barrier();
     } else {
         MPIDU_Init_shm_barrier();
-        for (i = 0; i < MPIDI_STEALING_CASE; ++i)
-            MPIDI_PIP_global.local_copy_state[i] =
-                MPIDI_PIP_global.pip_global_array[local_root]->local_copy_state[i];
+        MPIDI_PIP_global.local_copy_state =
+            MPIDI_PIP_global.pip_global_array[local_root]->local_copy_state;
         MPIDI_PIP_global.local_idle_state =
             MPIDI_PIP_global.pip_global_array[local_root]->local_idle_state;
     }
@@ -229,8 +228,7 @@ int MPIDI_PIP_mpi_finalize_hook(void)
     MPL_free(MPIDI_PIP_global.pip_global_array);
 
     if (MPIDI_PIP_global.local_rank == MPIDI_PIP_global.numa_root_rank) {
-        for (i = 0; i < MPIDI_STEALING_CASE; ++i)
-            MPL_free(MPIDI_PIP_global.local_copy_state[i]);
+        MPL_free(MPIDI_PIP_global.local_copy_state);
         MPL_free(MPIDI_PIP_global.local_idle_state);
     }
 

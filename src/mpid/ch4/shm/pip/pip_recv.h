@@ -31,11 +31,14 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_lmt_rts_recv_enqueue_tasks(char *src_buf
                                                                    int task_kind)
 {
     uint64_t copy_sz;
+    int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
     do {
         if (data_sz <= MPIDI_PIP_LAST_PKT_THRESHOLD) {
             /* Last packet, I need to copy it myself. */
             copy_sz = data_sz;
+            MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
             MPIR_Memcpy((void *) dest_buf, (void *) src_buf, copy_sz);
+            MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
             MPIDI_PIP_fflush_task();
             while (MPIDI_PIP_global.compl_queue->head)
                 MPIDI_PIP_fflush_compl_task(MPIDI_PIP_global.compl_queue);
@@ -83,8 +86,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_handle_lmt_rts_recv(uint64_t src_offset,
     if (dt_contig) {
         int task_kind =
             MPIDI_PIP_global.local_numa_id ==
-            MPIDI_PIP_global.
-            pip_global_array[src_lrank]->local_numa_id ? MPIDI_PIP_INTRA_TASK :
+            MPIDI_PIP_global.pip_global_array[src_lrank]->local_numa_id ? MPIDI_PIP_INTRA_TASK :
             MPIDI_PIP_INTER_TASK;
 
         /* Note: for now, just consider contiguous stealing [Need to fix this issue] */
