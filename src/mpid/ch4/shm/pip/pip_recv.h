@@ -36,11 +36,14 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_memcpy_task_enqueue(char *src_buf,
     MPI_Aint copy_sz;
     char *revs_src_buf = src_buf + data_sz;
     char *revs_dest_buf = dest_buf + data_sz;
+    int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
     do {
         if (data_sz <= MPIDI_PIP_LAST_PKT_THRESHOLD) {
             /* Last packet, I need to copy it myself. */
             copy_sz = data_sz;
+            MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
             MPIR_Memcpy((void *) dest_buf, (void *) src_buf, copy_sz);
+            MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
             MPIDI_PIP_fflush_task();
             while (MPIDI_PIP_global.compl_queue->head)
                 MPIDI_PIP_fflush_compl_task(MPIDI_PIP_global.compl_queue);

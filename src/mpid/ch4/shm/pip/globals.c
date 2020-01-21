@@ -16,16 +16,21 @@
 MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 #endif
 
+
+// const int MPIDI_PIP_local_stealing_num[MPIDI_PIP_THRESHOLD_CASE] = { 4, 5, 8, 12, 16 }; // #local stealing threshold
+// const int MPIDI_PIP_local_stealing_map[MPIDI_PIP_THRESHOLD_CASE] = { 16, 10, 8, 5, 1 }; // max remote stealing map
+
+
 /* array 0 is intra threshold, 1 is inter */
-const int MPIDI_PIP_upperbound_threshold[MPIDI_STEALING_CASE] =
-    { MPIDI_INTRA_COPY_LOCAL_PROCS_THRESHOLD, MPIDI_INTER_COPY_LOCAL_PROCS_THRESHOLD };
+// const int MPIDI_PIP_upperbound_threshold[MPIDI_STEALING_CASE] =
+//     { MPIDI_INTRA_COPY_LOCAL_PROCS_THRESHOLD, MPIDI_INTER_COPY_LOCAL_PROCS_THRESHOLD };
 
 /* intra map is at 0 position */
-const int MPIDI_PIP_thp_map[MPIDI_STEALING_CASE][MPIDI_NUM_COPY_LOCAL_PROCS_ARRAY] =
-    { {MPIDI_RMT_COPY_PROCS_THRESHOLD, 4, 3, 2, 1, 0, 0, 0}, {MPIDI_RMT_COPY_PROCS_THRESHOLD,
-                                                              MPIDI_RMT_COPY_PROCS_THRESHOLD, 4, 4,
-                                                              3, 2, 2, 1}
-};
+// const int MPIDI_PIP_thp_map[MPIDI_STEALING_CASE][MPIDI_NUM_COPY_LOCAL_PROCS_ARRAY] =
+//     { {MPIDI_RMT_COPY_PROCS_THRESHOLD, 4, 3, 2, 1, 0, 0, 0}, {MPIDI_RMT_COPY_PROCS_THRESHOLD,
+//                                                               MPIDI_RMT_COPY_PROCS_THRESHOLD, 4, 4,
+//                                                               3, 2, 2, 1}
+// };
 
 MPIDI_PIP_global_t MPIDI_PIP_global;
 

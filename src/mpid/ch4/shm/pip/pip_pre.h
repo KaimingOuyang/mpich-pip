@@ -23,13 +23,17 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 #define MPIDI_PIP_LAST_PKT_THRESHOLD MPIDI_PIP_PKT_SIZE /* 64KB */
 #define MPIDI_PIP_CELL_SIZE 65536
 
-#define MPIDI_INTRA_COPY_LOCAL_PROCS_THRESHOLD 5        /* #local process threshold for intra-NUMA copy on bebop */
-#define MPIDI_INTER_COPY_LOCAL_PROCS_THRESHOLD 8        /* #local process threshold for inter-NUMA copy on bebop */
+#define MPIDI_PIP_MAX_NUM_LOCAL_STEALING 10
+#define MPIDI_INTRA_COPY_LOCAL_PROCS_THRESHOLD 14       /* #local process threshold for intra-NUMA copy on knl */
+#define MPIDI_INTER_COPY_LOCAL_PROCS_THRESHOLD 16       /* #local process threshold for inter-NUMA copy on knl */
 #define MPIDI_NUM_COPY_LOCAL_PROCS_ARRAY MPIDI_INTER_COPY_LOCAL_PROCS_THRESHOLD
-#define MPIDI_RMT_COPY_PROCS_THRESHOLD 5        /* max #remote process in stealing on bebop */
+#define MPIDI_RMT_COPY_PROCS_THRESHOLD 16       /* max #remote process in stealing on knl */
 #define MPIDI_PROC_COPY 1
 #define MPIDI_PROC_NOT_COPY 0
 
+#define MPIDI_PIP_THRESHOLD_CASE 5
+extern const int MPIDI_PIP_local_stealing_num[MPIDI_PIP_THRESHOLD_CASE];        // #local stealing threshold
+extern const int MPIDI_PIP_local_stealing_map[MPIDI_PIP_THRESHOLD_CASE];        // max remote stealing map
 /* Task kind */
 #define MPIDI_STEALING_CASE 2
 #define MPIDI_PIP_INTRA_TASK 0
@@ -49,6 +53,14 @@ typedef struct MPIDI_PIP_cell {
     MPIR_OBJECT_HEADER;
     char load[MPIDI_PIP_CELL_SIZE];
 } MPIDI_PIP_cell_t;
+
+#ifdef BEBOP
+#define CORES_PER_NUMA_NODE 18
+#elif KNL
+#define CORES_PER_NUMA_NODE 16
+#else
+#define CORES_PER_NUMA_NODE 18
+#endif
 
 typedef struct MPIDI_PIP_task {
     MPIR_OBJECT_HEADER;
@@ -113,7 +125,7 @@ typedef struct MPIDI_PIP_global {
     OPA_int_t *rmt_steal_procs_ptr;
 
     /* copy state */
-    int *local_copy_state[MPIDI_STEALING_CASE]; /* copy state of processes in eahc NUMA node */
+    int *local_copy_state;      /* copy state of processes in eahc NUMA node */
     /* idle state */
     int *local_idle_state;
 
