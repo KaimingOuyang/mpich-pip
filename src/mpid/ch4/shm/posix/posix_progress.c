@@ -161,12 +161,7 @@ static int progress_send(int blocking)
         } else {
             MPIDI_POSIX_am_release_req_hdr(&curr_sreq_hdr);
         }
-    } else if (empty_recv_queue) {
-        /* need to check whether network module has requests completed */
-        /* I am idle, need to perform stealing */
-        MPIDI_PIP_global.local_idle_state[MPIDI_PIP_global.numa_local_rank] = 1;
-        MPIDI_PIP_steal_task();
-    }
+    } 
 
   fn_exit:
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_PROGRESS_SEND);
