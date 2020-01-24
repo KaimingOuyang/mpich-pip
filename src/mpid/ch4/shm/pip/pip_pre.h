@@ -50,6 +50,14 @@ typedef struct MPIDI_PIP_cell {
     char load[MPIDI_PIP_CELL_SIZE];
 } MPIDI_PIP_cell_t;
 
+#ifdef BEBOP
+#define NUM_CORES_PER_NUMA 18
+#elif KNL
+#define NUM_CORES_PER_NUMA 16
+#else
+#define NUM_CORES_PER_NUMA 36
+#endif
+
 typedef struct MPIDI_PIP_task {
     MPIR_OBJECT_HEADER;
     /* task header info */
