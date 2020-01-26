@@ -828,32 +828,6 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
             MPIDI_PIP_exec_stolen_task(victim_queue, MPIDI_PIP_LOCAL_STEALING);
         }
     }
-
-    /* check whether local tasks exists */
-    int i, j;
-    for (i = 0; i < numa_num_procs; ++i) {
-        j = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][i];
-        if (MPIDI_PIP_global.task_queue_array[j]->head)
-            return;
-    }
-
-    /* remote stealing */
-    numa_id = rand() % MPIDI_PIP_global.num_numa_node;
-    numa_num_procs = MPIDI_PIP_global.numa_num_procs[numa_id];
-
-    if (numa_num_procs != 0 && numa_id != MPIDI_PIP_global.local_numa_id) {
-        victim = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][rand() % numa_num_procs];
-        MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
-
-        if (victim_queue->head) {
-            MPIDI_PIP_global_t *victim_pip_global = MPIDI_PIP_global.pip_global_array[victim];
-            int cur_rmt_stealing_procs =
-                OPA_fetch_and_add_int(victim_pip_global->rmt_steal_procs_ptr, 1);
-            MPIDI_PIP_Task_remote_check_and_steal(victim_queue, numa_num_procs,
-                                                  cur_rmt_stealing_procs, victim_pip_global);
-            OPA_decr_int(victim_pip_global->rmt_steal_procs_ptr);
-        }
-    }
 #endif /* MPIDI_PIP_STEALING_ENABLE */
     return;
 }

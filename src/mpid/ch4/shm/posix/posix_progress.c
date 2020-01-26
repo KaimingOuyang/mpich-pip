@@ -66,6 +66,7 @@ static int progress_recv(int blocking)
     } else {
         MPIDI_PIP_global.local_idle_state[MPIDI_PIP_global.numa_local_rank] = 0;
         empty_recv_queue = 0;
+        MPIDI_PIP_global.idle_counter = 0;
     }
 
     /* Process the eager message */
@@ -284,6 +285,7 @@ static int progress_send(int blocking)
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_POSIX_PROGRESS_SEND);
 
     if (MPIDI_POSIX_global.postponed_queue) {
+        MPIDI_PIP_global.idle_counter = 0;
         /* Drain postponed queue */
         curr_sreq_hdr = MPIDI_POSIX_global.postponed_queue;
 
@@ -325,10 +327,14 @@ static int progress_send(int blocking)
             MPIDI_POSIX_am_release_req_hdr(&curr_sreq_hdr);
         }
     } else if (empty_recv_queue) {
-        /* need to check whether network module has requests completed */
-        /* I am idle, need to perform stealing */
-        MPIDI_PIP_global.local_idle_state[MPIDI_PIP_global.numa_local_rank] = 1;
-        MPIDI_PIP_steal_task();
+        if (MPIDI_PIP_global.idle_counter < MPIDI_IDLE_THRESHOLD) {
+            MPIDI_PIP_global.idle_counter++;
+        } else {
+            /* need to check whether network module has requests completed */
+            /* I am idle, need to perform stealing */
+            MPIDI_PIP_global.local_idle_state[MPIDI_PIP_global.numa_local_rank] = 1;
+            MPIDI_PIP_steal_task();
+        }
     }
 
   fn_exit:

@@ -30,6 +30,7 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 #define MPIDI_RMT_COPY_PROCS_THRESHOLD 5        /* max #remote process in stealing on bebop */
 #define MPIDI_PROC_COPY 1
 #define MPIDI_PROC_NOT_COPY 0
+#define MPIDI_IDLE_THRESHOLD 100
 
 /* Task kind */
 #define MPIDI_STEALING_CASE 2
@@ -105,6 +106,7 @@ typedef struct MPIDI_PIP_global {
     /* idle state */
     int *local_idle_state;
 
+    int idle_counter;
     /* pack/unpack load for stealing */
     char pkt_load[MPIDI_PIP_MAX_PKT_SIZE];
 } MPIDI_PIP_global_t;

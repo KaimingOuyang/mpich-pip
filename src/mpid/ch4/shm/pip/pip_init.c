@@ -189,7 +189,7 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     OPA_store_int(&MPIDI_PIP_global.fin_procs, 0);
     MPIDU_Init_shm_barrier();
     MPIDI_PIP_global.fin_procs_ptr = &MPIDI_PIP_global.pip_global_array[0]->fin_procs;
-
+    MPIDI_PIP_global.idle_counter = 0;
     /* For stealing rand seeds */
     srand(time(NULL) + MPIDI_PIP_global.local_rank * MPIDI_PIP_global.local_rank);
 
