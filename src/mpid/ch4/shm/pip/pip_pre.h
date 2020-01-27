@@ -31,6 +31,7 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 #define MPIDI_MAX_RMT_PEEKING_PROCS 5
 #define MPIDI_PROC_COPY 1
 #define MPIDI_PROC_NOT_COPY 0
+#define MPIDI_PIP_IDLE_THRESHOLD 100
 
 /* Task kind */
 // #define MPIDI_STEALING_CASE 2
@@ -118,6 +119,7 @@ typedef struct {
 
 typedef struct {
     MPIDI_PIP_am_unexp_rreq_t unexp_rreq;
+    size_t *idle_cnt;
 } MPIDI_PIP_am_request_t;
 
 extern MPIDI_PIP_global_t MPIDI_PIP_global;
@@ -125,6 +127,7 @@ extern MPIR_Object_alloc_t MPIDI_Task_mem;
 // extern MPIR_Object_alloc_t MPIDI_Cell_mem;
 // extern const int MPIDI_PIP_upperbound_threshold[MPIDI_STEALING_CASE];
 // extern const int MPIDI_PIP_thp_map[MPIDI_STEALING_CASE][MPIDI_NUM_COPY_LOCAL_PROCS_ARRAY];
+extern size_t MPIDI_PIP_idle_cnt;
 
 #define MPIDI_PIP_REQUEST(req, field)      ((req)->dev.ch4.am.shm_am.pip.field)
 

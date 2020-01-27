@@ -66,6 +66,10 @@ static int progress_recv(int blocking)
     } else {
         MPIDI_PIP_global.local_idle_state[MPIDI_PIP_global.numa_local_rank] = 0;
         empty_recv_queue = 0;
+        // printf("rank %d - cur idle cnt %ld before incoming messages\n", MPIDI_PIP_global.local_rank,
+        //        MPIDI_PIP_idle_cnt);
+        // fflush(stdout);
+        // MPIDI_PIP_idle_cnt = 0;
     }
 
     /* Process the eager message */
@@ -286,7 +290,7 @@ static int progress_send(int blocking)
     if (MPIDI_POSIX_global.postponed_queue) {
         /* Drain postponed queue */
         curr_sreq_hdr = MPIDI_POSIX_global.postponed_queue;
-
+        // MPIDI_PIP_idle_cnt = 0;
         POSIX_TRACE("Queue OUT HDR [ POSIX AM [handler_id %" PRIu64 ", am_hdr_sz %" PRIu64
                     ", data_sz %" PRIu64 ", seq_num = %d], request=%p] to %d\n",
                     curr_sreq_hdr->msg_hdr ? curr_sreq_hdr->msg_hdr->handler_id : (uint64_t) - 1,
@@ -325,8 +329,6 @@ static int progress_send(int blocking)
             MPIDI_POSIX_am_release_req_hdr(&curr_sreq_hdr);
         }
     } else if (empty_recv_queue) {
-        /* need to check whether network module has requests completed */
-        /* I am idle, need to perform stealing */
         MPIDI_PIP_global.local_idle_state[MPIDI_PIP_global.numa_local_rank] = 1;
         MPIDI_PIP_steal_task();
     }
