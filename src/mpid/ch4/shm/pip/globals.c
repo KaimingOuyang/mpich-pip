@@ -29,6 +29,8 @@ MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 
 MPIDI_PIP_global_t MPIDI_PIP_global;
 
+size_t MPIDI_PIP_idle_cnt;
+
 MPIDI_PIP_task_t MPIDI_Task_direct[MPIDI_TASK_PREALLOC] = { 0 };
 
 MPIR_Object_alloc_t MPIDI_Task_mem = {
