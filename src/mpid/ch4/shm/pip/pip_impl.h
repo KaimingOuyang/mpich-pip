@@ -183,6 +183,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * 
 
     MPID_Thread_mutex_lock(&task_queue->lock, &err);
     task = task_queue->head;
+#ifdef ENABLE_REVERSE_TASK_ENQUEUE
     if (task && task->cur_offset != 0) {
         copy_sz = MPIDI_PIP_copy_size_decision(task);
         task->cur_offset -= copy_sz;
@@ -191,6 +192,16 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * 
     } else {
         copy_sz = 0;
     }
+#else
+    if (task && task->cur_offset != task->orig_data_sz) {
+        copy_sz = MPIDI_PIP_copy_size_decision(task);
+        offset = task->cur_offset;
+        task->cur_offset += copy_sz;
+        copy_kind = task->copy_kind;
+    } else {
+        copy_sz = 0;
+    }
+#endif
     MPID_Thread_mutex_unlock(&task_queue->lock, &err);
 
     if (copy_sz) {
@@ -224,7 +235,11 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_memcpy_task(MPIDI_PIP_task_t * task
 
     task->src_buf = src_buf;
     task->dest_buf = dest_buf;
+#ifdef ENABLE_REVERSE_TASK_ENQUEUE
     task->cur_offset = data_sz;
+#else
+    task->cur_offset = 0;
+#endif
     task->orig_data_sz = data_sz;
     OPA_store_int(&task->done_data_sz, 0);
     return;
@@ -244,8 +259,13 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_memcpy_task_enqueue(char *src_buf,
         MPIDI_PIP_init_memcpy_task(task, src_buf, dest_buf, data_sz);
         MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task);
         do {
+#ifdef ENABLE_REVERSE_TASK_ENQUEUE
             if (task->cur_offset != 0)
                 MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue);
+#else
+            if (task->cur_offset != task->orig_data_sz)
+                MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue);       
+#endif
         } while (OPA_load_int(&task->done_data_sz) != task->orig_data_sz);
 
         MPIDI_PIP_cancel_task(MPIDI_PIP_global.task_queue);
@@ -264,7 +284,11 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_pack_task(MPIDI_PIP_task_t * task, 
 
     task->src_buf = src_buf;
     task->dest_buf = dest_buf;
+#ifdef ENABLE_REVERSE_TASK_ENQUEUE
     task->cur_offset = data_sz;
+#else
+    task->cur_offset = 0;
+#endif
     task->orig_data_sz = data_sz;
     OPA_store_int(&task->done_data_sz, 0);
 
@@ -296,8 +320,13 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_task_enqueue(void *src_buf, MPI_Ain
         MPIDI_PIP_init_pack_task(task, src_buf, src_count, 0, src_dt_dup_ptr, dest_buf, data_sz);
         MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task);
         do {
+#ifdef ENABLE_REVERSE_TASK_ENQUEUE
             if (task->cur_offset != 0)
                 MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue);
+#else
+            if (task->cur_offset != task->orig_data_sz)
+                MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue);       
+#endif
         } while (OPA_load_int(&task->done_data_sz) != task->orig_data_sz);
 
         MPIDI_PIP_cancel_task(MPIDI_PIP_global.task_queue);
@@ -319,7 +348,11 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_unpack_task(MPIDI_PIP_task_t * task
 
     task->src_buf = src_buf;
     task->dest_buf = dest_buf;
+#ifdef ENABLE_REVERSE_TASK_ENQUEUE
     task->cur_offset = data_sz;
+#else
+    task->cur_offset = 0;
+#endif
     task->orig_data_sz = data_sz;
     OPA_store_int(&task->done_data_sz, 0);
 
@@ -348,8 +381,13 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_unpack_task_enqueue(void *src_buf,
         MPIDI_PIP_init_unpack_task(task, src_buf, dest_buf, dest_count, 0, dest_dt_ptr, data_sz);
         MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task);
         do {
+#ifdef ENABLE_REVERSE_TASK_ENQUEUE
             if (task->cur_offset != 0)
                 MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue);
+#else
+            if (task->cur_offset != task->orig_data_sz)
+                MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue);       
+#endif
         } while (OPA_load_int(&task->done_data_sz) != task->orig_data_sz);
 
         MPIDI_PIP_cancel_task(MPIDI_PIP_global.task_queue);
@@ -372,7 +410,11 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_pack_unpack_task(MPIDI_PIP_task_t *
 
     task->src_buf = src_buf;
     task->dest_buf = dest_buf;
+#ifdef ENABLE_REVERSE_TASK_ENQUEUE
     task->cur_offset = data_sz;
+#else
+    task->cur_offset = 0;
+#endif
     task->orig_data_sz = data_sz;
     OPA_store_int(&task->done_data_sz, 0);
 
@@ -419,8 +461,13 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_unpack_task_enqueue(void *src_buf,
                                         dest_buf, dest_count, 0, dest_dt_ptr, data_sz);
         MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task);
         do {
+#ifdef ENABLE_REVERSE_TASK_ENQUEUE
             if (task->cur_offset != 0)
                 MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue);
+#else
+            if (task->cur_offset != task->orig_data_sz)
+                MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue);       
+#endif
         } while (OPA_load_int(&task->done_data_sz) != task->orig_data_sz);
 
         MPIDI_PIP_cancel_task(MPIDI_PIP_global.task_queue);
@@ -441,11 +488,16 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_copy_size_decision(MPIDI_PIP_task_t * tas
     static const int PKT_64KB = 1 << 16;
     static const int PKT_96KB = PKT_32KB + PKT_64KB;
     static const int PKT_512KB = 1 << 19;
-    if (task->cur_offset <= PKT_16KB)
-        copy_sz = task->cur_offset;
-    else if (task->cur_offset <= PKT_96KB)
+#ifdef ENABLE_REVERSE_TASK_ENQUEUE
+    size_t remaining_data = task->cur_offset;
+#else
+    size_t remaining_data = task->orig_data_sz - task->cur_offset;
+#endif
+    if (remaining_data <= PKT_16KB)
+        copy_sz = remaining_data;
+    else if (remaining_data <= PKT_96KB)
         copy_sz = PKT_16KB;
-    else if (task->cur_offset <= PKT_512KB)
+    else if (remaining_data <= PKT_512KB)
         copy_sz = PKT_32KB;
     else
         copy_sz = PKT_96KB;
@@ -545,6 +597,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t 
 
     MPID_Thread_mutex_lock(&task_queue->lock, &err);
     task = task_queue->head;
+#ifdef ENABLE_REVERSE_TASK_ENQUEUE
     if (task && task->cur_offset != 0) {
         copy_sz = MPIDI_PIP_copy_size_decision(task);
         task->cur_offset -= copy_sz;
@@ -553,6 +606,16 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t 
     } else {
         copy_sz = 0;
     }
+#else
+    if (task && task->cur_offset != task->orig_data_sz) {
+        copy_sz = MPIDI_PIP_copy_size_decision(task);
+        offset = task->cur_offset;
+        task->cur_offset += copy_sz;
+        copy_kind = task->copy_kind;
+    } else {
+        copy_sz = 0;
+    }
+#endif
     MPID_Thread_mutex_unlock(&task_queue->lock, &err);
 
     if (copy_sz) {
@@ -609,8 +672,13 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_pack(void *src_buf, MPI_Aint src_count,
         MPIDI_PIP_init_pack_task(task, src_buf, src_count, inoffset, src_dt_ptr, dest_buf, data_sz);
         MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task);
         do {
+#ifdef ENABLE_REVERSE_TASK_ENQUEUE
             if (task->cur_offset != 0)
                 MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue);
+#else
+            if (task->cur_offset != task->orig_data_sz)
+                MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue);
+#endif
         } while (OPA_load_int(&task->done_data_sz) != task->orig_data_sz);
 
         MPIDI_PIP_cancel_task(MPIDI_PIP_global.task_queue);
@@ -656,8 +724,13 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_unpack(void *src_buf, MPI_Aint insize,
                                    data_sz);
         MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task);
         do {
+#ifdef ENABLE_REVERSE_TASK_ENQUEUE
             if (task->cur_offset != 0)
                 MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue);
+#else
+            if (task->cur_offset != task->orig_data_sz)
+                MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue);
+#endif
         } while (OPA_load_int(&task->done_data_sz) != task->orig_data_sz);
 
         MPIDI_PIP_cancel_task(MPIDI_PIP_global.task_queue);
