@@ -56,8 +56,8 @@ typedef struct MPIDI_PIP_task {
     /* basic buffer and size */
     void *src_buf;
     void *dest_buf;
-    MPI_Aint cur_offset;
-    int orig_data_sz;
+    uint32_t cur_offset;
+    uint32_t orig_data_sz;
     OPA_int_t done_data_sz;
 
     /* non-contig copy attributes */
