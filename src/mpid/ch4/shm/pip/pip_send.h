@@ -9,6 +9,7 @@
 
 #include "ch4_impl.h"
 #include "shm_control.h"
+#include "pip_pre.h"
 
 MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_lmt_rts_isend(const void *buf, MPI_Aint count,
                                                      MPI_Datatype datatype, int rank, int tag,
@@ -49,10 +50,30 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_lmt_rts_isend(const void *buf, MPI_Aint c
     slmt_rts_hdr->src_dt_ptr = src_datatype;
     slmt_rts_hdr->src_count = count;
 
+
     /* message matching info */
     slmt_rts_hdr->src_rank = comm->rank;
     slmt_rts_hdr->tag = tag;
     slmt_rts_hdr->context_id = comm->context_id + context_offset;
+
+    /* enqueue partner */
+    int src_numa_id = MPIDI_PIP_global.local_numa_id;
+    const int grank = MPIDIU_rank_to_lpid(rank, comm);
+    int dest_lrank = MPIDI_PIP_global.grank_to_lrank[grank];
+    // printf("src_lrank %d sends to dest_lrank %d\n", MPIDI_PIP_global.local_rank, dest_lrank);
+    int dest_numa_id = MPIDI_PIP_global.numa_lrank_to_nid[dest_lrank];
+
+    MPIDI_PIP_partner_t *partner =
+        (MPIDI_PIP_partner_t *) MPIR_Handle_obj_alloc(&MPIDI_Partner_mem);
+    partner->partner = dest_lrank;
+    if (src_numa_id == dest_numa_id) {
+        MPIDI_PIP_PARTNER_ENQUEUE(partner, &MPIDI_PIP_global.intrap_queue);
+        slmt_rts_hdr->partner_queue = MPIDI_PIP_INTRA_QUEUE;
+    } else {
+        MPIDI_PIP_PARTNER_ENQUEUE(partner, &MPIDI_PIP_global.interp_queue);
+        slmt_rts_hdr->partner_queue = MPIDI_PIP_INTER_QUEUE;
+    }
+    slmt_rts_hdr->partner = (uint64_t) partner;
 
     PIP_TRACE("pip_lmt_isend: shm ctrl_id %d, src_offset 0x%lx, data_sz 0x%lx, sreq_ptr 0x%lx, "
               "src_lrank %d, match info[dest %d, src_rank %d, tag %d, context_id 0x%x]\n",

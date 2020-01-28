@@ -160,7 +160,7 @@ typedef enum MPII_Object_kind {
     MPIR_XPMEM_SEG = 0x0,       /* XPMEM segment, only meaningful in CH4
                                  * when XPMEM shmmod is enabled */
     MPIDI_TASK = 0x0,
-    MPIDI_CELL = 0x0,
+    MPIDI_PARTNER = 0x0,
 } MPII_Object_kind;
 
 

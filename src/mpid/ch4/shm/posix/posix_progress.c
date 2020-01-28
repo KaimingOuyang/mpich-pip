@@ -332,7 +332,6 @@ static int progress_send(int blocking)
         MPIDI_PIP_global.local_idle_state[MPIDI_PIP_global.numa_local_rank] = 1;
         MPIDI_PIP_steal_task();
     }
-
   fn_exit:
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_POSIX_PROGRESS_SEND);
     return mpi_errno;
