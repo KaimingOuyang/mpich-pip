@@ -55,6 +55,8 @@ typedef struct MPIDI_SHM_ctrl_pip_send_lmt_rts {
     int is_contig;              /* indicate the contiguity of data */
     MPIR_Datatype *src_dt_ptr;
     MPI_Aint src_count;
+    uint64_t partner;
+    int partner_queue;
 
     /* matching info */
     int src_rank;
@@ -72,6 +74,8 @@ typedef struct MPIDI_SHM_ctrl_pip_send_lmt_cts {
 
 typedef struct MPIDI_SHM_ctrl_xpmem_send_lmt_ack {
     uint64_t req_ptr;
+    uint64_t partner;
+    int partner_queue;
 } MPIDI_SHM_ctrl_pip_send_lmt_fin_t;
 
 typedef MPIDI_SHM_ctrl_pip_send_lmt_fin_t MPIDI_SHM_ctrl_pip_send_lmt_send_fin_t;

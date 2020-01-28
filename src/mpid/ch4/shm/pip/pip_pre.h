@@ -17,6 +17,7 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
     MPL_DBG_MSG_FMT(MPIDI_CH4_SHM_PIP_GENERAL,VERBOSE,(MPL_DBG_FDEST, "PIP "__VA_ARGS__))
 
 #define MPIDI_TASK_PREALLOC 8
+#define MPIDI_PARTNER_PREALLOC 64
 #define MPIDI_MAX_TASK_THRESHOLD 60
 #define MPIDI_PIP_MAX_PKT_SIZE 98304
 #define MPIDI_PIP_PKT_32KB 32768
@@ -35,8 +36,8 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 
 /* Task kind */
 // #define MPIDI_STEALING_CASE 2
-// #define MPIDI_PIP_INTRA_TASK 0
-// #define MPIDI_PIP_INTER_TASK 1
+#define MPIDI_PIP_INTRA_QUEUE 0
+#define MPIDI_PIP_INTER_QUEUE 1
 
 /* Local or remote stealing */
 #define MPIDI_PIP_LOCAL_STEALING 0
@@ -47,6 +48,9 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 #define MPIDI_PIP_PACK 1
 #define MPIDI_PIP_UNPACK 2
 #define MPIDI_PIP_PACK_UNPACK 3
+
+#define STEALING_FAIL 0
+#define STEALING_SUCCESS 1
 
 typedef struct MPIDI_PIP_task {
     MPIR_OBJECT_HEADER;
@@ -74,6 +78,16 @@ typedef struct MPIDI_PIP_task_queue {
     MPID_Thread_mutex_t lock;
 } MPIDI_PIP_task_queue_t;
 
+typedef struct MPIDI_PIP_partner {
+    MPIR_OBJECT_HEADER;
+    int partner;
+    struct MPIDI_PIP_partner *prev, *next;
+} MPIDI_PIP_partner_t;
+
+typedef struct MPIDI_PIP_partner_queue {
+    MPIDI_PIP_partner_t *head, *tail;
+} MPIDI_PIP_partner_queue_t;
+
 typedef struct MPIDI_PIP_global {
     uint32_t num_local;
     uint32_t local_rank;
@@ -90,6 +104,7 @@ typedef struct MPIDI_PIP_global {
     /* NUMA info */
     int **numa_cores_to_ranks;  /* map between core id to rank */
     int *numa_num_procs;        /* #processes in each NUMA node */
+    int *numa_lrank_to_nid;     /* local rank to numa id */
     int numa_root_rank;         /* rank of root process in my NUMA node */
     int numa_local_rank;        /* my rank on the numa node */
     // OPA_int_t *numa_rmt_access; /* number of processes  */
@@ -105,12 +120,18 @@ typedef struct MPIDI_PIP_global {
 
     /* pack/unpack load for stealing */
     char pkt_load[MPIDI_PIP_MAX_PKT_SIZE];
+
+    MPIDI_PIP_partner_queue_t intrap_queue;
+    MPIDI_PIP_partner_queue_t interp_queue;
+    int *grank_to_lrank;
 } MPIDI_PIP_global_t;
 
 typedef struct {
     uint64_t src_offset;
     uint64_t data_sz;
     uint64_t sreq_ptr;
+    uint64_t partner;
+    int partner_queue;
     int src_lrank;
     int is_contig;
     MPIR_Datatype *src_dt_ptr;
@@ -122,8 +143,37 @@ typedef struct {
     size_t *idle_cnt;
 } MPIDI_PIP_am_request_t;
 
+static inline void MPIDI_PIP_PARTNER_ENQUEUE(MPIDI_PIP_partner_t * partner_ptr,
+                                             MPIDI_PIP_partner_queue_t * queue_ptr)
+{
+    if (queue_ptr->head) {
+        partner_ptr->prev = queue_ptr->tail;
+        queue_ptr->tail->next = partner_ptr;
+        partner_ptr->next = NULL;
+        queue_ptr->tail = partner_ptr;
+    } else {
+        queue_ptr->head = queue_ptr->tail = partner_ptr;
+        partner_ptr->prev = partner_ptr->next = NULL;
+    }
+}
+
+static inline void MPIDI_PIP_PARTNER_DEQUEUE(MPIDI_PIP_partner_t * partner_ptr,
+                                             MPIDI_PIP_partner_queue_t * queue_ptr)
+{
+    if (partner_ptr->prev == NULL)
+        queue_ptr->head = partner_ptr->next;
+    else
+        partner_ptr->prev->next = partner_ptr->next;
+    if (partner_ptr->next == NULL)
+        queue_ptr->tail = partner_ptr->prev;
+    else
+        partner_ptr->next->prev = partner_ptr->prev;
+}
+
 extern MPIDI_PIP_global_t MPIDI_PIP_global;
 extern MPIR_Object_alloc_t MPIDI_Task_mem;
+extern MPIR_Object_alloc_t MPIDI_Partner_mem;
+// extern MPIDI_POSIX_global_t MPIDI_POSIX_global;
 // extern MPIR_Object_alloc_t MPIDI_Cell_mem;
 // extern const int MPIDI_PIP_upperbound_threshold[MPIDI_STEALING_CASE];
 // extern const int MPIDI_PIP_thp_map[MPIDI_STEALING_CASE][MPIDI_NUM_COPY_LOCAL_PROCS_ARRAY];
