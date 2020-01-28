@@ -290,12 +290,15 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_OFI_send_normal(const void *buf, MPI_Aint cou
                              MPI_ERR_OTHER, "**nomem", "**nomem %s", "Send Pack buffer alloc");
 
         MPI_Aint actual_pack_bytes;
+#ifdef ENABLE_OFI_STEALING
         MPIDI_PIP_pack(buf, count, datatype, 0,
                        MPIDI_OFI_REQUEST(sreq, noncontig.pack->pack_buffer), data_sz,
                        &actual_pack_bytes);
-        // MPIR_Typerep_pack(buf, count, datatype, 0,
-        // MPIDI_OFI_REQUEST(sreq, noncontig.pack->pack_buffer), data_sz,
-        // &actual_pack_bytes);
+#else
+        MPIR_Typerep_pack(buf, count, datatype, 0,
+                          MPIDI_OFI_REQUEST(sreq, noncontig.pack->pack_buffer), data_sz,
+                          &actual_pack_bytes);
+#endif
         send_buf = MPIDI_OFI_REQUEST(sreq, noncontig.pack->pack_buffer);
     } else {
         MPIDI_OFI_REQUEST(sreq, noncontig.pack) = NULL;

@@ -112,16 +112,19 @@ static int recv_event(struct fi_cq_tagged_entry *wc, MPIR_Request * rreq, int ev
     if ((event_id == MPIDI_OFI_EVENT_RECV_PACK || event_id == MPIDI_OFI_EVENT_GET_HUGE) &&
         (MPIDI_OFI_REQUEST(rreq, noncontig.pack))) {
         MPI_Aint actual_unpack_bytes;
+#ifdef ENABLE_OFI_STEALING
         MPIDI_PIP_unpack(MPIDI_OFI_REQUEST(rreq, noncontig.pack->pack_buffer), count,
                          MPIDI_OFI_REQUEST(rreq, noncontig.pack->buf),
                          MPIDI_OFI_REQUEST(rreq, noncontig.pack->count),
                          MPIDI_OFI_REQUEST(rreq, noncontig.pack->datatype), 0,
                          &actual_unpack_bytes);
-        // MPIR_Typerep_unpack(MPIDI_OFI_REQUEST(rreq, noncontig.pack->pack_buffer), count,
-        //                     MPIDI_OFI_REQUEST(rreq, noncontig.pack->buf),
-        //                     MPIDI_OFI_REQUEST(rreq, noncontig.pack->count),
-        //                     MPIDI_OFI_REQUEST(rreq, noncontig.pack->datatype), 0,
-        //                     &actual_unpack_bytes);
+#else
+        MPIR_Typerep_unpack(MPIDI_OFI_REQUEST(rreq, noncontig.pack->pack_buffer), count,
+                            MPIDI_OFI_REQUEST(rreq, noncontig.pack->buf),
+                            MPIDI_OFI_REQUEST(rreq, noncontig.pack->count),
+                            MPIDI_OFI_REQUEST(rreq, noncontig.pack->datatype), 0,
+                            &actual_unpack_bytes);
+#endif
         MPL_free(MPIDI_OFI_REQUEST(rreq, noncontig.pack));
         if (actual_unpack_bytes != (MPI_Aint) count) {
             rreq->status.MPI_ERROR =
