@@ -303,8 +303,8 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_task_enqueue(void *src_buf, MPI_Ain
                                                           char *dest_buf, MPI_Aint data_sz)
 {
     MPI_Datatype src_dt_dup;
-
     MPIR_PIP_Type_dup(src_dt_ptr, &src_dt_dup);
+#ifdef ENABLE_NON_CONTIG_STEALING
     if (data_sz <= MPIDI_PIP_PKT_32KB) {
         MPI_Aint actual_bytes;
         MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
@@ -326,13 +326,20 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_task_enqueue(void *src_buf, MPI_Ain
 #else
             if (task->cur_offset != task->orig_data_sz)
                 MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue);       
-#endif
+#endif /* ENABLE_REVERSE_TASK_ENQUEUE */
         } while (OPA_load_int(&task->done_data_sz) != task->orig_data_sz);
 
         MPIDI_PIP_cancel_task(MPIDI_PIP_global.task_queue);
         MPIR_Handle_obj_free(&MPIDI_Task_mem, task);
     }
-
+#else /* ENABLE_NON_CONTIG_STEALING */
+    MPI_Aint actual_bytes;
+    MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
+    MPIR_Typerep_pack(src_buf, src_count, src_dt_dup, 0, dest_buf, data_sz, &actual_bytes);
+    OPA_write_barrier();
+    MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
+    MPIR_Assert(actual_bytes == data_sz);
+#endif /* ENABLE_NON_CONTIG_STEALING */
     MPIR_Type_free_impl(&src_dt_dup);
     return;
 }
@@ -366,6 +373,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_unpack_task_enqueue(void *src_buf,
                                                             void *dest_buf, MPI_Aint dest_count,
                                                             MPI_Datatype dest_dt, MPI_Aint data_sz)
 {
+#ifdef ENABLE_NON_CONTIG_STEALING
     if (data_sz <= MPIDI_PIP_PKT_32KB) {
         MPI_Aint actual_bytes;
         MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
@@ -393,6 +401,14 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_unpack_task_enqueue(void *src_buf,
         MPIDI_PIP_cancel_task(MPIDI_PIP_global.task_queue);
         MPIR_Handle_obj_free(&MPIDI_Task_mem, task);
     }
+#else /* ENABLE_NON_CONTIG_STEALING */
+    MPI_Aint actual_bytes;
+    MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
+    MPIR_Typerep_unpack(src_buf, data_sz, dest_buf, dest_count, dest_dt, 0, &actual_bytes);
+    OPA_write_barrier();
+    MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
+    MPIR_Assert(actual_bytes == data_sz);
+#endif /* ENABLE_NON_CONTIG_STEALING */
     return;
 }
 
@@ -437,8 +453,9 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_unpack_task_enqueue(void *src_buf,
                                                                  MPI_Aint data_sz)
 {
     MPI_Datatype src_dt_dup;
-
     MPIR_PIP_Type_dup(src_dt_ptr, &src_dt_dup);
+
+#ifdef ENABLE_NON_CONTIG_STEALING
     if (data_sz <= MPIDI_PIP_PKT_32KB) {
         MPI_Aint actual_bytes;
         MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
@@ -473,6 +490,20 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_unpack_task_enqueue(void *src_buf,
         MPIDI_PIP_cancel_task(MPIDI_PIP_global.task_queue);
         MPIR_Handle_obj_free(&MPIDI_Task_mem, task);
     }
+#else /* ENABLE_NON_CONTIG_STEALING */
+    MPI_Aint actual_bytes;
+    void *im_buf = MPL_malloc(data_sz, MPL_MEM_OTHER);
+    MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
+    MPIR_Typerep_pack(src_buf, src_count, src_dt_dup, 0, im_buf, data_sz,
+    &actual_bytes);
+    MPIR_Assert(actual_bytes == data_sz);
+    MPIR_Typerep_unpack(im_buf, data_sz, dest_buf, dest_count, dest_dt, 0,
+    &actual_bytes);
+    MPIR_Assert(actual_bytes == data_sz);
+    OPA_write_barrier();
+    MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
+    MPL_free(im_buf);
+#endif /* ENABLE_NON_CONTIG_STEALING */
     MPIR_Type_free_impl(&src_dt_dup);
 
     return;
