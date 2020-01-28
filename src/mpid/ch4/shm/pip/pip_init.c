@@ -98,6 +98,9 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
         }
     }
 
+    MPIR_CHKPMEM_MALLOC(MPIDI_PIP_global.numa_lrank_to_nid, int *,
+                        sizeof(int *) * num_local, mpi_errno, "numa_lrank_to_nid", MPL_MEM_SHM);
+
     MPIDU_Init_shm_put(&MPIDI_PIP_global.local_numa_id, sizeof(int));
     MPIDU_Init_shm_barrier();
 
@@ -109,6 +112,7 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
         MPIDU_Init_shm_get(i, sizeof(int), &numa_id);
         if (i == local_rank)
             MPIDI_PIP_global.numa_local_rank = MPIDI_PIP_global.numa_num_procs[numa_id];
+        MPIDI_PIP_global.numa_lrank_to_nid[i] = numa_id;
         MPIDI_PIP_global.numa_cores_to_ranks[numa_id][MPIDI_PIP_global.numa_num_procs[numa_id]++] =
             i;
     }
@@ -195,6 +199,19 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     OPA_store_int(&MPIDI_PIP_global.fin_procs, 0);
     MPIDU_Init_shm_barrier();
     MPIDI_PIP_global.fin_procs_ptr = &MPIDI_PIP_global.pip_global_array[0]->fin_procs;
+    /* init partner queue */
+    MPIDI_PIP_global.intrap_queue.head = MPIDI_PIP_global.intrap_queue.tail = NULL;
+    MPIDI_PIP_global.interp_queue.head = MPIDI_PIP_global.interp_queue.tail = NULL;
+
+    /* global rank to local rank */
+    MPIDI_PIP_global.grank_to_lrank = (int *) MPL_malloc(MPIR_Process.size * sizeof(int),
+                                                         MPL_MEM_SHM);
+    for (i = 0; i < MPIR_Process.size; ++i) {
+        MPIDI_PIP_global.grank_to_lrank[i] = -1;
+    }
+    for (i = 0; i < MPIR_Process.local_size; i++) {
+        MPIDI_PIP_global.grank_to_lrank[MPIR_Process.node_local_map[i]] = i;
+    }
 
     /* For stealing rand seeds */
     srand(time(NULL) + MPIDI_PIP_global.local_rank * MPIDI_PIP_global.local_rank);
@@ -226,6 +243,7 @@ int MPIDI_PIP_mpi_finalize_hook(void)
 
     MPL_free(MPIDI_PIP_global.task_queue_array);
     MPL_free(MPIDI_PIP_global.pip_global_array);
+    MPL_free(MPIDI_PIP_global.grank_to_lrank);
 
     if (MPIDI_PIP_global.local_rank == MPIDI_PIP_global.numa_root_rank) {
         MPL_free(MPIDI_PIP_global.local_copy_state);

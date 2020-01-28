@@ -40,3 +40,10 @@ MPIR_Object_alloc_t MPIDI_Task_mem = {
     0, 0, 0, 0, MPIDI_TASK, sizeof(MPIDI_PIP_task_t), MPIDI_Task_direct,
     MPIDI_TASK_PREALLOC
 };
+
+MPIDI_PIP_partner_t MPIDI_Partner_direct[MPIDI_PARTNER_PREALLOC] = { 0 };
+
+MPIR_Object_alloc_t MPIDI_Partner_mem = {
+    0, 0, 0, 0, MPIDI_PARTNER, sizeof(MPIDI_PIP_partner_t), MPIDI_Partner_direct,
+    MPIDI_PARTNER_PREALLOC
+};

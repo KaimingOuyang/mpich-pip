@@ -117,7 +117,9 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mmods_try_matched_recv(void *buf,
         mpi_errno = MPIDI_PIP_handle_lmt_rts_recv(unexp_rreq->src_offset, unexp_rreq->src_count,
                                                   unexp_rreq->data_sz, unexp_rreq->sreq_ptr,
                                                   unexp_rreq->is_contig, unexp_rreq->src_dt_ptr,
-                                                  unexp_rreq->src_lrank, message);
+                                                  unexp_rreq->src_lrank,
+                                                  unexp_rreq->partner, unexp_rreq->partner_queue,
+                                                  message);
         MPIR_ERR_CHECK(mpi_errno);
 
         *recvd_flag = true;
