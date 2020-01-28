@@ -158,9 +158,12 @@ int MPI_Pack(const void *inbuf,
 
     MPI_Aint actual_pack_bytes;
     void *buf = (void *) ((char *) outbuf + position_x);
+#ifdef ENABLE_NON_CONTIG_STEALING
     mpi_errno =
         MPIDI_PIP_pack((void *) inbuf, incount, datatype, 0, buf, outsize, &actual_pack_bytes);
-    // mpi_errno = MPIR_Typerep_pack(inbuf, incount, datatype, 0, buf, outsize, &actual_pack_bytes);
+#else
+    mpi_errno = MPIR_Typerep_pack(inbuf, incount, datatype, 0, buf, outsize, &actual_pack_bytes);
+#endif
     if (mpi_errno)
         goto fn_fail;
     position_x += actual_pack_bytes;

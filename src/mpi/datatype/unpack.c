@@ -124,9 +124,12 @@ int MPI_Unpack(const void *inbuf, int insize, int *position,
 
     MPI_Aint actual_unpack_bytes;
     void *buf = (void *) ((char *) inbuf + position_x);
+#ifdef ENABLE_NON_CONTIG_STEALING
     mpi_errno = MPIDI_PIP_unpack(buf, insize, outbuf, outcount, datatype, 0, &actual_unpack_bytes);
-    // mpi_errno =
-    //     MPIR_Typerep_unpack(buf, insize, outbuf, outcount, datatype, 0, &actual_unpack_bytes);
+#else
+    mpi_errno =
+        MPIR_Typerep_unpack(buf, insize, outbuf, outcount, datatype, 0, &actual_unpack_bytes);
+#endif
     if (mpi_errno)
         goto fn_fail;
 
