@@ -81,6 +81,7 @@ typedef struct MPIDI_PIP_task_queue {
 typedef struct MPIDI_PIP_partner {
     MPIR_OBJECT_HEADER;
     int partner;
+    int partner_numa_id;
     struct MPIDI_PIP_partner *prev, *next;
 } MPIDI_PIP_partner_t;
 
@@ -107,6 +108,7 @@ typedef struct MPIDI_PIP_global {
     int *numa_lrank_to_nid;     /* local rank to numa id */
     int numa_root_rank;         /* rank of root process in my NUMA node */
     int numa_local_rank;        /* my rank on the numa node */
+    int partner_numa;           /* only remote stealing partner numa */
     // OPA_int_t *numa_rmt_access; /* number of processes  */
 
     /* finalized procs cnt */

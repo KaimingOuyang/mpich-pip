@@ -83,6 +83,7 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     int local_numa_id = numa_node_of_cpu(cpu);
     MPIDI_PIP_global.num_numa_node = num_numa_node;
     MPIDI_PIP_global.local_numa_id = local_numa_id;
+    MPIDI_PIP_global.partner_numa = local_numa_id ^ 1;
 
     /* Get NUMA info */
     MPIR_CHKPMEM_MALLOC(MPIDI_PIP_global.numa_cores_to_ranks, int **,

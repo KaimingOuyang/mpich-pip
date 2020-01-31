@@ -62,10 +62,11 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_lmt_rts_isend(const void *buf, MPI_Aint c
     int dest_lrank = MPIDI_PIP_global.grank_to_lrank[grank];
     // printf("src_lrank %d sends to dest_lrank %d\n", MPIDI_PIP_global.local_rank, dest_lrank);
     int dest_numa_id = MPIDI_PIP_global.numa_lrank_to_nid[dest_lrank];
-
+    
     MPIDI_PIP_partner_t *partner =
         (MPIDI_PIP_partner_t *) MPIR_Handle_obj_alloc(&MPIDI_Partner_mem);
     partner->partner = dest_lrank;
+    partner->partner_numa_id = dest_numa_id;
     if (src_numa_id == dest_numa_id) {
         MPIDI_PIP_PARTNER_ENQUEUE(partner, &MPIDI_PIP_global.intrap_queue);
         slmt_rts_hdr->partner_queue = MPIDI_PIP_INTRA_QUEUE;
