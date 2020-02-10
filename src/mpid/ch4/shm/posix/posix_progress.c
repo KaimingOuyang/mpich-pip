@@ -69,7 +69,9 @@ static int progress_recv(int blocking)
         // printf("rank %d - cur idle cnt %ld before incoming messages\n", MPIDI_PIP_global.local_rank,
         //        MPIDI_PIP_idle_cnt);
         // fflush(stdout);
+#ifdef ENABLE_IDLECNT_STEALING
         MPIDI_PIP_idle_cnt = 0;
+#endif
     }
 
     /* Process the eager message */
@@ -290,7 +292,9 @@ static int progress_send(int blocking)
     if (MPIDI_POSIX_global.postponed_queue) {
         /* Drain postponed queue */
         curr_sreq_hdr = MPIDI_POSIX_global.postponed_queue;
+#ifdef ENABLE_IDLECNT_STEALING
         MPIDI_PIP_idle_cnt = 0;
+#endif
         POSIX_TRACE("Queue OUT HDR [ POSIX AM [handler_id %" PRIu64 ", am_hdr_sz %" PRIu64
                     ", data_sz %" PRIu64 ", seq_num = %d], request=%p] to %d\n",
                     curr_sreq_hdr->msg_hdr ? curr_sreq_hdr->msg_hdr->handler_id : (uint64_t) - 1,
@@ -333,14 +337,22 @@ static int progress_send(int blocking)
         if (MPIDI_PIP_global.intrap_queue.head) {
             MPIDI_PIP_global.local_idle_state[MPIDI_PIP_global.numa_local_rank] = 1;
             MPIDI_PIP_steal_task();
-        }
+        }else
 #endif
+
+#ifdef ENABLE_IDLECNT_STEALING
         if (MPIDI_PIP_idle_cnt < MPIDI_PIP_IDLE_THRESHOLD) {
             MPIDI_PIP_idle_cnt++;
         } else {
             MPIDI_PIP_global.local_idle_state[MPIDI_PIP_global.numa_local_rank] = 1;
             MPIDI_PIP_steal_task();
         }
+#else
+        {
+            MPIDI_PIP_global.local_idle_state[MPIDI_PIP_global.numa_local_rank] = 1;
+            MPIDI_PIP_steal_task();
+        }
+#endif
     }
   fn_exit:
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_POSIX_PROGRESS_SEND);
