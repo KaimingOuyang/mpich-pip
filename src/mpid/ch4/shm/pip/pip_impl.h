@@ -529,6 +529,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_copy_size_decision(MPIDI_PIP_task_t * tas
 #else
     size_t remaining_data = task->orig_data_sz - task->cur_offset;
 #endif
+
+#ifdef ENABLE_DYNAMIC_CHUNK
     if (remaining_data <= PKT_16KB)
         copy_sz = remaining_data;
     else if (remaining_data <= PKT_96KB)
@@ -537,7 +539,12 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_copy_size_decision(MPIDI_PIP_task_t * tas
         copy_sz = PKT_32KB;
     else
         copy_sz = PKT_96KB;
-
+#else
+    if (remaining_data <= PKT_16KB)
+        copy_sz = remaining_data;
+    else 
+        copy_sz = PKT_64KB;
+#endif
     return copy_sz;
 }
 
