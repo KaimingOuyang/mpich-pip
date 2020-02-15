@@ -65,11 +65,9 @@ typedef struct MPIDI_SHM_ctrl_pip_send_lmt_rts {
 } MPIDI_SHM_ctrl_pip_send_lmt_rts_t;
 
 typedef struct MPIDI_SHM_ctrl_pip_send_lmt_cts {
-    uint64_t dest_offset;       /* send data starting address (buffer + true_lb) */
     uint64_t data_sz;           /* data size in bytes */
     uint64_t sreq_ptr;          /* send request pointer */
-    uint64_t rreq_ptr;          /* send request pointer */
-    int dest_lrank;             /* sender rank on local node */
+    uint64_t cells;             /* receiver's cell array addr */
 } MPIDI_SHM_ctrl_pip_send_lmt_cts_t;
 
 typedef struct MPIDI_SHM_ctrl_xpmem_send_lmt_ack {

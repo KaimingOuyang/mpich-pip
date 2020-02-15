@@ -23,6 +23,7 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 #define MPIDI_PIP_L2_CACHE_THRESHOLD 131072     /* 64KB * 2 this size has two considerations, one is keeping head data in L2 cache in receiver, the other is reducing the chances of remote process stealing, lock contention and remote data access overhead that will slow down the copy due to small data_sz. */
 #define MPIDI_PIP_LAST_PKT_THRESHOLD MPIDI_PIP_PKT_SIZE /* 64KB */
 #define MPIDI_PIP_CELL_SIZE 65536
+#define MPIDI_PIP_CELL_NUM 4
 
 #define MPIDI_PROC_COPY 1
 #define MPIDI_PROC_NOT_COPY 0
@@ -53,7 +54,7 @@ extern const int MPIDI_PIP_local_stealing_map[MPIDI_PIP_THRESHOLD_CASE];        
 #define MPIDI_PIP_COMPLETE      1
 
 typedef struct MPIDI_PIP_cell {
-    MPIR_OBJECT_HEADER;
+    int full;
     char load[MPIDI_PIP_CELL_SIZE];
 } MPIDI_PIP_cell_t;
 
@@ -154,6 +155,7 @@ typedef struct MPIDI_PIP_global {
     int *allow_rmt_stealing_ptr;
     OPA_int_t *bdw_checking;
     OPA_int_t *bdw_checking_ptr;
+    volatile MPIDI_PIP_cell_t cells[MPIDI_PIP_CELL_NUM];
 } MPIDI_PIP_global_t;
 
 typedef struct {

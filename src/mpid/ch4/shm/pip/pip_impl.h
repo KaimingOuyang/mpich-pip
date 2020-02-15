@@ -87,7 +87,6 @@ MPL_STATIC_INLINE_PREFIX int MPIR_PIP_Type_dup(MPIR_Datatype * old_dtp, MPI_Data
     /* --END ERROR HANDLING-- */
 }
 
-
 /* use MPIR_Datatype_free(datatype_ptr); to free the duplicated datatype */
 
 

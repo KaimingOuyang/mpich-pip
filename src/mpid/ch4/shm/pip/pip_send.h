@@ -41,8 +41,12 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_lmt_rts_isend(const void *buf, MPI_Aint c
     /* pip internal info */
     if (is_contig)
         slmt_rts_hdr->src_offset = (uint64_t) buf + true_lb;
-    else
+    else {
+        MPIDIG_REQUEST(sreq, buffer) = buf;
+        MPIDIG_REQUEST(sreq, count) = count;
+        MPIDIG_REQUEST(sreq, datatype) = datatype;
         slmt_rts_hdr->src_offset = (uint64_t) buf;
+    }
     slmt_rts_hdr->data_sz = data_sz;
     slmt_rts_hdr->sreq_ptr = (uint64_t) sreq;
     slmt_rts_hdr->src_lrank = MPIDI_PIP_global.local_rank;

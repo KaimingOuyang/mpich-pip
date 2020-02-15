@@ -159,6 +159,8 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
         MPIDI_PIP_global.pip_global_array[local_root]->allow_rmt_stealing;
     MPIDI_PIP_global.bdw_checking_ptr = MPIDI_PIP_global.pip_global_array[local_root]->bdw_checking;
 
+    for(i = 0; i < MPIDI_PIP_CELL_NUM; ++i)
+        MPIDI_PIP_global.cells[i].full = 0;
     /* Debug */
     // if (rank == 0) {
     //     for (i = 0; i < num_numa_node; ++i) {
