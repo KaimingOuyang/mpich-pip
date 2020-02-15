@@ -20,6 +20,7 @@
 #define MPIDI_PIP_L2_CACHE_THRESHOLD 131072     /* 64KB * 2 this size has two considerations, one is keeping head data in L2 cache in receiver, the other is reducing the chances of remote process stealing, lock contention and remote data access overhead that will slow down the copy due to small data_sz. */
 #define MPIDI_PIP_LAST_PKT_THRESHOLD MPIDI_PIP_PKT_SIZE /* 64KB */
 #define MPIDI_PIP_CELL_SIZE 65536
+#define MPIDI_PIP_CELL_NUM 4
 
 #define MPIDI_INTRA_COPY_LOCAL_PROCS_THRESHOLD 5        /* #local process threshold for intra-NUMA copy on bebop */
 #define MPIDI_INTER_COPY_LOCAL_PROCS_THRESHOLD 8        /* #local process threshold for inter-NUMA copy on bebop */
@@ -44,7 +45,7 @@
 #define MPIDI_PIP_COMPLETE      1
 
 typedef struct MPIDI_PIP_cell {
-    MPIR_OBJECT_HEADER;
+    int full;
     char load[MPIDI_PIP_CELL_SIZE];
 } MPIDI_PIP_cell_t;
 
@@ -124,7 +125,7 @@ typedef struct MPIDI_PIP_global {
     int *local_idle_state;
 
     /* pack/unpack load for stealing */
-    char pkt_load[MPIDI_PIP_PKT_SIZE];
+    volatile MPIDI_PIP_cell_t cells[MPIDI_PIP_CELL_NUM];
 } MPIDI_PIP_global_t;
 
 typedef struct MPIDI_PIP_ipc_handle {
