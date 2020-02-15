@@ -31,6 +31,9 @@ int MPIDI_SHM_ctrl_dispatch(int ctrl_id, void *ctrl_hdr)
         case MPIDI_SHM_PIP_SEND_LMT_RTS:
             mpi_errno = MPIDI_PIP_ctrl_send_lmt_rts_cb((MPIDI_SHM_ctrl_hdr_t *) ctrl_hdr);
             break;
+        case MPIDI_SHM_PIP_SEND_LMT_CTS:
+            mpi_errno = MPIDI_PIP_ctrl_send_lmt_cts_cb((MPIDI_SHM_ctrl_hdr_t *) ctrl_hdr);
+            break;
         case MPIDI_SHM_PIP_SEND_LMT_SEND_ACK:
             mpi_errno = MPIDI_PIP_ctrl_send_lmt_send_fin_cb((MPIDI_SHM_ctrl_hdr_t *) ctrl_hdr);
             break;
