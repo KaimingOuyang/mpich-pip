@@ -45,6 +45,9 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_lmt_rts_isend(const void *buf, MPI_Aint c
         MPIDIG_REQUEST(sreq, buffer) = buf;
         MPIDIG_REQUEST(sreq, count) = count;
         MPIDIG_REQUEST(sreq, datatype) = datatype;
+        MPIDIG_REQUEST(sreq, rank) = rank;
+        MPIDIG_REQUEST(sreq, context_id) = comm->context_id + context_offset;
+        MPIDI_PIP_REQUEST(sreq, offset) = 0;
         slmt_rts_hdr->src_offset = (uint64_t) buf;
     }
     slmt_rts_hdr->data_sz = data_sz;

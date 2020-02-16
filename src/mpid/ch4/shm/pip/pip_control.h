@@ -11,5 +11,7 @@
 
 int MPIDI_PIP_ctrl_send_lmt_send_fin_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr);
 int MPIDI_PIP_ctrl_send_lmt_rts_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr);
+int MPIDI_PIP_ctrl_send_lmt_cts_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr);
+int MPIDI_PIP_ctrl_send_lmt_pkt_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr);
 
 #endif /* PIP_CONTROL_H_INCLUDED */
