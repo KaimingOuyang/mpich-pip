@@ -140,8 +140,9 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     MPIDI_PIP_global.rmt_steal_procs_ptr =
         &MPIDI_PIP_global.pip_global_array[local_root]->rmt_steal_procs;
 
-    for(i = 0; i < MPIDI_PIP_CELL_NUM; ++i)
+    for (i = 0; i < MPIDI_PIP_CELL_NUM; ++i)
         MPIDI_PIP_global.cells[i].full = 0;
+    MPIDI_PIP_global.buffer_index = 0;
     /* Debug */
     // if (rank == 0) {
     //     for (i = 0; i < num_numa_node; ++i) {
