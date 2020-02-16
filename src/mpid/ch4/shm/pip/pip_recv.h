@@ -223,43 +223,64 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_handle_lmt_rts_recv(uint64_t src_offset, 
         /* both are non-contig */
         MPIDI_SHM_ctrl_hdr_t cts_ctrl_hdr;
         MPIDI_SHM_ctrl_pip_send_lmt_cts_t *slmt_cts_hdr = &cts_ctrl_hdr.pip_slmt_cts;
-        slmt_cts_hdr->data_sz = recv_data_sz;
+        slmt_cts_hdr->remain_data = recv_data_sz;
         slmt_cts_hdr->sreq_ptr = sreq_ptr;
-        slmt_cts_hdr->cells = (uint64_t) MPIDI_PIP_global.cells;
+        slmt_cts_hdr->rreq_ptr = (uint64_t) rreq;
+        MPIDI_PIP_REQUEST(rreq, target_data_sz) = recv_data_sz;
+        MPIDI_PIP_REQUEST(rreq, remain_data) = recv_data_sz;
+        MPIDI_PIP_REQUEST(rreq, offset) = 0;
         mpi_errno =
             MPIDI_SHM_do_ctrl_send(MPIDIG_REQUEST(rreq, rank),
                                    MPIDIG_context_id_to_comm(MPIDIG_REQUEST(rreq, context_id)),
                                    MPIDI_SHM_PIP_SEND_LMT_CTS, &cts_ctrl_hdr);
-        MPI_Aint remain_data = recv_data_sz;
-        MPI_Aint actual_bytes;
-        MPI_Aint outoffset = 0;
-        MPI_Aint copy_sz;
-        MPI_Aint dest_count = MPIDIG_REQUEST(rreq, count);
-        MPI_Datatype dest_dt = MPIDIG_REQUEST(rreq, datatype);
-        int buffer_index = 0;
-
-        void *dest_buf = MPIDIG_REQUEST(rreq, buffer);
-        while (remain_data) {
-            if (MPIDI_PIP_global.cells[buffer_index].full) {
-                if (remain_data >= MPIDI_PIP_CELL_SIZE)
-                    copy_sz = MPIDI_PIP_CELL_SIZE;
-                else
-                    copy_sz = remain_data;
-                MPIR_Typerep_unpack(MPIDI_PIP_global.cells[buffer_index].load, copy_sz, dest_buf,
-                                    dest_count, dest_dt, outoffset, &actual_bytes);
-                OPA_write_barrier();
-                MPIR_Assert(actual_bytes == copy_sz);
-                MPIDI_PIP_global.cells[buffer_index].full = 0;
-                outoffset += copy_sz;
-                remain_data -= copy_sz;
-                buffer_index = (buffer_index + 1) % MPIDI_PIP_CELL_NUM;
+        if (MPIDI_PIP_REQUEST(rreq, remain_data) > MPIDI_PIP_CELL_SIZE) {
+            MPIDI_PIP_REQUEST(rreq, remain_data) -= MPIDI_PIP_CELL_SIZE;
+            slmt_cts_hdr->remain_data = MPIDI_PIP_REQUEST(rreq, remain_data);
+            /* pipeline */
+            mpi_errno =
+                MPIDI_SHM_do_ctrl_send(MPIDIG_REQUEST(rreq, rank),
+                                       MPIDIG_context_id_to_comm(MPIDIG_REQUEST(rreq, context_id)),
+                                       MPIDI_SHM_PIP_SEND_LMT_CTS, &cts_ctrl_hdr);
+            if (MPIDI_PIP_REQUEST(rreq, remain_data) > MPIDI_PIP_CELL_SIZE) {
+                MPIDI_PIP_REQUEST(rreq, remain_data) -= MPIDI_PIP_CELL_SIZE;
+            } else {
+                MPIDI_PIP_REQUEST(rreq, remain_data) = 0;
             }
+        } else {
+            MPIDI_PIP_REQUEST(rreq, remain_data) = 0;
         }
+
+
+        // MPI_Aint remain_data = recv_data_sz;
+        // MPI_Aint actual_bytes;
+        // MPI_Aint outoffset = 0;
+        // MPI_Aint copy_sz;
+        // MPI_Aint dest_count = MPIDIG_REQUEST(rreq, count);
+        // MPI_Datatype dest_dt = MPIDIG_REQUEST(rreq, datatype);
+        // int buffer_index = 0;
+
+        // void *dest_buf = MPIDIG_REQUEST(rreq, buffer);
+        // while (remain_data) {
+        //     if (MPIDI_PIP_global.cells[buffer_index].full) {
+        //         if (remain_data >= MPIDI_PIP_CELL_SIZE)
+        //             copy_sz = MPIDI_PIP_CELL_SIZE;
+        //         else
+        //             copy_sz = remain_data;
+        //         MPIR_Typerep_unpack(MPIDI_PIP_global.cells[buffer_index].load, copy_sz, dest_buf,
+        //                             dest_count, dest_dt, outoffset, &actual_bytes);
+        //         OPA_write_barrier();
+        //         MPIR_Assert(actual_bytes == copy_sz);
+        //         MPIDI_PIP_global.cells[buffer_index].full = 0;
+        //         outoffset += copy_sz;
+        //         remain_data -= copy_sz;
+        //         buffer_index = (buffer_index + 1) % MPIDI_PIP_CELL_NUM;
+        //     }
+        // }
+
         MPIR_STATUS_SET_COUNT(rreq->status, recv_data_sz);
         rreq->status.MPI_SOURCE = MPIDIG_REQUEST(rreq, rank);
         rreq->status.MPI_TAG = MPIDIG_REQUEST(rreq, tag);
-        MPIR_Datatype_release_if_not_builtin(MPIDIG_REQUEST(rreq, datatype));
-        MPID_Request_complete(rreq);
+
         goto fn_exit;
     }
 

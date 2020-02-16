@@ -21,6 +21,7 @@ typedef enum {
 #ifdef MPIDI_CH4_SHM_ENABLE_PIP
     MPIDI_SHM_PIP_SEND_LMT_RTS,
     MPIDI_SHM_PIP_SEND_LMT_CTS,
+    MPIDI_SHM_PIP_SEND_LMT_PKT,
     MPIDI_SHM_PIP_SEND_LMT_SEND_ACK,
     MPIDI_SHM_PIP_SEND_LMT_RECV_ACK,
 #endif
@@ -63,10 +64,17 @@ typedef struct MPIDI_SHM_ctrl_pip_send_lmt_rts {
 } MPIDI_SHM_ctrl_pip_send_lmt_rts_t;
 
 typedef struct MPIDI_SHM_ctrl_pip_send_lmt_cts {
-    uint64_t data_sz;           /* data size in bytes */
+    uint64_t remain_data;       /* total data size in bytes */
     uint64_t sreq_ptr;          /* send request pointer */
-    uint64_t cells;             /* receiver's cell array addr */
+    uint64_t rreq_ptr;          /* receiver request pointer */
 } MPIDI_SHM_ctrl_pip_send_lmt_cts_t;
+
+typedef struct MPIDI_SHM_ctrl_pip_send_lmt_pkt {
+    uint64_t data_sz;           /* pkt data size in bytes */
+    uint64_t sreq_ptr;          /* send request pointer */
+    uint64_t rreq_ptr;          /* receiver request pointer */
+    uint64_t cell;              /* cell addr */
+} MPIDI_SHM_ctrl_pip_send_lmt_pkt_t;
 
 typedef struct MPIDI_SHM_ctrl_xpmem_send_lmt_ack {
     uint64_t req_ptr;
@@ -85,6 +93,7 @@ typedef struct {
 #ifdef MPIDI_CH4_SHM_ENABLE_PIP
         MPIDI_SHM_ctrl_pip_send_lmt_rts_t pip_slmt_rts;
         MPIDI_SHM_ctrl_pip_send_lmt_cts_t pip_slmt_cts;
+        MPIDI_SHM_ctrl_pip_send_lmt_pkt_t pip_slmt_pkt;
         MPIDI_SHM_ctrl_pip_send_lmt_fin_t pip_slmt_fin;
 #endif
     };
