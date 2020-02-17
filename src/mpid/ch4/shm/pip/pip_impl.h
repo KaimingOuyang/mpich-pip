@@ -414,6 +414,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
                 MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
                 MPIDI_PIP_do_task_copy(task);
                 MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
+                MPIDI_PIP_global.local_try = 0;
                 return;
             }
         }
@@ -434,6 +435,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
                 MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
                 MPIDI_PIP_do_task_copy(task);
                 MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
+                MPIDI_PIP_global.local_try = 0;
                 return;
             }
         }
@@ -453,13 +455,19 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
         curp = curp->next;
     }
 
-    /* check whether local tasks exists */
-    int i, j;
-    for (i = 0; i < numa_num_procs; ++i) {
-        j = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][i];
-        if (MPIDI_PIP_global.task_queue_array[j]->head)
-            return;
+    if (MPIDI_PIP_global.local_try < CORES_PER_NUMA_NODE) {
+        ++MPIDI_PIP_global.local_try;
+        return;
+    } else {
+        MPIDI_PIP_global.local_try = 0;
     }
+    /* check whether local tasks exists */
+    // int i, j;
+    // for (i = 0; i < numa_num_procs; ++i) {
+    //     j = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][i];
+    //     if (MPIDI_PIP_global.task_queue_array[j]->head)
+    //         return;
+    // }
 
     /* remote stealing */
     // numa_id = rand() % MPIDI_PIP_global.num_numa_node;

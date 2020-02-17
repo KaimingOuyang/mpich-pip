@@ -62,7 +62,7 @@ typedef struct MPIDI_PIP_cell {
 #define MPIDI_PIP_MAX_NUM_LOCAL_STEALING 4
 #elif KNL
 #define CORES_PER_NUMA_NODE 16
-#define MPIDI_PIP_MAX_NUM_LOCAL_STEALING 10
+#define MPIDI_PIP_MAX_NUM_LOCAL_STEALING 12
 #else
 #define CORES_PER_NUMA_NODE 18
 #define MPIDI_PIP_MAX_NUM_LOCAL_STEALING 4
@@ -118,7 +118,7 @@ typedef struct MPIDI_PIP_global {
     uint32_t rank;
     uint32_t num_numa_node;
     uint32_t local_numa_id;
-
+    uint32_t local_try;
     MPIDI_PIP_task_queue_t *task_queue;
     MPIDI_PIP_task_queue_t **task_queue_array;
     MPIDI_PIP_task_queue_t *compl_queue;
