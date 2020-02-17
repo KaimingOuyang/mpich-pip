@@ -379,10 +379,10 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_Task_safe_dequeue_and_thd_test(MPIDI_PIP
     }
 
     if (cur_local_intra_copy < MPIDI_PIP_MAX_NUM_LOCAL_STEALING) {
-        MPIDI_PIP_global.allow_rmt_stealing_ptr[numa_id] = 1;
         MPID_Thread_mutex_lock(&task_queue->lock, &err);
         old_head = task_queue->head;
         if (old_head) {
+            MPIDI_PIP_global.allow_rmt_stealing_ptr[numa_id] = 1;
             task_queue->head = old_head->task_next;
             if (task_queue->head == NULL)
                 task_queue->tail = NULL;
@@ -439,14 +439,6 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
         }
     }
 
-    /* check whether local tasks exists */
-    int i, j;
-    for (i = 0; i < numa_num_procs; ++i) {
-        j = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][i];
-        if (MPIDI_PIP_global.task_queue_array[j]->head)
-            return;
-    }
-
     curp = MPIDI_PIP_global.interp_queue.head;
     while (curp != NULL) {
         victim = curp->partner;
@@ -461,8 +453,17 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
         curp = curp->next;
     }
 
+    /* check whether local tasks exists */
+    int i, j;
+    for (i = 0; i < numa_num_procs; ++i) {
+        j = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][i];
+        if (MPIDI_PIP_global.task_queue_array[j]->head)
+            return;
+    }
+
     /* remote stealing */
-    numa_id = rand() % MPIDI_PIP_global.num_numa_node;
+    // numa_id = rand() % MPIDI_PIP_global.num_numa_node;
+    numa_id = MPIDI_PIP_global.numa_partner;
     numa_num_procs = MPIDI_PIP_global.numa_num_procs[numa_id];
     if (numa_num_procs != 0 && numa_id != MPIDI_PIP_global.local_numa_id) {
         if (OPA_cas_int(&MPIDI_PIP_global.bdw_checking_ptr[numa_id], 0, 1) == 0) {
@@ -479,7 +480,6 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
                     MPIDI_PIP_do_task_copy(task);
                     MPIDI_PIP_global.allow_rmt_stealing_ptr[numa_id] = 0;
                 }
-                
             }
             OPA_store_int(&MPIDI_PIP_global.bdw_checking_ptr[numa_id], 0);
         } else if (MPIDI_PIP_global.allow_rmt_stealing_ptr[numa_id]) {

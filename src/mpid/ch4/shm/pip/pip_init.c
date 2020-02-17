@@ -156,9 +156,8 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
             MPIDI_PIP_global.pip_global_array[local_root]->local_idle_state;
     }
     MPIDI_PIP_global.allow_rmt_stealing_ptr =
-    MPIDI_PIP_global.pip_global_array[local_root]->allow_rmt_stealing;
-    MPIDI_PIP_global.bdw_checking_ptr =
-    MPIDI_PIP_global.pip_global_array[local_root]->bdw_checking;
+        MPIDI_PIP_global.pip_global_array[local_root]->allow_rmt_stealing;
+    MPIDI_PIP_global.bdw_checking_ptr = MPIDI_PIP_global.pip_global_array[local_root]->bdw_checking;
 
     /* Debug */
     // if (rank == 0) {
@@ -224,7 +223,7 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     for (i = 0; i < MPIR_Process.local_size; i++) {
         MPIDI_PIP_global.grank_to_lrank[MPIR_Process.node_local_map[i]] = i;
     }
-
+    MPIDI_PIP_global.numa_partner = local_numa_id ^ 1;
     /* For stealing rand seeds */
     srand(time(NULL) + MPIDI_PIP_global.local_rank * MPIDI_PIP_global.local_rank);
 

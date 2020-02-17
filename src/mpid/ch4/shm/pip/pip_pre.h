@@ -132,6 +132,7 @@ typedef struct MPIDI_PIP_global {
     int *numa_lrank_to_nid;     /* local rank to numa id */
     int numa_root_rank;         /* rank of root process in my NUMA node */
     int numa_local_rank;
+    int numa_partner;
 
     /* finalized procs cnt */
     OPA_int_t fin_procs;
