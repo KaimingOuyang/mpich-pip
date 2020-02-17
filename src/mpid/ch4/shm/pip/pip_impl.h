@@ -542,7 +542,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_copy_size_decision(MPIDI_PIP_task_t * tas
 #else
     if (remaining_data <= PKT_16KB)
         copy_sz = remaining_data;
-    else 
+    else
         copy_sz = PKT_64KB;
 #endif
     return copy_sz;
@@ -785,11 +785,10 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_unpack(void *src_buf, MPI_Aint insize,
     return mpi_errno;
 }
 
-
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_Task_remote_check_and_steal(MPIDI_PIP_task_queue_t *
                                                                     task_queue, int numa_num_procs,
                                                                     MPIDI_PIP_global_t *
-                                                                    victim_pip_global)
+                                                                    victim_pip_global, int numa_id)
 {
     int err, i;
     int cur_local_intra_copy = 0;
@@ -800,8 +799,11 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_Task_remote_check_and_steal(MPIDI_PIP_ta
         if (local_copy_array[i] || local_idle_array[i])
             cur_local_intra_copy++;
     }
-    if (cur_local_intra_copy < MPIDI_INTRA_COPY_LOCAL_PROCS_THRESHOLD) {
+
+    if (cur_local_intra_copy < MPIDI_PIP_MAX_NUM_LOCAL_STEALING) {
+        MPIDI_PIP_global.allow_rmt_stealing_ptr[numa_id] = 1;
         MPIDI_PIP_exec_stolen_task(task_queue);
+        MPIDI_PIP_global.allow_rmt_stealing_ptr[numa_id] = 0;
     }
     return;
 }
@@ -823,8 +825,10 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
             MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
             ret = MPIDI_PIP_exec_stolen_task(victim_queue);
             MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
-            if (ret == STEALING_SUCCESS)
+            if (ret == STEALING_SUCCESS) {
+                MPIDI_PIP_global.local_try = 0;
                 return;
+            }
         }
         curp = curp->next;
     }
@@ -839,52 +843,63 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
             MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
             ret = MPIDI_PIP_exec_stolen_task(victim_queue);
             MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
-            if (ret == STEALING_SUCCESS)
+            if (ret == STEALING_SUCCESS) {
+                MPIDI_PIP_global.local_try = 0;
                 return;
+            }
         }
     }
-
-    /* check whether local tasks exists */
-    int i, j;
-    for (i = 0; i < numa_num_procs; ++i) {
-        j = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][i];
-        if (MPIDI_PIP_global.task_queue_array[j]->head)
-            return;
-    }
-
 #ifdef ENABLE_PARTNER_STEALING
     curp = MPIDI_PIP_global.interp_queue.head;
     while (curp != NULL) {
         victim = curp->partner;
         MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
         if (victim_queue->head) {
-            numa_num_procs = MPIDI_PIP_global.numa_num_procs[curp->partner_numa_id];
+            // numa_num_procs = MPIDI_PIP_global.numa_num_procs[curp->partner_numa_id];
             // MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
-            MPIDI_PIP_Task_remote_check_and_steal(victim_queue, numa_num_procs,
-                                                  MPIDI_PIP_global.pip_global_array[victim]);
+            MPIDI_PIP_exec_stolen_task(victim_queue);
             // MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
             return;
         }
         curp = curp->next;
     }
 #endif
+    if (MPIDI_PIP_global.local_try < CORES_PER_NUMA_NODE) {
+        ++MPIDI_PIP_global.local_try;
+        return;
+    } else {
+        MPIDI_PIP_global.local_try = 0;
+    }
+    /* check whether local tasks exists */
+    // int i, j;
+    // for (i = 0; i < numa_num_procs; ++i) {
+    //     j = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][i];
+    //     if (MPIDI_PIP_global.task_queue_array[j]->head)
+    //         return;
+    // }
 
     /* remote stealing */
     numa_id = MPIDI_PIP_global.partner_numa;
     numa_num_procs = MPIDI_PIP_global.numa_num_procs[numa_id];
+    if (numa_num_procs != 0) {
+        if (OPA_cas_int(&MPIDI_PIP_global.bdw_checking_ptr[numa_id], 0, 1) == 0) {
+            victim = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][rand() % numa_num_procs];
+            MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
+            if (victim_queue->head) {
+                MPIDI_PIP_Task_remote_check_and_steal(victim_queue, numa_num_procs,
+                                                      MPIDI_PIP_global.pip_global_array[victim],
+                                                      numa_id);
+            }
+            OPA_store_int(&MPIDI_PIP_global.bdw_checking_ptr[numa_id], 0);
+        } else if (MPIDI_PIP_global.allow_rmt_stealing_ptr[numa_id]) {
+            victim = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][rand() % numa_num_procs];
+            MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
 
-    if (numa_num_procs != 0 && numa_id != MPIDI_PIP_global.local_numa_id) {
-        // int rmt_access = OPA_fetch_and_add_int(&MPIDI_PIP_global.numa_rmt_access[numa_id], 1);
-        // if (rmt_access < MPIDI_MAX_RMT_PEEKING_PROCS) {
-        victim = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][rand() % numa_num_procs];
-        MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
-
-        if (victim_queue->head) {
-            MPIDI_PIP_Task_remote_check_and_steal(victim_queue, numa_num_procs,
-                                                  MPIDI_PIP_global.pip_global_array[victim]);
+            if (victim_queue->head) {
+                MPIDI_PIP_exec_stolen_task(victim_queue);
+                return;
+            }
         }
-        // }
-        // OPA_decr_int(&MPIDI_PIP_global.numa_rmt_access[numa_id]);
     }
 #endif /* MPIDI_PIP_STEALING_ENABLE */
     return;

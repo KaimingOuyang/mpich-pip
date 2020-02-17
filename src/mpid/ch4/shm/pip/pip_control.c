@@ -17,10 +17,13 @@ int MPIDI_PIP_ctrl_send_lmt_send_fin_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr)
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_XPMEM_CTRL_SEND_LMT_ACK_CB);
 
     PIP_TRACE("send_lmt_ack_cb: complete sreq %p\n", sreq);
+#ifdef ENABLE_PARTNER_STEALING
     if (partner_queue == MPIDI_PIP_INTRA_QUEUE)
         MPIDI_PIP_PARTNER_DEQUEUE(partner, &MPIDI_PIP_global.intrap_queue);
     else
         MPIDI_PIP_PARTNER_DEQUEUE(partner, &MPIDI_PIP_global.interp_queue);
+    MPIR_Handle_obj_free(&MPIDI_Partner_mem, partner);
+#endif
     MPID_Request_complete(sreq);
 
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_XPMEM_CTRL_SEND_LMT_ACK_CB);

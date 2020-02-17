@@ -333,12 +333,6 @@ static int progress_send(int blocking)
             MPIDI_POSIX_am_release_req_hdr(&curr_sreq_hdr);
         }
     } else if (empty_recv_queue) {
-#ifdef ENABLE_PARTNER_STEALING
-        if (MPIDI_PIP_global.intrap_queue.head) {
-            MPIDI_PIP_global.local_idle_state[MPIDI_PIP_global.numa_local_rank] = 1;
-            MPIDI_PIP_steal_task();
-        }else
-#endif
 
 #ifdef ENABLE_IDLECNT_STEALING
         if (MPIDI_PIP_idle_cnt < MPIDI_PIP_IDLE_THRESHOLD) {
@@ -348,10 +342,8 @@ static int progress_send(int blocking)
             MPIDI_PIP_steal_task();
         }
 #else
-        {
-            MPIDI_PIP_global.local_idle_state[MPIDI_PIP_global.numa_local_rank] = 1;
-            MPIDI_PIP_steal_task();
-        }
+        MPIDI_PIP_global.local_idle_state[MPIDI_PIP_global.numa_local_rank] = 1;
+        MPIDI_PIP_steal_task();
 #endif
     }
   fn_exit:

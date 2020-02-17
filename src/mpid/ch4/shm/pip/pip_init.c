@@ -123,15 +123,10 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     int local_root = MPIDI_PIP_global.numa_root_rank;
     if (local_root == local_rank) {
         /* root process in eahc NUMA node */
-        // MPIR_CHKPMEM_MALLOC(MPIDI_PIP_global.numa_rmt_access, OPA_int_t *,
-        //                     sizeof(OPA_int_t) * num_numa_node, mpi_errno, "numa_rmt_access",
-        //                     MPL_MEM_OTHER);
-        // for (i = 0; i < num_numa_node; ++i)
-        //     OPA_store_int(&MPIDI_PIP_global.numa_rmt_access[i], 0);
-
         MPIR_CHKPMEM_MALLOC(MPIDI_PIP_global.local_copy_state, int *,
                             sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id], mpi_errno,
                             "local copy state", MPL_MEM_OTHER);
+
         memset(MPIDI_PIP_global.local_copy_state, 0,
                sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id]);
 
@@ -140,6 +135,17 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
                                MPL_MEM_OTHER);
         memset(MPIDI_PIP_global.local_idle_state, 0,
                sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id]);
+
+        MPIDI_PIP_global.bdw_checking =
+            (OPA_int_t *) MPL_malloc(sizeof(OPA_int_t) * MPIDI_PIP_global.num_numa_node,
+                                     MPL_MEM_OTHER);
+        for (i = 0; i < MPIDI_PIP_global.num_numa_node; ++i)
+            OPA_store_int(&MPIDI_PIP_global.bdw_checking[i], 0);
+
+        MPIDI_PIP_global.allow_rmt_stealing =
+            (int *) MPL_malloc(sizeof(int) * MPIDI_PIP_global.num_numa_node, MPL_MEM_OTHER);
+        for (i = 0; i < MPIDI_PIP_global.num_numa_node; ++i)
+            MPIDI_PIP_global.allow_rmt_stealing[i] = 0;
         MPIDU_Init_shm_barrier();
     } else {
         MPIDU_Init_shm_barrier();
@@ -150,6 +156,10 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
         MPIDI_PIP_global.local_idle_state =
             MPIDI_PIP_global.pip_global_array[local_root]->local_idle_state;
     }
+
+    MPIDI_PIP_global.allow_rmt_stealing_ptr =
+        MPIDI_PIP_global.pip_global_array[local_root]->allow_rmt_stealing;
+    MPIDI_PIP_global.bdw_checking_ptr = MPIDI_PIP_global.pip_global_array[local_root]->bdw_checking;
 
     /* Debug */
     // if (rank == 0) {
@@ -209,7 +219,7 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     for (i = 0; i < MPIR_Process.local_size; i++) {
         MPIDI_PIP_global.grank_to_lrank[MPIR_Process.node_local_map[i]] = i;
     }
-
+    MPIDI_PIP_global.local_try = 0;
     /* For stealing rand seeds */
     srand(time(NULL) + MPIDI_PIP_global.local_rank * MPIDI_PIP_global.local_rank);
 
@@ -243,6 +253,8 @@ int MPIDI_PIP_mpi_finalize_hook(void)
         // MPL_free(MPIDI_PIP_global.numa_rmt_access);
         MPL_free(MPIDI_PIP_global.local_copy_state);
         MPL_free(MPIDI_PIP_global.local_idle_state);
+        MPL_free(MPIDI_PIP_global.bdw_checking);
+        MPL_free(MPIDI_PIP_global.allow_rmt_stealing);
     }
 
     MPL_free(MPIDI_PIP_global.numa_num_procs);

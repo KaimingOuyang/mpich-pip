@@ -76,8 +76,10 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_handle_lmt_rts_recv(uint64_t src_offset, 
 
     /* Send ack to sender */
     slmt_fin_hdr->req_ptr = sreq_ptr;
+#ifdef ENABLE_PARTNER_STEALING
     slmt_fin_hdr->partner = partner;
     slmt_fin_hdr->partner_queue = partner_queue;
+#endif
     mpi_errno =
         MPIDI_SHM_do_ctrl_send(MPIDIG_REQUEST(rreq, rank),
                                MPIDIG_context_id_to_comm(MPIDIG_REQUEST(rreq, context_id)),

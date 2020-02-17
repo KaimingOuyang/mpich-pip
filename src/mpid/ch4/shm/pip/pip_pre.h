@@ -26,11 +26,6 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 #define MPIDI_PIP_L2_CACHE_THRESHOLD 131072     /* 64KB * 2 this size has two considerations, one is keeping head data in L2 cache in receiver, the other is reducing the chances of remote process stealing, lock contention and remote data access overhead that will slow down the copy due to small data_sz. */
 #define MPIDI_PIP_LAST_PKT_THRESHOLD MPIDI_PIP_PKT_SIZE /* 64KB */
 
-#define MPIDI_INTRA_COPY_LOCAL_PROCS_THRESHOLD 5        /* #local process threshold for intra-NUMA copy on bebop */
-#define MPIDI_INTER_COPY_LOCAL_PROCS_THRESHOLD 8        /* #local process threshold for inter-NUMA copy on bebop */
-#define MPIDI_NUM_COPY_LOCAL_PROCS_ARRAY MPIDI_INTER_COPY_LOCAL_PROCS_THRESHOLD
-#define MPIDI_RMT_COPY_PROCS_THRESHOLD 5        /* max #remote process in stealing on bebop */
-#define MPIDI_MAX_RMT_PEEKING_PROCS 5
 #define MPIDI_PROC_COPY 1
 #define MPIDI_PROC_NOT_COPY 0
 #define MPIDI_PIP_IDLE_THRESHOLD 50
@@ -52,6 +47,20 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 
 #define STEALING_FAIL 0
 #define STEALING_SUCCESS 1
+/* Complete status */
+#define MPIDI_PIP_NOT_COMPLETE  0
+#define MPIDI_PIP_COMPLETE      1
+
+#ifdef BEBOP
+#define CORES_PER_NUMA_NODE 18
+#define MPIDI_PIP_MAX_NUM_LOCAL_STEALING 4
+#elif KNL
+#define CORES_PER_NUMA_NODE 16
+#define MPIDI_PIP_MAX_NUM_LOCAL_STEALING 12
+#else
+#define CORES_PER_NUMA_NODE 18
+#define MPIDI_PIP_MAX_NUM_LOCAL_STEALING 4
+#endif
 
 typedef struct MPIDI_PIP_task {
     MPIR_OBJECT_HEADER;
@@ -96,7 +105,8 @@ typedef struct MPIDI_PIP_global {
     uint32_t rank;
     uint32_t num_numa_node;
     uint32_t local_numa_id;     /* id of numa node I locate at */
-
+    uint32_t local_try;
+    
     MPIDI_PIP_task_queue_t *task_queue;
     MPIDI_PIP_task_queue_t **task_queue_array;
 
@@ -127,6 +137,11 @@ typedef struct MPIDI_PIP_global {
     MPIDI_PIP_partner_queue_t intrap_queue;
     MPIDI_PIP_partner_queue_t interp_queue;
     int *grank_to_lrank;
+
+    int *allow_rmt_stealing;
+    int *allow_rmt_stealing_ptr;
+    OPA_int_t *bdw_checking;
+    OPA_int_t *bdw_checking_ptr;
 } MPIDI_PIP_global_t;
 
 typedef struct {
