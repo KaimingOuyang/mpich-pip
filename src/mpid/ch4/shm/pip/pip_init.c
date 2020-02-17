@@ -35,7 +35,7 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
 
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_PIP_INIT_HOOK);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_PIP_INIT_HOOK);
-    MPIR_CHKPMEM_DECL(6);
+    MPIR_CHKPMEM_DECL(7);
 
 #ifdef MPL_USE_DBG_LOGGING
     extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
@@ -123,7 +123,6 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     int local_root = MPIDI_PIP_global.numa_root_rank;
     if (local_root == local_rank) {
         /* root process in eahc NUMA node */
-        OPA_store_int(&MPIDI_PIP_global.rmt_steal_procs, 0);
 
         MPIDI_PIP_global.local_copy_state =
             (int *) MPL_malloc(sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id],
@@ -137,6 +136,17 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
                                MPL_MEM_OTHER);
         memset(MPIDI_PIP_global.local_idle_state, 0,
                sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id]);
+
+        MPIDI_PIP_global.bdw_checking =
+            (OPA_int_t *) MPL_malloc(sizeof(OPA_int_t) * MPIDI_PIP_global.num_numa_node,
+                                     MPL_MEM_OTHER);
+        for (i = 0; i < MPIDI_PIP_global.num_numa_node; ++i)
+            OPA_store_int(&MPIDI_PIP_global.bdw_checking[i], 0);
+
+        MPIDI_PIP_global.allow_rmt_stealing =
+            (int *) MPL_malloc(sizeof(int) * MPIDI_PIP_global.num_numa_node, MPL_MEM_OTHER);
+        for (i = 0; i < MPIDI_PIP_global.num_numa_node; ++i)
+            MPIDI_PIP_global.allow_rmt_stealing[i] = 0;
         MPIDU_Init_shm_barrier();
     } else {
         MPIDU_Init_shm_barrier();
@@ -145,8 +155,10 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
         MPIDI_PIP_global.local_idle_state =
             MPIDI_PIP_global.pip_global_array[local_root]->local_idle_state;
     }
-    MPIDI_PIP_global.rmt_steal_procs_ptr =
-        &MPIDI_PIP_global.pip_global_array[local_root]->rmt_steal_procs;
+    MPIDI_PIP_global.allow_rmt_stealing_ptr =
+    MPIDI_PIP_global.pip_global_array[local_root]->allow_rmt_stealing;
+    MPIDI_PIP_global.bdw_checking_ptr =
+    MPIDI_PIP_global.pip_global_array[local_root]->bdw_checking;
 
     /* Debug */
     // if (rank == 0) {
@@ -248,6 +260,8 @@ int MPIDI_PIP_mpi_finalize_hook(void)
     if (MPIDI_PIP_global.local_rank == MPIDI_PIP_global.numa_root_rank) {
         MPL_free(MPIDI_PIP_global.local_copy_state);
         MPL_free(MPIDI_PIP_global.local_idle_state);
+        MPL_free(MPIDI_PIP_global.bdw_checking);
+        MPL_free(MPIDI_PIP_global.allow_rmt_stealing);
     }
 
     MPL_free(MPIDI_PIP_global.numa_num_procs);

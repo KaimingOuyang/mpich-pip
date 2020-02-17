@@ -362,6 +362,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_Task_safe_dequeue_and_thd_test(MPIDI_PIP
                                                                        int numa_num_procs,
                                                                        MPIDI_PIP_global_t *
                                                                        victim_pip_global,
+                                                                       int numa_id,
                                                                        MPIDI_PIP_task_t ** task)
 {
     int err;
@@ -378,6 +379,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_Task_safe_dequeue_and_thd_test(MPIDI_PIP
     }
 
     if (cur_local_intra_copy < MPIDI_PIP_MAX_NUM_LOCAL_STEALING) {
+        MPIDI_PIP_global.allow_rmt_stealing_ptr[numa_id] = 1;
         MPID_Thread_mutex_lock(&task_queue->lock, &err);
         old_head = task_queue->head;
         if (old_head) {
@@ -402,7 +404,6 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
     MPIDI_PIP_task_t *task = NULL;
     int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
     // MPIDI_PIP_task_t *task = NULL;
-#ifdef ENABLE_PARTNER_STEALING
     MPIDI_PIP_partner_t *curp = MPIDI_PIP_global.intrap_queue.head;
     while (curp != NULL) {
         victim = curp->partner;
@@ -418,7 +419,6 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
         }
         curp = curp->next;
     }
-#endif
     /* local stealing */
     int numa_id = MPIDI_PIP_global.local_numa_id;
     int numa_num_procs = MPIDI_PIP_global.numa_num_procs[numa_id];
@@ -447,7 +447,6 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
             return;
     }
 
-#ifdef ENABLE_PARTNER_STEALING
     curp = MPIDI_PIP_global.interp_queue.head;
     while (curp != NULL) {
         victim = curp->partner;
@@ -461,28 +460,39 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
         }
         curp = curp->next;
     }
-#endif
 
     /* remote stealing */
     numa_id = rand() % MPIDI_PIP_global.num_numa_node;
     numa_num_procs = MPIDI_PIP_global.numa_num_procs[numa_id];
-
     if (numa_num_procs != 0 && numa_id != MPIDI_PIP_global.local_numa_id) {
-        victim = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][rand() % numa_num_procs];
-        MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
-
-        if (victim_queue->head) {
-
-            MPIDI_PIP_global_t *victim_pip_global = MPIDI_PIP_global.pip_global_array[victim];
-            // int cur_rmt_stealing_procs =
-            //     OPA_fetch_and_add_int(victim_pip_global->rmt_steal_procs_ptr, 1);
-            MPIDI_PIP_Task_safe_dequeue_and_thd_test(victim_queue, numa_num_procs,
-                                                     victim_pip_global, &task);
-            // task = NULL;
-            if (task) {
-                MPIDI_PIP_do_task_copy(task);
+        if (OPA_cas_int(&MPIDI_PIP_global.bdw_checking_ptr[numa_id], 0, 1) == 0) {
+            victim = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][rand() % numa_num_procs];
+            MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
+            if (victim_queue->head) {
+                MPIDI_PIP_global_t *victim_pip_global = MPIDI_PIP_global.pip_global_array[victim];
+                // int cur_rmt_stealing_procs =
+                //     OPA_fetch_and_add_int(victim_pip_global->rmt_steal_procs_ptr, 1);
+                MPIDI_PIP_Task_safe_dequeue_and_thd_test(victim_queue, numa_num_procs,
+                                                         victim_pip_global, numa_id, &task);
+                // task = NULL;
+                if (task) {
+                    MPIDI_PIP_do_task_copy(task);
+                    MPIDI_PIP_global.allow_rmt_stealing_ptr[numa_id] = 0;
+                }
+                
             }
-            // OPA_decr_int(victim_pip_global->rmt_steal_procs_ptr);
+            OPA_store_int(&MPIDI_PIP_global.bdw_checking_ptr[numa_id], 0);
+        } else if (MPIDI_PIP_global.allow_rmt_stealing_ptr[numa_id]) {
+            victim = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][rand() % numa_num_procs];
+            MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
+
+            if (victim_queue->head) {
+                MPIDI_PIP_Task_safe_dequeue(victim_queue, &task);
+                if (task) {
+                    MPIDI_PIP_do_task_copy(task);
+                    return;
+                }
+            }
         }
     }
 #endif /* MPIDI_PIP_STEALING_ENABLE */

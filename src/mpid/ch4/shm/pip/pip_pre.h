@@ -24,11 +24,6 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 #define MPIDI_PIP_LAST_PKT_THRESHOLD MPIDI_PIP_PKT_SIZE /* 64KB */
 #define MPIDI_PIP_CELL_SIZE 65536
 
-#define MPIDI_PIP_MAX_NUM_LOCAL_STEALING 10
-#define MPIDI_INTRA_COPY_LOCAL_PROCS_THRESHOLD 14       /* #local process threshold for intra-NUMA copy on knl */
-#define MPIDI_INTER_COPY_LOCAL_PROCS_THRESHOLD 16       /* #local process threshold for inter-NUMA copy on knl */
-#define MPIDI_NUM_COPY_LOCAL_PROCS_ARRAY MPIDI_INTER_COPY_LOCAL_PROCS_THRESHOLD
-#define MPIDI_RMT_COPY_PROCS_THRESHOLD 16       /* max #remote process in stealing on knl */
 #define MPIDI_PROC_COPY 1
 #define MPIDI_PROC_NOT_COPY 0
 
@@ -64,10 +59,13 @@ typedef struct MPIDI_PIP_cell {
 
 #ifdef BEBOP
 #define CORES_PER_NUMA_NODE 18
+#define MPIDI_PIP_MAX_NUM_LOCAL_STEALING 4
 #elif KNL
 #define CORES_PER_NUMA_NODE 16
+#define MPIDI_PIP_MAX_NUM_LOCAL_STEALING 10
 #else
 #define CORES_PER_NUMA_NODE 18
+#define MPIDI_PIP_MAX_NUM_LOCAL_STEALING 4
 #endif
 
 typedef struct MPIDI_PIP_task {
@@ -139,10 +137,6 @@ typedef struct MPIDI_PIP_global {
     OPA_int_t fin_procs;
     OPA_int_t *fin_procs_ptr;
 
-    /* current #remote stealing processes */
-    OPA_int_t rmt_steal_procs;  /* #remote stealing processes, valid only in root process */
-    OPA_int_t *rmt_steal_procs_ptr;
-
     /* copy state */
     int *local_copy_state;      /* copy state of processes in eahc NUMA node */
     /* idle state */
@@ -154,6 +148,11 @@ typedef struct MPIDI_PIP_global {
     MPIDI_PIP_partner_queue_t intrap_queue;
     MPIDI_PIP_partner_queue_t interp_queue;
     int *grank_to_lrank;
+
+    int *allow_rmt_stealing;
+    int *allow_rmt_stealing_ptr;
+    OPA_int_t *bdw_checking;
+    OPA_int_t *bdw_checking_ptr;
 } MPIDI_PIP_global_t;
 
 typedef struct {
@@ -202,8 +201,6 @@ static inline void MPIDI_PIP_PARTNER_DEQUEUE(MPIDI_PIP_partner_t * partner_ptr,
 extern MPIDI_PIP_global_t MPIDI_PIP_global;
 extern MPIR_Object_alloc_t MPIDI_Task_mem;
 extern MPIR_Object_alloc_t MPIDI_Cell_mem;
-extern const int MPIDI_PIP_upperbound_threshold[MPIDI_STEALING_CASE];
-extern const int MPIDI_PIP_thp_map[MPIDI_STEALING_CASE][MPIDI_NUM_COPY_LOCAL_PROCS_ARRAY];
 extern MPIR_Object_alloc_t MPIDI_Partner_mem;
 // extern MPIDI_POSIX_global_t MPIDI_POSIX_global;
 // extern MPIR_Object_alloc_t MPIDI_Cell_mem;
