@@ -75,7 +75,8 @@ typedef struct MPIDI_SHM_ctrl_pip_send_lmt_pkt {
     uint64_t data_sz;           /* pkt data size in bytes */
     uint64_t sreq_ptr;          /* send request pointer */
     uint64_t rreq_ptr;          /* receiver request pointer */
-    uint64_t cell;              /* cell addr */
+    uint64_t cells;             /* cell hdr addr */
+    uint64_t start_index;       /* index to start copy */
 } MPIDI_SHM_ctrl_pip_send_lmt_pkt_t;
 
 typedef struct MPIDI_SHM_ctrl_xpmem_send_lmt_ack {

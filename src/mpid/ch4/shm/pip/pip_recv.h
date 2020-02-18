@@ -346,29 +346,28 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_handle_lmt_rts_recv(uint64_t src_offset, 
         slmt_cts_hdr->remain_data = recv_data_sz;
         slmt_cts_hdr->sreq_ptr = sreq_ptr;
         slmt_cts_hdr->rreq_ptr = (uint64_t) rreq;
-        MPIDI_PIP_REQUEST(rreq, target_data_sz) = recv_data_sz;
         MPIDI_PIP_REQUEST(rreq, remain_data) = recv_data_sz;
         MPIDI_PIP_REQUEST(rreq, offset) = 0;
         mpi_errno =
             MPIDI_SHM_do_ctrl_send(MPIDIG_REQUEST(rreq, rank),
                                    MPIDIG_context_id_to_comm(MPIDIG_REQUEST(rreq, context_id)),
                                    MPIDI_SHM_PIP_SEND_LMT_CTS, &cts_ctrl_hdr);
-        if (MPIDI_PIP_REQUEST(rreq, remain_data) > MPIDI_PIP_CELL_SIZE) {
-            MPIDI_PIP_REQUEST(rreq, remain_data) -= MPIDI_PIP_CELL_SIZE;
-            slmt_cts_hdr->remain_data = MPIDI_PIP_REQUEST(rreq, remain_data);
-            /* pipeline */
-            mpi_errno =
-                MPIDI_SHM_do_ctrl_send(MPIDIG_REQUEST(rreq, rank),
-                                       MPIDIG_context_id_to_comm(MPIDIG_REQUEST(rreq, context_id)),
-                                       MPIDI_SHM_PIP_SEND_LMT_CTS, &cts_ctrl_hdr);
-            if (MPIDI_PIP_REQUEST(rreq, remain_data) > MPIDI_PIP_CELL_SIZE) {
-                MPIDI_PIP_REQUEST(rreq, remain_data) -= MPIDI_PIP_CELL_SIZE;
-            } else {
-                MPIDI_PIP_REQUEST(rreq, remain_data) = 0;
-            }
-        } else {
-            MPIDI_PIP_REQUEST(rreq, remain_data) = 0;
-        }
+        // if (MPIDI_PIP_REQUEST(rreq, remain_data) > MPIDI_PIP_CELL_SIZE) {
+        //     MPIDI_PIP_REQUEST(rreq, remain_data) -= MPIDI_PIP_CELL_SIZE;
+        //     slmt_cts_hdr->remain_data = MPIDI_PIP_REQUEST(rreq, remain_data);
+        //     /* pipeline */
+        //     mpi_errno =
+        //         MPIDI_SHM_do_ctrl_send(MPIDIG_REQUEST(rreq, rank),
+        //                                MPIDIG_context_id_to_comm(MPIDIG_REQUEST(rreq, context_id)),
+        //                                MPIDI_SHM_PIP_SEND_LMT_CTS, &cts_ctrl_hdr);
+        //     if (MPIDI_PIP_REQUEST(rreq, remain_data) > MPIDI_PIP_CELL_SIZE) {
+        //         MPIDI_PIP_REQUEST(rreq, remain_data) -= MPIDI_PIP_CELL_SIZE;
+        //     } else {
+        //         MPIDI_PIP_REQUEST(rreq, remain_data) = 0;
+        //     }
+        // } else {
+        //     MPIDI_PIP_REQUEST(rreq, remain_data) = 0;
+        // }
 
 
         // MPI_Aint remain_data = recv_data_sz;

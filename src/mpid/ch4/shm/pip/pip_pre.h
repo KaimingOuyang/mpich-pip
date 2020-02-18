@@ -180,7 +180,7 @@ typedef struct {
 
 typedef struct {
     MPIDI_PIP_am_unexp_rreq_t unexp_rreq;
-    MPI_Aint target_data_sz;
+    // MPI_Aint target_data_sz;
     MPI_Aint remain_data;
     MPI_Aint offset;
 } MPIDI_PIP_am_request_t;
