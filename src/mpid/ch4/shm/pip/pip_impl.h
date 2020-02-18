@@ -402,24 +402,24 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
 #ifdef MPIDI_PIP_STEALING_ENABLE
     int victim;
     MPIDI_PIP_task_t *task = NULL;
-    int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
+    // int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
     // MPIDI_PIP_task_t *task = NULL;
-    MPIDI_PIP_partner_t *curp = MPIDI_PIP_global.intrap_queue.head;
-    while (curp != NULL) {
-        victim = curp->partner;
-        MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
-        if (victim_queue->head) {
-            MPIDI_PIP_Task_safe_dequeue(victim_queue, &task);
-            if (task) {
-                MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
-                MPIDI_PIP_do_task_copy(task);
-                MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
-                MPIDI_PIP_global.local_try = 0;
-                return;
-            }
-        }
-        curp = curp->next;
-    }
+    // MPIDI_PIP_partner_t *curp = MPIDI_PIP_global.intrap_queue.head;
+    // while (curp != NULL) {
+    //     victim = curp->partner;
+    //     MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
+    //     if (victim_queue->head) {
+    //         MPIDI_PIP_Task_safe_dequeue(victim_queue, &task);
+    //         if (task) {
+    //             MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
+    //             MPIDI_PIP_do_task_copy(task);
+    //             MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
+    //             MPIDI_PIP_global.local_try = 0;
+    //             return;
+    //         }
+    //     }
+    //     curp = curp->next;
+    // }
     /* local stealing */
     int numa_id = MPIDI_PIP_global.local_numa_id;
     int numa_num_procs = MPIDI_PIP_global.numa_num_procs[numa_id];
@@ -441,19 +441,19 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
         }
     }
 
-    curp = MPIDI_PIP_global.interp_queue.head;
-    while (curp != NULL) {
-        victim = curp->partner;
-        MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
-        if (victim_queue->head) {
-            MPIDI_PIP_Task_safe_dequeue(victim_queue, &task);
-            if (task) {
-                MPIDI_PIP_do_task_copy(task);
-                return;
-            }
-        }
-        curp = curp->next;
-    }
+    // curp = MPIDI_PIP_global.interp_queue.head;
+    // while (curp != NULL) {
+    //     victim = curp->partner;
+    //     MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
+    //     if (victim_queue->head) {
+    //         MPIDI_PIP_Task_safe_dequeue(victim_queue, &task);
+    //         if (task) {
+    //             MPIDI_PIP_do_task_copy(task);
+    //             return;
+    //         }
+    //     }
+    //     curp = curp->next;
+    // }
 
     if (MPIDI_PIP_global.local_try < CORES_PER_NUMA_NODE) {
         ++MPIDI_PIP_global.local_try;
