@@ -116,6 +116,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task_knl_unpack(MPIDI_PIP_task_t *
     MPIR_PIP_Type_dup(task->dest_dt_ptr, &dest_dt_dup);
 
     MPIDI_PIP_cell_t *cell = (MPIDI_PIP_cell_t *) task->src_buf;
+    while (cell->full == 0);
     MPIR_Typerep_unpack(cell->load, task->data_sz, task->dest_buf, task->dest_count, dest_dt_dup,
                         task->dest_offset, &actual_bytes);
     OPA_write_barrier();
@@ -142,6 +143,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_self_task_knl_unpack(MPIDI_PIP_task_t * 
 {
     MPI_Aint actual_bytes;
     MPIDI_PIP_cell_t *cell = (MPIDI_PIP_cell_t *) task->src_buf;
+    while (cell->full == 0);
     MPIR_Typerep_unpack(cell->load, task->data_sz, task->dest_buf, task->dest_count,
                         task->dest_dt_ptr->handle, task->dest_offset, &actual_bytes);
     OPA_write_barrier();
@@ -163,6 +165,25 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_Task_safe_enqueue(MPIDI_PIP_task_queue_t
         task_queue->head = task_queue->tail = task;
     }
     task_queue->task_num++;
+    MPID_Thread_mutex_unlock(&task_queue->lock, &err);
+    return;
+}
+
+MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_Task_safe_enqueue_knl(MPIDI_PIP_task_queue_t * task_queue,
+                                                              MPIDI_PIP_task_t * task_head,
+                                                              MPIDI_PIP_task_t * task_tail,
+                                                              int task_num)
+{
+    int err;
+    MPID_Thread_mutex_lock(&task_queue->lock, &err);
+    if (task_queue->tail) {
+        task_queue->tail->task_next = task_head;
+        task_queue->tail = task_tail;
+    } else {
+        task_queue->head = task_head;
+        task_queue->tail = task_tail;
+    }
+    task_queue->task_num += task_num;
     MPID_Thread_mutex_unlock(&task_queue->lock, &err);
     return;
 }
@@ -199,6 +220,25 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_Compl_task_enqueue(MPIDI_PIP_task_queue_t
     }
 
     compl_queue->task_num++;
+    return mpi_errno;
+}
+
+MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_Compl_task_enqueue_knl(MPIDI_PIP_task_queue_t * compl_queue,
+                                                              MPIDI_PIP_task_t * task_head,
+                                                              MPIDI_PIP_task_t * task_tail,
+                                                              int task_num)
+{
+    int mpi_errno = MPI_SUCCESS;
+
+    if (compl_queue->tail) {
+        compl_queue->tail->compl_next = task_head;
+        compl_queue->tail = task_tail;
+    } else {
+        compl_queue->head = task_head;
+        compl_queue->tail = task_tail;
+    }
+
+    compl_queue->task_num += task_num;
     return mpi_errno;
 }
 
