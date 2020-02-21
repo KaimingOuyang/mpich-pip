@@ -88,7 +88,68 @@ MPL_STATIC_INLINE_PREFIX int MPIR_PIP_Type_dup(MPIR_Datatype * old_dtp, MPI_Data
 }
 
 /* use MPIR_Datatype_free(datatype_ptr); to free the duplicated datatype */
+MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task_knl_pack(MPIDI_PIP_task_t * task)
+{
+    MPI_Datatype src_dt_dup;
+    MPI_Aint actual_bytes;
+    // printf("steal rank %d - pack task->src_dt_ptr->typerep %p\n", MPIDI_PIP_global.local_rank, task->src_dt_ptr->typerep);
+    // fflush(stdout);
 
+    MPIR_PIP_Type_dup(task->src_dt_ptr, &src_dt_dup);
+
+    // printf("steal rank %d - pack done\n", MPIDI_PIP_global.local_rank);
+    // fflush(stdout);
+    MPIDI_PIP_cell_t *cell = (MPIDI_PIP_cell_t *) task->dest_buf;
+    MPIR_Typerep_pack(task->src_buf, task->src_count, src_dt_dup, task->src_offset, cell->load,
+                      task->data_sz, &actual_bytes);
+    OPA_write_barrier();
+    MPIR_Assert(actual_bytes == task->data_sz);
+    cell->full = 1;
+    MPIR_Type_free_impl(&src_dt_dup);
+    return;
+}
+
+MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task_knl_unpack(MPIDI_PIP_task_t * task)
+{
+    MPI_Datatype dest_dt_dup;
+    MPI_Aint actual_bytes;
+    MPIR_PIP_Type_dup(task->dest_dt_ptr, &dest_dt_dup);
+
+    MPIDI_PIP_cell_t *cell = (MPIDI_PIP_cell_t *) task->src_buf;
+    MPIR_Typerep_unpack(cell->load, task->data_sz, task->dest_buf, task->dest_count, dest_dt_dup,
+                        task->dest_offset, &actual_bytes);
+    OPA_write_barrier();
+    MPIR_Assert(actual_bytes == task->data_sz);
+    cell->full = 0;
+
+    MPIR_Type_free_impl(&dest_dt_dup);
+    return;
+}
+
+MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_self_task_knl_pack(MPIDI_PIP_task_t * task)
+{
+    MPI_Aint actual_bytes;
+    MPIDI_PIP_cell_t *cell = (MPIDI_PIP_cell_t *) task->dest_buf;
+    MPIR_Typerep_pack(task->src_buf, task->src_count, task->src_dt_ptr->handle, task->src_offset,
+                      cell->load, task->data_sz, &actual_bytes);
+    OPA_write_barrier();
+    MPIR_Assert(actual_bytes == task->data_sz);
+    cell->full = 1;
+    return;
+}
+
+MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_self_task_knl_unpack(MPIDI_PIP_task_t * task)
+{
+    MPI_Aint actual_bytes;
+    MPIDI_PIP_cell_t *cell = (MPIDI_PIP_cell_t *) task->src_buf;
+    MPIR_Typerep_unpack(cell->load, task->data_sz, task->dest_buf, task->dest_count,
+                        task->dest_dt_ptr->handle, task->dest_offset, &actual_bytes);
+    OPA_write_barrier();
+    MPIR_Assert(actual_bytes == task->data_sz);
+    cell->full = 0;
+
+    return;
+}
 
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_Task_safe_enqueue(MPIDI_PIP_task_queue_t * task_queue,
                                                           MPIDI_PIP_task_t * task)
@@ -283,6 +344,12 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_do_task_copy(MPIDI_PIP_task_t * task)
         case MPIDI_PIP_PACK_UNPACK:
             MPIDI_PIP_steal_task_pack_unpack(task);
             break;
+        case MPIDI_PIP_KNL_PACK:
+            MPIDI_PIP_steal_task_knl_pack(task);
+            break;
+        case MPIDI_PIP_KNL_UNPACK:
+            MPIDI_PIP_steal_task_knl_unpack(task);
+            break;
     }
     OPA_write_barrier();
     // MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
@@ -310,6 +377,12 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_do_self_task_copy(MPIDI_PIP_task_t * tas
             break;
         case MPIDI_PIP_PACK_UNPACK:
             MPIDI_PIP_self_task_pack_unpack(task);
+            break;
+        case MPIDI_PIP_KNL_PACK:
+            MPIDI_PIP_self_task_knl_pack(task);
+            break;
+        case MPIDI_PIP_KNL_UNPACK:
+            MPIDI_PIP_self_task_knl_unpack(task);
             break;
     }
 
@@ -439,7 +512,6 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
             }
         }
     }
-
     // curp = MPIDI_PIP_global.interp_queue.head;
     // while (curp != NULL) {
     //     victim = curp->partner;

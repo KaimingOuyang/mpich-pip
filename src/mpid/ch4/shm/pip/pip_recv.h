@@ -12,6 +12,53 @@
 #include "pip_pre.h"
 #include "pip_impl.h"
 
+MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_knl_pack_task(MPIDI_PIP_task_t * task, void *src_buf,
+                                                           MPI_Aint src_count, MPI_Aint inoffset,
+                                                           MPIR_Datatype * src_dt_ptr,
+                                                           void *dest_buf, MPI_Aint max_pack_bytes,
+                                                           int task_kind)
+{
+    task->compl_flag = MPIDI_PIP_NOT_COMPLETE;
+    task->task_next = NULL;
+    task->compl_next = NULL;
+
+    task->task_kind = task_kind;
+    task->copy_kind = MPIDI_PIP_KNL_PACK;
+
+    task->src_buf = src_buf;
+    task->dest_buf = dest_buf;
+    task->data_sz = max_pack_bytes;
+
+    task->src_count = src_count;
+    task->src_dt_ptr = src_dt_ptr;
+    task->src_offset = inoffset;
+    return;
+}
+
+MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_knl_unpack_task(MPIDI_PIP_task_t * task, void *src_buf,
+                                                             MPI_Aint insize, void *dest_buf,
+                                                             MPI_Aint dest_count,
+                                                             MPI_Aint outoffset,
+                                                             MPIR_Datatype * dest_dt_ptr,
+                                                             int task_kind)
+{
+    task->compl_flag = MPIDI_PIP_NOT_COMPLETE;
+    task->task_next = NULL;
+    task->compl_next = NULL;
+
+    task->task_kind = task_kind;
+    task->copy_kind = MPIDI_PIP_KNL_UNPACK;
+
+    task->src_buf = src_buf;
+    task->dest_buf = dest_buf;
+    task->data_sz = insize;
+
+    task->dest_count = dest_count;
+    task->dest_dt_ptr = dest_dt_ptr;
+    task->dest_offset = outoffset;
+    return;
+}
+
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_memcpy_task(MPIDI_PIP_task_t * task, void *src_buf,
                                                          size_t copy_sz, void *dest_buf,
                                                          int task_kind)
@@ -300,7 +347,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_handle_lmt_rts_recv(uint64_t src_offset, 
                                                            int src_is_contig,
                                                            MPIR_Datatype * src_dt_ptr,
                                                            int src_lrank, uint64_t partner,
-                                                           int partner_queue, MPIR_Request * rreq)
+                                                           int partner_queue, int inter_flag,
+                                                           MPIR_Request * rreq)
 {
     int mpi_errno = MPI_SUCCESS;
     MPI_Aint data_sz, recv_data_sz;
@@ -340,67 +388,41 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_handle_lmt_rts_recv(uint64_t src_offset, 
                                       MPIDIG_REQUEST(rreq, buffer), MPIDIG_REQUEST(rreq, count),
                                       MPIDIG_REQUEST(rreq, datatype), recv_data_sz, task_kind);
     } else {
+#ifdef KNL
         /* both are non-contig */
-        MPIDI_SHM_ctrl_hdr_t cts_ctrl_hdr;
-        MPIDI_SHM_ctrl_pip_send_lmt_cts_t *slmt_cts_hdr = &cts_ctrl_hdr.pip_slmt_cts;
-        slmt_cts_hdr->remain_data = recv_data_sz;
-        slmt_cts_hdr->sreq_ptr = sreq_ptr;
-        slmt_cts_hdr->rreq_ptr = (uint64_t) rreq;
-        MPIDI_PIP_REQUEST(rreq, remain_data) = recv_data_sz;
-        MPIDI_PIP_REQUEST(rreq, offset) = 0;
-        mpi_errno =
-            MPIDI_SHM_do_ctrl_send(MPIDIG_REQUEST(rreq, rank),
-                                   MPIDIG_context_id_to_comm(MPIDIG_REQUEST(rreq, context_id)),
-                                   MPIDI_SHM_PIP_SEND_LMT_CTS, &cts_ctrl_hdr);
-        // if (MPIDI_PIP_REQUEST(rreq, remain_data) > MPIDI_PIP_CELL_SIZE) {
-        //     MPIDI_PIP_REQUEST(rreq, remain_data) -= MPIDI_PIP_CELL_SIZE;
-        //     slmt_cts_hdr->remain_data = MPIDI_PIP_REQUEST(rreq, remain_data);
-        //     /* pipeline */
-        //     mpi_errno =
-        //         MPIDI_SHM_do_ctrl_send(MPIDIG_REQUEST(rreq, rank),
-        //                                MPIDIG_context_id_to_comm(MPIDIG_REQUEST(rreq, context_id)),
-        //                                MPIDI_SHM_PIP_SEND_LMT_CTS, &cts_ctrl_hdr);
-        //     if (MPIDI_PIP_REQUEST(rreq, remain_data) > MPIDI_PIP_CELL_SIZE) {
-        //         MPIDI_PIP_REQUEST(rreq, remain_data) -= MPIDI_PIP_CELL_SIZE;
-        //     } else {
-        //         MPIDI_PIP_REQUEST(rreq, remain_data) = 0;
-        //     }
-        // } else {
-        //     MPIDI_PIP_REQUEST(rreq, remain_data) = 0;
-        // }
+        if (inter_flag) {
+            MPIDI_SHM_ctrl_hdr_t cts_ctrl_hdr;
+            MPIDI_SHM_ctrl_pip_send_lmt_cts_t *slmt_cts_hdr = &cts_ctrl_hdr.pip_slmt_cts;
+            slmt_cts_hdr->remain_data = recv_data_sz;
+            slmt_cts_hdr->sreq_ptr = sreq_ptr;
+            slmt_cts_hdr->rreq_ptr = (uint64_t) rreq;
+            MPIDI_PIP_REQUEST(rreq, remain_data) = recv_data_sz;
+            MPIDI_PIP_REQUEST(rreq, offset) = 0;
+            mpi_errno =
+                MPIDI_SHM_do_ctrl_send(MPIDIG_REQUEST(rreq, rank),
+                                       MPIDIG_context_id_to_comm(MPIDIG_REQUEST(rreq, context_id)),
+                                       MPIDI_SHM_PIP_SEND_LMT_CTS, &cts_ctrl_hdr);
 
+            MPIR_STATUS_SET_COUNT(rreq->status, recv_data_sz);
+            rreq->status.MPI_SOURCE = MPIDIG_REQUEST(rreq, rank);
+            rreq->status.MPI_TAG = MPIDIG_REQUEST(rreq, tag);
+            goto fn_exit;
+        } else {
+            MPIDI_PIP_pack_unpack_task_enqueue((void *) src_offset,
+                                               src_count, src_dt_ptr, MPIDIG_REQUEST(rreq, buffer),
+                                               MPIDIG_REQUEST(rreq, count), MPIDIG_REQUEST(rreq,
+                                                                                           datatype),
+                                               recv_data_sz, task_kind);
+        }
 
-        // MPI_Aint remain_data = recv_data_sz;
-        // MPI_Aint actual_bytes;
-        // MPI_Aint outoffset = 0;
-        // MPI_Aint copy_sz;
-        // MPI_Aint dest_count = MPIDIG_REQUEST(rreq, count);
-        // MPI_Datatype dest_dt = MPIDIG_REQUEST(rreq, datatype);
-        // int buffer_index = 0;
+#else /* broadwell */
+        MPIDI_PIP_pack_unpack_task_enqueue((void *) src_offset,
+                                           src_count, src_dt_ptr, MPIDIG_REQUEST(rreq, buffer),
+                                           MPIDIG_REQUEST(rreq, count), MPIDIG_REQUEST(rreq,
+                                                                                       datatype),
+                                           recv_data_sz, task_kind);
+#endif
 
-        // void *dest_buf = MPIDIG_REQUEST(rreq, buffer);
-        // while (remain_data) {
-        //     if (MPIDI_PIP_global.cells[buffer_index].full) {
-        //         if (remain_data >= MPIDI_PIP_CELL_SIZE)
-        //             copy_sz = MPIDI_PIP_CELL_SIZE;
-        //         else
-        //             copy_sz = remain_data;
-        //         MPIR_Typerep_unpack(MPIDI_PIP_global.cells[buffer_index].load, copy_sz, dest_buf,
-        //                             dest_count, dest_dt, outoffset, &actual_bytes);
-        //         OPA_write_barrier();
-        //         MPIR_Assert(actual_bytes == copy_sz);
-        //         MPIDI_PIP_global.cells[buffer_index].full = 0;
-        //         outoffset += copy_sz;
-        //         remain_data -= copy_sz;
-        //         buffer_index = (buffer_index + 1) % MPIDI_PIP_CELL_NUM;
-        //     }
-        // }
-
-        MPIR_STATUS_SET_COUNT(rreq->status, recv_data_sz);
-        rreq->status.MPI_SOURCE = MPIDIG_REQUEST(rreq, rank);
-        rreq->status.MPI_TAG = MPIDIG_REQUEST(rreq, tag);
-
-        goto fn_exit;
     }
 
     PIP_TRACE("handle_lmt_recv: handle matched rreq %p [source %d, tag %d, context_id 0x%x],"

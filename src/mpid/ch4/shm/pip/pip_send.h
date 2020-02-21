@@ -38,31 +38,6 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_lmt_rts_isend(const void *buf, MPI_Aint c
 
     MPIR_Assert(data_sz > MPIR_CVAR_CH4_PIP_LMT_MSG_SIZE);
 
-    /* pip internal info */
-    if (is_contig)
-        slmt_rts_hdr->src_offset = (uint64_t) buf + true_lb;
-    else {
-        MPIDIG_REQUEST(sreq, buffer) = buf;
-        MPIDIG_REQUEST(sreq, count) = count;
-        MPIDIG_REQUEST(sreq, datatype) = datatype;
-        MPIDIG_REQUEST(sreq, rank) = rank;
-        MPIDIG_REQUEST(sreq, context_id) = comm->context_id + context_offset;
-        MPIDI_PIP_REQUEST(sreq, offset) = 0;
-        slmt_rts_hdr->src_offset = (uint64_t) buf;
-    }
-    slmt_rts_hdr->data_sz = data_sz;
-    slmt_rts_hdr->sreq_ptr = (uint64_t) sreq;
-    slmt_rts_hdr->src_lrank = MPIDI_PIP_global.local_rank;
-    slmt_rts_hdr->is_contig = is_contig;
-    slmt_rts_hdr->src_dt_ptr = src_datatype;
-    slmt_rts_hdr->src_count = count;
-
-
-    /* message matching info */
-    slmt_rts_hdr->src_rank = comm->rank;
-    slmt_rts_hdr->tag = tag;
-    slmt_rts_hdr->context_id = comm->context_id + context_offset;
-
     /* enqueue partner */
     int src_numa_id = MPIDI_PIP_global.local_numa_id;
     const int grank = MPIDIU_rank_to_lpid(rank, comm);
@@ -81,6 +56,32 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_lmt_rts_isend(const void *buf, MPI_Aint c
         slmt_rts_hdr->partner_queue = MPIDI_PIP_INTER_QUEUE;
     }
     slmt_rts_hdr->partner = (uint64_t) partner;
+
+    /* pip internal info */
+    if (is_contig)
+        slmt_rts_hdr->src_offset = (uint64_t) buf + true_lb;
+    else {
+        MPIDIG_REQUEST(sreq, buffer) = buf;
+        MPIDIG_REQUEST(sreq, count) = count;
+        MPIDIG_REQUEST(sreq, datatype) = datatype;
+        MPIDIG_REQUEST(sreq, rank) = rank;
+        MPIDIG_REQUEST(sreq, context_id) = comm->context_id + context_offset;
+        MPIDI_PIP_REQUEST(sreq, offset) = 0;
+        slmt_rts_hdr->src_offset = (uint64_t) buf;
+    }
+    slmt_rts_hdr->data_sz = data_sz;
+    slmt_rts_hdr->sreq_ptr = (uint64_t) sreq;
+    slmt_rts_hdr->src_lrank = MPIDI_PIP_global.local_rank;
+    slmt_rts_hdr->is_contig = is_contig;
+    slmt_rts_hdr->src_dt_ptr = src_datatype;
+    slmt_rts_hdr->src_count = count;
+    slmt_rts_hdr->inter_flag = (src_numa_id != dest_numa_id);
+
+
+    /* message matching info */
+    slmt_rts_hdr->src_rank = comm->rank;
+    slmt_rts_hdr->tag = tag;
+    slmt_rts_hdr->context_id = comm->context_id + context_offset;
 
     PIP_TRACE("pip_lmt_isend: shm ctrl_id %d, src_offset 0x%lx, data_sz 0x%lx, sreq_ptr 0x%lx, "
               "src_lrank %d, match info[dest %d, src_rank %d, tag %d, context_id 0x%x]\n",

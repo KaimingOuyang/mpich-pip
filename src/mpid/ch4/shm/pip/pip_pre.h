@@ -48,6 +48,8 @@ extern const int MPIDI_PIP_local_stealing_map[MPIDI_PIP_THRESHOLD_CASE];        
 #define MPIDI_PIP_PACK 1
 #define MPIDI_PIP_UNPACK 2
 #define MPIDI_PIP_PACK_UNPACK 3
+#define MPIDI_PIP_KNL_PACK 4
+#define MPIDI_PIP_KNL_UNPACK 5
 
 /* Complete status */
 #define MPIDI_PIP_NOT_COMPLETE  0
@@ -148,7 +150,6 @@ typedef struct MPIDI_PIP_global {
     int *local_idle_state;
 
     /* pack/unpack load for stealing */
-<<<<<<< HEAD
     char pkt_load[MPIDI_PIP_PKT_SIZE];
 
     MPIDI_PIP_partner_queue_t intrap_queue;
@@ -159,11 +160,8 @@ typedef struct MPIDI_PIP_global {
     int *allow_rmt_stealing_ptr;
     OPA_int_t *bdw_checking;
     OPA_int_t *bdw_checking_ptr;
-    volatile MPIDI_PIP_cell_t cells[MPIDI_PIP_CELL_NUM];
-=======
     int buffer_index;
     MPIDI_PIP_cell_t cells[MPIDI_PIP_CELL_NUM];
->>>>>>> 36b158588... fix pip-base pipeline non-contig copy
 } MPIDI_PIP_global_t;
 
 typedef struct {
@@ -174,6 +172,7 @@ typedef struct {
     int partner_queue;
     int src_lrank;
     int is_contig;
+    int inter_flag;
     MPIR_Datatype *src_dt_ptr;
     MPI_Aint src_count;
 } MPIDI_PIP_am_unexp_rreq_t;

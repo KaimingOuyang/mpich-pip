@@ -119,7 +119,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mmods_try_matched_recv(void *buf,
                                                   unexp_rreq->is_contig, unexp_rreq->src_dt_ptr,
                                                   unexp_rreq->src_lrank,
                                                   unexp_rreq->partner, unexp_rreq->partner_queue,
-                                                  message);
+                                                  unexp_rreq->inter_flag, message);
         MPIR_ERR_CHECK(mpi_errno);
 
         *recvd_flag = true;

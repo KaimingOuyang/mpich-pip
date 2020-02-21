@@ -21,6 +21,7 @@ int MPIDI_PIP_ctrl_send_lmt_send_fin_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr)
         MPIDI_PIP_PARTNER_DEQUEUE(partner, &MPIDI_PIP_global.intrap_queue);
     else
         MPIDI_PIP_PARTNER_DEQUEUE(partner, &MPIDI_PIP_global.interp_queue);
+    MPIR_Handle_obj_free(&MPIDI_Partner_mem, partner);
     MPID_Request_complete(sreq);
 
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_XPMEM_CTRL_SEND_LMT_ACK_CB);
@@ -95,7 +96,8 @@ int MPIDI_PIP_ctrl_send_lmt_rts_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr)
                                                   slmt_rts_hdr->src_dt_ptr,
                                                   slmt_rts_hdr->src_lrank,
                                                   slmt_rts_hdr->partner,
-                                                  slmt_rts_hdr->partner_queue, rreq);
+                                                  slmt_rts_hdr->partner_queue, 
+                                                  slmt_rts_hdr->inter_flag, rreq);
         MPIR_ERR_CHECK(mpi_errno);
     } else {
         /* Enqueue unexpected receive request */
@@ -121,6 +123,7 @@ int MPIDI_PIP_ctrl_send_lmt_rts_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr)
         MPIDI_PIP_REQUEST(rreq, unexp_rreq).src_count = slmt_rts_hdr->src_count;
         MPIDI_PIP_REQUEST(rreq, unexp_rreq).partner = slmt_rts_hdr->partner;
         MPIDI_PIP_REQUEST(rreq, unexp_rreq).partner_queue = slmt_rts_hdr->partner_queue;
+        MPIDI_PIP_REQUEST(rreq, unexp_rreq).inter_flag = slmt_rts_hdr->inter_flag;
 
         MPIDI_SHM_REQUEST(rreq, status) |= MPIDI_SHM_REQ_PIP_SEND_LMT;
 
@@ -162,7 +165,7 @@ int MPIDI_PIP_ctrl_send_lmt_cts_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr)
     while (MPIDI_PIP_global.cells[buffer_index].full == 0 && send_data < remain_data) {
         send_data += MPIDI_PIP_CELL_SIZE;
         buffer_index = (buffer_index + 1) % MPIDI_PIP_CELL_NUM;
-        if(buffer_index == start_index)
+        if (buffer_index == start_index)
             break;
     }
     MPIDI_PIP_global.buffer_index = buffer_index;
@@ -184,21 +187,32 @@ int MPIDI_PIP_ctrl_send_lmt_cts_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr)
     MPIR_ERR_CHECK(mpi_errno);
 
     int cur_index = start_index;
+    MPIR_Datatype *src_dt_ptr;
+    MPIR_Datatype_get_ptr(src_dt, src_dt_ptr);
     while (send_data) {
         if (remain_data < MPIDI_PIP_CELL_SIZE)
             copy_sz = remain_data;
         else
             copy_sz = MPIDI_PIP_CELL_SIZE;
-        MPIR_Typerep_pack(src_buf, src_count, src_dt, MPIDI_PIP_REQUEST(sreq, offset),
-                          MPIDI_PIP_global.cells[cur_index].load, copy_sz, &actual_bytes);
-        OPA_write_barrier();
-        MPIR_Assert(actual_bytes == copy_sz);
-        MPIDI_PIP_global.cells[cur_index].full = 1;
+        MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
+        MPIDI_PIP_init_knl_pack_task(task, src_buf, src_count, MPIDI_PIP_REQUEST(sreq, offset),
+        src_dt_ptr, &MPIDI_PIP_global.cells[cur_index], copy_sz,
+        MPIDI_PIP_INTER_TASK);
+        MPIDI_PIP_Task_safe_enqueue(MPIDI_PIP_global.task_queue, task);
+        MPIDI_PIP_Compl_task_enqueue(MPIDI_PIP_global.compl_queue, task);
+
+        if (MPIDI_PIP_global.compl_queue->task_num >= MPIDI_MAX_TASK_THRESHOLD)
+            MPIDI_PIP_exec_one_task(MPIDI_PIP_global.task_queue, MPIDI_PIP_global.compl_queue);
+
         MPIDI_PIP_REQUEST(sreq, offset) += copy_sz;
         remain_data -= copy_sz;
         send_data -= copy_sz;
         cur_index = (cur_index + 1) % MPIDI_PIP_CELL_NUM;
     }
+
+    MPIDI_PIP_fflush_task();
+    while (MPIDI_PIP_global.compl_queue->head)
+        MPIDI_PIP_fflush_compl_task(MPIDI_PIP_global.compl_queue);
 
     if (remain_data == 0)
         MPID_Request_complete(sreq);
@@ -220,23 +234,36 @@ int MPIDI_PIP_ctrl_send_lmt_pkt_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr)
     int mpi_errno = MPI_SUCCESS;
 
     MPI_Aint remain_data = MPIDI_PIP_REQUEST(rreq, remain_data);
-
+    void *dest_buf = MPIDIG_REQUEST(rreq, buffer);
+    MPI_Aint dest_count = MPIDIG_REQUEST(rreq, count);
+    int dest_dt = MPIDIG_REQUEST(rreq, datatype);
+    MPIR_Datatype *dest_dt_ptr;
+    MPIR_Datatype_get_ptr(dest_dt, dest_dt_ptr);
     while (send_data) {
+        while (cells[cur_index].full == 0);
         if (send_data < MPIDI_PIP_CELL_SIZE)
             copy_sz = send_data;
         else
             copy_sz = MPIDI_PIP_CELL_SIZE;
-        while (cells[cur_index].full == 0);
-        MPIR_Typerep_unpack(cells[cur_index].load, copy_sz, MPIDIG_REQUEST(rreq, buffer),
-                            MPIDIG_REQUEST(rreq, count), MPIDIG_REQUEST(rreq, datatype),
-                            MPIDI_PIP_REQUEST(rreq, offset), &actual_bytes);
-        OPA_write_barrier();
-        MPIR_Assert(actual_bytes == copy_sz);
-        cells[cur_index].full = 0;
+        
+        MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
+        MPIDI_PIP_init_knl_unpack_task(task, &cells[cur_index], copy_sz, dest_buf, dest_count,
+        MPIDI_PIP_REQUEST(rreq, offset), dest_dt_ptr,
+        MPIDI_PIP_INTER_TASK);
+        MPIDI_PIP_Task_safe_enqueue(MPIDI_PIP_global.task_queue, task);
+        MPIDI_PIP_Compl_task_enqueue(MPIDI_PIP_global.compl_queue, task);
+
+        if (MPIDI_PIP_global.compl_queue->task_num >= MPIDI_MAX_TASK_THRESHOLD)
+            MPIDI_PIP_exec_one_task(MPIDI_PIP_global.task_queue, MPIDI_PIP_global.compl_queue);
+        
         MPIDI_PIP_REQUEST(rreq, offset) += copy_sz;
         send_data -= copy_sz;
         cur_index = (cur_index + 1) % MPIDI_PIP_CELL_NUM;
     }
+
+    MPIDI_PIP_fflush_task();
+    while (MPIDI_PIP_global.compl_queue->head)
+        MPIDI_PIP_fflush_compl_task(MPIDI_PIP_global.compl_queue);
 
     MPIDI_PIP_REQUEST(rreq, remain_data) -= slmt_pkt_hdr->data_sz;
 
