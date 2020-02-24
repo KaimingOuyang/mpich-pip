@@ -872,9 +872,12 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t *
     if (copy_sz) {
         if (stealing_type == MPIDI_PIP_REMOTE_STEALING) {
             MPIDI_PIP_global.rmt_stealing_cnt++;
-            // printf("grank %d - remotely stealing victim %d, copy_sz %ld, copy_kind %d\n", MPIDI_PIP_global.grank, victim, copy_sz, copy_kind) ;
-            // fflush(stdout);
+            printf("grank %d - victim %d, copy_sz %ld, copy_kind %d, intraq %p, interq %p\n",
+                   MPIDI_PIP_global.grank, victim, copy_sz, copy_kind,
+                   MPIDI_PIP_global.intrap_queue.head, MPIDI_PIP_global.interp_queue.head);
+            fflush(stdout);
         }
+        MPIDI_PIP_global.total_stealing_cnt++;
         ret = STEALING_SUCCESS;
         switch (copy_kind) {
             case MPIDI_PIP_MEMCPY:
@@ -1022,6 +1025,9 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_Task_remote_check_and_steal(MPIDI_PIP_ta
     }
 
     if (cur_local_intra_copy < MPIDI_PIP_MAX_NUM_LOCAL_STEALING) {
+        printf("grank %d - cur_local_intra_copy (%d) < threshold (%d)\n", MPIDI_PIP_global.grank,
+               cur_local_intra_copy, MPIDI_PIP_MAX_NUM_LOCAL_STEALING);
+        fflush(stdout);
         MPIDI_PIP_global.allow_rmt_stealing_ptr[numa_id] = 1;
         MPIDI_PIP_exec_stolen_task(task_queue, MPIDI_PIP_REMOTE_STEALING, victim);
         MPIDI_PIP_global.allow_rmt_stealing_ptr[numa_id] = 0;

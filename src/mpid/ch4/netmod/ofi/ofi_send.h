@@ -291,8 +291,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_OFI_send_normal(const void *buf, MPI_Aint cou
 
         MPI_Aint actual_pack_bytes;
 #ifdef ENABLE_OFI_STEALING
-        printf("rank %d - OFI send data %ld to dst_rank %d\n", comm->rank, data_sz, dst_rank);
-        fflush(stdout);
+        // printf("rank %d - OFI send data %ld to dst_rank %d\n", comm->rank, data_sz, dst_rank);
+        // fflush(stdout);
         MPIDI_PIP_pack(buf, count, datatype, 0,
                        MPIDI_OFI_REQUEST(sreq, noncontig.pack->pack_buffer), data_sz,
                        &actual_pack_bytes);

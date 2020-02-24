@@ -113,9 +113,9 @@ static int recv_event(struct fi_cq_tagged_entry *wc, MPIR_Request * rreq, int ev
         (MPIDI_OFI_REQUEST(rreq, noncontig.pack))) {
         MPI_Aint actual_unpack_bytes;
 #ifdef ENABLE_OFI_STEALING
-        printf("rank %d - OFI recv data %ld to src_rank %d\n", MPIDI_PIP_global.grank, count,
-               MPIDI_OFI_REQUEST(rreq, src_rank));
-        fflush(stdout);
+        // printf("rank %d - OFI recv data %ld to src_rank %d\n", MPIDI_PIP_global.grank, count,
+        //        MPIDI_OFI_REQUEST(rreq, src_rank));
+        // fflush(stdout);
         MPIDI_PIP_unpack(MPIDI_OFI_REQUEST(rreq, noncontig.pack->pack_buffer), count,
                          MPIDI_OFI_REQUEST(rreq, noncontig.pack->buf),
                          MPIDI_OFI_REQUEST(rreq, noncontig.pack->count),

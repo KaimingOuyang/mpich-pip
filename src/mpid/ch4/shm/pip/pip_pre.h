@@ -125,6 +125,7 @@ typedef struct MPIDI_PIP_global {
     uint32_t local_try;
     uint32_t grank;
     uint32_t rmt_stealing_cnt;
+    uint32_t total_stealing_cnt;
 
     MPIDI_PIP_task_queue_t *task_queue;
     MPIDI_PIP_task_queue_t **task_queue_array;
