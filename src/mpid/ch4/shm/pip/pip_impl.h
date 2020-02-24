@@ -174,14 +174,19 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_pack_unpack_task(MPIDI_PIP_tas
 }
 
 
-MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * task_queue)
+MPL_STATIC_INLINE_PREFIX int MPIDI_obtain_task_info_safe(MPIDI_PIP_task_queue_t * task_queue,
+                                                         MPIDI_PIP_task_t ** task_ret,
+                                                         int *copy_sz_ret, MPI_Aint * offset_ret,
+                                                         int *copy_kind_ret)
 {
-    void *src_buf, *dest_buf;
-    int copy_sz, err, copy_kind;
-    MPI_Aint offset;
     MPIDI_PIP_task_t *task;
-
+    int err, copy_sz, copy_kind;
+    MPI_Aint offset;
     MPID_Thread_mutex_lock(&task_queue->lock, &err);
+    if (err) {
+        printf("MPIDI_obtain_task_info_safe lock get error %d\n", err);
+        fflush(stdout);
+    }
     task = task_queue->head;
 #ifdef ENABLE_REVERSE_TASK_ENQUEUE
     if (task && task->cur_offset != 0) {
@@ -189,6 +194,10 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * 
         task->cur_offset -= copy_sz;
         offset = task->cur_offset;
         copy_kind = task->copy_kind;
+        if (task->copy_kind == MPIDI_PIP_PACK)
+            offset += task->init_src_offset;
+        else if (task->copy_kind == MPIDI_PIP_UNPACK)
+            offset += task->init_dest_offset;
     } else {
         copy_sz = 0;
     }
@@ -198,11 +207,34 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * 
         offset = task->cur_offset;
         task->cur_offset += copy_sz;
         copy_kind = task->copy_kind;
+        if (task->copy_kind == MPIDI_PIP_PACK)
+            offset += task->init_src_offset;
+        else if (task->copy_kind == MPIDI_PIP_UNPACK)
+            offset += task->init_dest_offset;
     } else {
         copy_sz = 0;
     }
 #endif
     MPID_Thread_mutex_unlock(&task_queue->lock, &err);
+    if (err) {
+        printf("MPIDI_obtain_task_info_safe lock release error %d\n", err);
+        fflush(stdout);
+    }
+    *task_ret = task;
+    *copy_sz_ret = copy_sz;
+    *offset_ret = offset;
+    *copy_kind_ret = copy_kind;
+}
+
+
+MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * task_queue)
+{
+    void *src_buf, *dest_buf;
+    int copy_sz, err, copy_kind;
+    MPI_Aint offset, init_src_offset, init_dest_offset;
+    MPIDI_PIP_task_t *task;
+
+    MPIDI_obtain_task_info_safe(task_queue, &task, &copy_sz, &offset, &copy_kind);
 
     if (copy_sz) {
         int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
@@ -212,9 +244,11 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * 
                 MPIDI_PIP_exec_memcpy_task(task, copy_sz, offset);
                 break;
             case MPIDI_PIP_PACK:
+                offset += init_src_offset;
                 MPIDI_PIP_exec_self_pack_task(task, copy_sz, offset);
                 break;
             case MPIDI_PIP_UNPACK:
+                offset += init_dest_offset;
                 MPIDI_PIP_exec_self_unpack_task(task, copy_sz, offset);
                 break;
             case MPIDI_PIP_PACK_UNPACK:
@@ -631,6 +665,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_stolen_pack_unpack_task(MPIDI_PIP_t
     return;
 }
 
+
 MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t * task_queue)
 {
     void *src_buf, *dest_buf;
@@ -638,28 +673,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t *
     MPI_Aint offset;
     MPIDI_PIP_task_t *task;
     int ret = STEALING_FAIL;
-    MPID_Thread_mutex_lock(&task_queue->lock, &err);
-    task = task_queue->head;
-#ifdef ENABLE_REVERSE_TASK_ENQUEUE
-    if (task && task->cur_offset != 0) {
-        copy_sz = MPIDI_PIP_copy_size_decision(task);
-        task->cur_offset -= copy_sz;
-        offset = task->cur_offset;
-        copy_kind = task->copy_kind;
-    } else {
-        copy_sz = 0;
-    }
-#else
-    if (task && task->cur_offset != task->orig_data_sz) {
-        copy_sz = MPIDI_PIP_copy_size_decision(task);
-        offset = task->cur_offset;
-        task->cur_offset += copy_sz;
-        copy_kind = task->copy_kind;
-    } else {
-        copy_sz = 0;
-    }
-#endif
-    MPID_Thread_mutex_unlock(&task_queue->lock, &err);
+
+    MPIDI_obtain_task_info_safe(task_queue, &task, &copy_sz, &offset, &copy_kind);
 
     if (copy_sz) {
         ret = STEALING_SUCCESS;

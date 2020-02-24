@@ -28,7 +28,7 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 
 #define MPIDI_PROC_COPY 1
 #define MPIDI_PROC_NOT_COPY 0
-#define MPIDI_PIP_IDLE_THRESHOLD 50
+#define MPIDI_PIP_IDLE_THRESHOLD 2
 
 /* Task kind */
 // #define MPIDI_STEALING_CASE 2
@@ -106,7 +106,7 @@ typedef struct MPIDI_PIP_global {
     uint32_t num_numa_node;
     uint32_t local_numa_id;     /* id of numa node I locate at */
     uint32_t local_try;
-    
+
     MPIDI_PIP_task_queue_t *task_queue;
     MPIDI_PIP_task_queue_t **task_queue_array;
 
