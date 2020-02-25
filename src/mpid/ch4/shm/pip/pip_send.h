@@ -41,8 +41,9 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_lmt_rts_isend(const void *buf, MPI_Aint c
     /* pip internal info */
     if (is_contig)
         slmt_rts_hdr->src_offset = (uint64_t) buf + true_lb;
-    else
+    else {
         slmt_rts_hdr->src_offset = (uint64_t) buf;
+    }
     slmt_rts_hdr->data_sz = data_sz;
     slmt_rts_hdr->sreq_ptr = (uint64_t) sreq;
     slmt_rts_hdr->src_lrank = MPIDI_PIP_global.local_rank;
@@ -68,6 +69,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_lmt_rts_isend(const void *buf, MPI_Aint c
         (MPIDI_PIP_partner_t *) MPIR_Handle_obj_alloc(&MPIDI_Partner_mem);
     partner->partner = dest_lrank;
     partner->partner_numa_id = dest_numa_id;
+
     if (src_numa_id == dest_numa_id) {
         MPIDI_PIP_PARTNER_ENQUEUE(partner, &MPIDI_PIP_global.intrap_queue);
         slmt_rts_hdr->partner_queue = MPIDI_PIP_INTRA_QUEUE;

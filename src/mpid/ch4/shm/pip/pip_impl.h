@@ -21,11 +21,12 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_memcpy_task(MPIDI_PIP_task_t * task
                                                          MPI_Aint offset);
 
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_publish_task(MPIDI_PIP_task_queue_t * task_queue,
-                                                     MPIDI_PIP_task_t * task)
+                                                     MPIDI_PIP_task_t * task, uint64_t partner)
 {
     int err;
     MPID_Thread_mutex_lock(&task_queue->lock, &err);
     task_queue->head = task;
+    task_queue->partner = partner;
     MPID_Thread_mutex_unlock(&task_queue->lock, &err);
 }
 
@@ -35,6 +36,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_cancel_task(MPIDI_PIP_task_queue_t * tas
     int err;
     MPID_Thread_mutex_lock(&task_queue->lock, &err);
     task_queue->head = NULL;
+    task_queue->partner = -1;
     MPID_Thread_mutex_unlock(&task_queue->lock, &err);
 }
 
@@ -281,7 +283,8 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_memcpy_task(MPIDI_PIP_task_t * task
 
 
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_memcpy_task_enqueue(char *src_buf,
-                                                            char *dest_buf, MPI_Aint data_sz)
+                                                            char *dest_buf, MPI_Aint data_sz,
+                                                            uint64_t partner)
 {
 #ifdef ENABLE_CONTIG_STEALING
     if (data_sz <= MPIDI_PIP_STEALING_THRESHOLD) {
@@ -292,7 +295,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_memcpy_task_enqueue(char *src_buf,
     } else {
         MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
         MPIDI_PIP_init_memcpy_task(task, src_buf, dest_buf, data_sz);
-        MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task);
+        MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task, partner);
         do {
 #ifdef ENABLE_REVERSE_TASK_ENQUEUE
             if (task->cur_offset != 0)
@@ -341,7 +344,8 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_pack_task(MPIDI_PIP_task_t * task, 
 
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_task_enqueue(void *src_buf, MPI_Aint src_count,
                                                           MPIR_Datatype * src_dt_ptr,
-                                                          char *dest_buf, MPI_Aint data_sz)
+                                                          char *dest_buf, MPI_Aint data_sz,
+                                                          uint64_t partner)
 {
     MPI_Datatype src_dt_dup;
     MPIR_PIP_Type_dup(src_dt_ptr, &src_dt_dup);
@@ -359,7 +363,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_task_enqueue(void *src_buf, MPI_Ain
         MPIR_Datatype_get_ptr(src_dt_dup, src_dt_dup_ptr);
 
         MPIDI_PIP_init_pack_task(task, src_buf, src_count, 0, src_dt_dup_ptr, dest_buf, data_sz);
-        MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task);
+        MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task, partner);
         do {
 #ifdef ENABLE_REVERSE_TASK_ENQUEUE
             if (task->cur_offset != 0)
@@ -412,7 +416,8 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_unpack_task(MPIDI_PIP_task_t * task
 
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_unpack_task_enqueue(void *src_buf,
                                                             void *dest_buf, MPI_Aint dest_count,
-                                                            MPI_Datatype dest_dt, MPI_Aint data_sz)
+                                                            MPI_Datatype dest_dt, MPI_Aint data_sz,
+                                                            uint64_t partner)
 {
 #ifdef ENABLE_NON_CONTIG_STEALING
     if (data_sz <= MPIDI_PIP_STEALING_THRESHOLD) {
@@ -428,7 +433,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_unpack_task_enqueue(void *src_buf,
         MPIR_Datatype_get_ptr(dest_dt, dest_dt_ptr);
 
         MPIDI_PIP_init_unpack_task(task, src_buf, dest_buf, dest_count, 0, dest_dt_ptr, data_sz);
-        MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task);
+        MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task, partner);
         do {
 #ifdef ENABLE_REVERSE_TASK_ENQUEUE
             if (task->cur_offset != 0)
@@ -491,7 +496,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_unpack_task_enqueue(void *src_buf,
                                                                  void *dest_buf,
                                                                  MPI_Aint dest_count,
                                                                  MPI_Datatype dest_dt,
-                                                                 MPI_Aint data_sz)
+                                                                 MPI_Aint data_sz, uint64_t partner)
 {
     MPI_Datatype src_dt_dup;
     MPIR_PIP_Type_dup(src_dt_ptr, &src_dt_dup);
@@ -517,7 +522,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_unpack_task_enqueue(void *src_buf,
 
         MPIDI_PIP_init_pack_unpack_task(task, src_buf, src_count, 0, src_dt_dup_ptr,
                                         dest_buf, dest_count, 0, dest_dt_ptr, data_sz);
-        MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task);
+        MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task, partner);
         do {
 #ifdef ENABLE_REVERSE_TASK_ENQUEUE
             if (task->cur_offset != 0)
@@ -730,7 +735,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_pack(void *src_buf, MPI_Aint src_count,
         MPIR_Datatype_get_ptr(src_dt, src_dt_ptr);
 
         MPIDI_PIP_init_pack_task(task, src_buf, src_count, inoffset, src_dt_ptr, dest_buf, data_sz);
-        MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task);
+        MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task, -1);
         do {
 #ifdef ENABLE_REVERSE_TASK_ENQUEUE
             if (task->cur_offset != 0)
@@ -782,7 +787,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_unpack(void *src_buf, MPI_Aint insize,
 
         MPIDI_PIP_init_unpack_task(task, src_buf, dest_buf, dest_count, outoffset, dest_dt_ptr,
                                    data_sz);
-        MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task);
+        MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task, -1);
         do {
 #ifdef ENABLE_REVERSE_TASK_ENQUEUE
             if (task->cur_offset != 0)
@@ -836,7 +841,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
     while (curp != NULL) {
         victim = curp->partner;
         MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
-        if (victim_queue->head) {
+        if (victim_queue->head && victim_queue->partner == (uint64_t) curp) {
             MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
             ret = MPIDI_PIP_exec_stolen_task(victim_queue);
             MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
@@ -869,22 +874,26 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
     while (curp != NULL) {
         victim = curp->partner;
         MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
-        if (victim_queue->head) {
+        if (victim_queue->partner == (uint64_t) curp) {
             // numa_num_procs = MPIDI_PIP_global.numa_num_procs[curp->partner_numa_id];
             // MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
-            MPIDI_PIP_exec_stolen_task(victim_queue);
+            ret = MPIDI_PIP_exec_stolen_task(victim_queue);
+            if (ret == STEALING_SUCCESS) {
+                MPIDI_PIP_global.local_try = 0;
+                return;
+            }
             // MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
-            return;
         }
+
         curp = curp->next;
     }
 #endif
-    if (MPIDI_PIP_global.local_try < CORES_PER_NUMA_NODE) {
-        ++MPIDI_PIP_global.local_try;
-        return;
-    } else {
-        MPIDI_PIP_global.local_try = 0;
-    }
+    // if (MPIDI_PIP_global.local_try < CORES_PER_NUMA_NODE) {
+    //     ++MPIDI_PIP_global.local_try;
+    //     return;
+    // } else {
+    //     MPIDI_PIP_global.local_try = 0;
+    // }
     /* check whether local tasks exists */
     // int i, j;
     // for (i = 0; i < numa_num_procs; ++i) {
@@ -894,28 +903,28 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
     // }
 
     /* remote stealing */
-    numa_id = MPIDI_PIP_global.partner_numa;
-    numa_num_procs = MPIDI_PIP_global.numa_num_procs[numa_id];
-    if (numa_num_procs != 0) {
-        if (OPA_cas_int(&MPIDI_PIP_global.bdw_checking_ptr[numa_id], 0, 1) == 0) {
-            victim = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][rand() % numa_num_procs];
-            MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
-            if (victim_queue->head) {
-                MPIDI_PIP_Task_remote_check_and_steal(victim_queue, numa_num_procs,
-                                                      MPIDI_PIP_global.pip_global_array[victim],
-                                                      numa_id);
-            }
-            OPA_store_int(&MPIDI_PIP_global.bdw_checking_ptr[numa_id], 0);
-        } else if (MPIDI_PIP_global.allow_rmt_stealing_ptr[numa_id]) {
-            victim = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][rand() % numa_num_procs];
-            MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
+    // numa_id = MPIDI_PIP_global.partner_numa;
+    // numa_num_procs = MPIDI_PIP_global.numa_num_procs[numa_id];
+    // if (numa_num_procs != 0) {
+    //     if (OPA_cas_int(&MPIDI_PIP_global.bdw_checking_ptr[numa_id], 0, 1) == 0) {
+    //         victim = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][rand() % numa_num_procs];
+    //         MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
+    //         if (victim_queue->head) {
+    //             MPIDI_PIP_Task_remote_check_and_steal(victim_queue, numa_num_procs,
+    //                                                   MPIDI_PIP_global.pip_global_array[victim],
+    //                                                   numa_id);
+    //         }
+    //         OPA_store_int(&MPIDI_PIP_global.bdw_checking_ptr[numa_id], 0);
+    //     } else if (MPIDI_PIP_global.allow_rmt_stealing_ptr[numa_id]) {
+    //         victim = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][rand() % numa_num_procs];
+    //         MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
 
-            if (victim_queue->head) {
-                MPIDI_PIP_exec_stolen_task(victim_queue);
-                return;
-            }
-        }
-    }
+    //         if (victim_queue->head) {
+    //             MPIDI_PIP_exec_stolen_task(victim_queue);
+    //             return;
+    //         }
+    //     }
+    // }
 #endif /* MPIDI_PIP_STEALING_ENABLE */
     return;
 }

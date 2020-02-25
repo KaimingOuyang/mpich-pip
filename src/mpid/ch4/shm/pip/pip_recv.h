@@ -39,29 +39,60 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_handle_lmt_rts_recv(uint64_t src_offset, 
     //     MPIDI_PIP_global.local_numa_id ==
     //     MPIDI_PIP_global.pip_global_array[src_lrank]->local_numa_id ? MPIDI_PIP_INTRA_TASK :
     //     MPIDI_PIP_INTER_TASK;
+    // if (partner_queue == MPIDI_PIP_INTRA_QUEUE) {
+    //     /* reply CTS to set up partner task_flag */
+    //     MPIDI_SHM_ctrl_hdr_t cts_ctrl_hdr;
+    //     MPIDI_SHM_ctrl_pip_send_lmt_cts_t *slmt_cts_hdr = &cts_ctrl_hdr.pip_slmt_cts;
+    //     slmt_cts_hdr->partner = partner;
+
+    //     mpi_errno =
+    //         MPIDI_SHM_do_ctrl_send(MPIDIG_REQUEST(rreq, rank),
+    //                                MPIDIG_context_id_to_comm(MPIDIG_REQUEST(rreq, context_id)),
+    //                                MPIDI_SHM_PIP_SEND_LMT_CTS, &cts_ctrl_hdr);
+    //     MPIR_ERR_CHECK(mpi_errno);
+    // }
+
+    uint64_t partner_post = -1;
+    if (partner_queue == MPIDI_PIP_INTRA_QUEUE)
+        partner_post = partner;
 
     int copy_kind;
     if (src_is_contig && dest_dt_contig) {
         /* both are contiguous */
         MPIDI_PIP_memcpy_task_enqueue((char *) src_offset,
                                       (char *) MPIDIG_REQUEST(rreq, buffer) + true_lb,
-                                      recv_data_sz);
+                                      recv_data_sz, partner_post);
     } else if (!src_is_contig && dest_dt_contig) {
         /* src data is non-contig */
         MPIDI_PIP_pack_task_enqueue((void *) src_offset, src_count, src_dt_ptr,
-                                    (char *) MPIDIG_REQUEST(rreq, buffer) + true_lb, recv_data_sz);
+                                    (char *) MPIDIG_REQUEST(rreq, buffer) + true_lb, recv_data_sz,
+                                    partner_post);
     } else if (src_is_contig && !dest_dt_contig) {
         /* dest data is non-contig */
         MPIDI_PIP_unpack_task_enqueue((void *) src_offset,
                                       MPIDIG_REQUEST(rreq, buffer), MPIDIG_REQUEST(rreq, count),
-                                      MPIDIG_REQUEST(rreq, datatype), recv_data_sz);
+                                      MPIDIG_REQUEST(rreq, datatype), recv_data_sz, partner_post);
     } else {
+        // if (partner_queue == MPIDI_PIP_INTER_QUEUE) {
+        //     /* reply CTS to set up partner task_flag */
+        //     MPIDI_SHM_ctrl_hdr_t cts_ctrl_hdr;
+        //     MPIDI_SHM_ctrl_pip_send_lmt_cts_t *slmt_cts_hdr = &cts_ctrl_hdr.pip_slmt_cts;
+        //     slmt_cts_hdr->partner = partner;
+
+        //     mpi_errno =
+        //         MPIDI_SHM_do_ctrl_send(MPIDIG_REQUEST(rreq, rank),
+        //                                MPIDIG_context_id_to_comm(MPIDIG_REQUEST(rreq, context_id)),
+        //                                MPIDI_SHM_PIP_SEND_LMT_CTS, &cts_ctrl_hdr);
+        //     MPIR_ERR_CHECK(mpi_errno);
+        // }
         /* both are non-contig */
+        if (partner_queue == MPIDI_PIP_INTER_QUEUE)
+            partner_post = partner;
         MPIDI_PIP_pack_unpack_task_enqueue((void *) src_offset,
                                            src_count, src_dt_ptr, MPIDIG_REQUEST(rreq, buffer),
                                            MPIDIG_REQUEST(rreq, count), MPIDIG_REQUEST(rreq,
                                                                                        datatype),
-                                           recv_data_sz);
+                                           recv_data_sz, partner_post);
     }
 
     PIP_TRACE("handle_lmt_recv: handle matched rreq %p [source %d, tag %d, context_id 0x%x],"

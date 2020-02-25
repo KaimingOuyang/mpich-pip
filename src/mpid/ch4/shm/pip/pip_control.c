@@ -144,3 +144,12 @@ int MPIDI_PIP_ctrl_send_lmt_rts_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr)
   fn_fail:
     goto fn_exit;
 }
+
+
+// int MPIDI_PIP_ctrl_send_lmt_cts_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr){
+//     int mpi_errno = MPI_SUCCESS;
+//     MPIDI_SHM_ctrl_pip_send_lmt_cts_t *slmt_cts_hdr = &ctrl_hdr->pip_slmt_cts;
+//     MPIDI_PIP_partner_t *partner = (MPIDI_PIP_partner_t *) slmt_rts_hdr->partner;
+//     partner->task_flag = 1;
+//     return mpi_errno;
+// }
