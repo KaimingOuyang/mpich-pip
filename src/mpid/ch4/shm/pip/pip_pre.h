@@ -130,7 +130,7 @@ typedef struct MPIDI_PIP_global {
     /* copy state */
     int *local_copy_state;      /* copy state of processes in eahc NUMA node */
     /* idle state */
-    int *local_idle_state;
+    // int *local_idle_state;
 
     /* pack/unpack load for stealing */
     char pkt_load[MPIDI_PIP_MAX_PKT_SIZE];

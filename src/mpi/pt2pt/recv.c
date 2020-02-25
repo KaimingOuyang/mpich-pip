@@ -6,7 +6,7 @@
  */
 
 #include "mpiimpl.h"
-
+#include "../../mpid/ch4/shm/pip/pip_pre.h"
 /* -- Begin Profiling Symbol Block for routine MPI_Recv */
 #if defined(HAVE_PRAGMA_WEAK)
 #pragma weak MPI_Recv = PMPI_Recv
@@ -73,7 +73,8 @@ int MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag,
 
     MPID_THREAD_CS_ENTER(VCI_GLOBAL, MPIR_THREAD_GLOBAL_ALLFUNC_MUTEX);
     MPIR_FUNC_TERSE_PT2PT_ENTER_BACK(MPID_STATE_MPI_RECV);
-
+    int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
+    MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
     /* Validate handle parameters needing to be converted */
 #ifdef HAVE_ERROR_CHECKING
     {
@@ -147,6 +148,7 @@ int MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag,
         goto fn_exit;
     }
 
+    MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
     mpi_errno = MPID_Wait(request_ptr, MPI_STATUS_IGNORE);
     if (mpi_errno != MPI_SUCCESS)
         goto fn_fail;

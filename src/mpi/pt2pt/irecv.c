@@ -6,7 +6,7 @@
  */
 
 #include "mpiimpl.h"
-
+#include "../../mpid/ch4/shm/pip/pip_pre.h"
 /* -- Begin Profiling Symbol Block for routine MPI_Irecv */
 #if defined(HAVE_PRAGMA_WEAK)
 #pragma weak MPI_Irecv = PMPI_Irecv
@@ -68,6 +68,8 @@ int MPI_Irecv(void *buf, int count, MPI_Datatype datatype, int source,
     MPID_THREAD_CS_ENTER(VCI_GLOBAL, MPIR_THREAD_GLOBAL_ALLFUNC_MUTEX);
     MPIR_FUNC_TERSE_PT2PT_ENTER_BACK(MPID_STATE_MPI_IRECV);
 
+    int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
+    MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
     /* Validate handle parameters needing to be converted */
 #ifdef HAVE_ERROR_CHECKING
     {
@@ -150,6 +152,7 @@ int MPI_Irecv(void *buf, int count, MPI_Datatype datatype, int source,
     /* ... end of body of routine ... */
 
   fn_exit:
+    MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
     MPIR_FUNC_TERSE_PT2PT_EXIT_BACK(MPID_STATE_MPI_IRECV);
     MPID_THREAD_CS_EXIT(VCI_GLOBAL, MPIR_THREAD_GLOBAL_ALLFUNC_MUTEX);
     return mpi_errno;

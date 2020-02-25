@@ -6,7 +6,7 @@
  */
 
 #include "mpiimpl.h"
-
+#include "../../mpid/ch4/shm/pip/pip_pre.h"
 /* -- Begin Profiling Symbol Block for routine MPI_Send */
 #if defined(HAVE_PRAGMA_WEAK)
 #pragma weak MPI_Send = PMPI_Send
@@ -68,7 +68,8 @@ int MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest, int ta
 
     MPID_THREAD_CS_ENTER(VCI_GLOBAL, MPIR_THREAD_GLOBAL_ALLFUNC_MUTEX);
     MPIR_FUNC_TERSE_PT2PT_ENTER_FRONT(MPID_STATE_MPI_SEND);
-
+    int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
+    MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
     /* Validate handle parameters needing to be converted */
 #ifdef HAVE_ERROR_CHECKING
     {
@@ -134,7 +135,7 @@ int MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest, int ta
     if (request_ptr == NULL) {
         goto fn_exit;
     }
-
+    MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
     mpi_errno = MPID_Wait(request_ptr, MPI_STATUS_IGNORE);
     MPIR_ERR_CHECK(mpi_errno);
 

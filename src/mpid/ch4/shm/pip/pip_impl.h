@@ -240,7 +240,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * 
 
     if (copy_sz) {
         int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
-        MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
+        // MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
         switch (copy_kind) {
             case MPIDI_PIP_MEMCPY:
                 MPIDI_PIP_exec_memcpy_task(task, copy_sz, offset);
@@ -257,7 +257,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * 
                 MPIDI_PIP_exec_self_pack_unpack_task(task, copy_sz, offset);
                 break;
         }
-        MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
+        // MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
     }
 
     return;
@@ -288,10 +288,10 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_memcpy_task_enqueue(char *src_buf,
 {
 #ifdef ENABLE_CONTIG_STEALING
     if (data_sz <= MPIDI_PIP_STEALING_THRESHOLD) {
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
+        // MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
         MPIR_Memcpy(dest_buf, src_buf, data_sz);
         OPA_write_barrier();
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
+        // MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
     } else {
         MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
         MPIDI_PIP_init_memcpy_task(task, src_buf, dest_buf, data_sz);
@@ -310,10 +310,10 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_memcpy_task_enqueue(char *src_buf,
         MPIR_Handle_obj_free(&MPIDI_Task_mem, task);
     }
 #else
-    MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
+    // MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
     MPIR_Memcpy(dest_buf, src_buf, data_sz);
     OPA_write_barrier();
-    MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
+    // MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
 #endif
     return;
 }
@@ -352,10 +352,10 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_task_enqueue(void *src_buf, MPI_Ain
 #ifdef ENABLE_NON_CONTIG_STEALING
     if (data_sz <= MPIDI_PIP_STEALING_THRESHOLD) {
         MPI_Aint actual_bytes;
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
+        // MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
         MPIR_Typerep_pack(src_buf, src_count, src_dt_dup, 0, dest_buf, data_sz, &actual_bytes);
         OPA_write_barrier();
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
+        // MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
         MPIR_Assert(actual_bytes == data_sz);
     } else {
         MPIR_Datatype *src_dt_dup_ptr;
@@ -379,10 +379,10 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_task_enqueue(void *src_buf, MPI_Ain
     }
 #else /* ENABLE_NON_CONTIG_STEALING */
     MPI_Aint actual_bytes;
-    MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
+    // MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
     MPIR_Typerep_pack(src_buf, src_count, src_dt_dup, 0, dest_buf, data_sz, &actual_bytes);
     OPA_write_barrier();
-    MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
+    // MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
     MPIR_Assert(actual_bytes == data_sz);
 #endif /* ENABLE_NON_CONTIG_STEALING */
     MPIR_Type_free_impl(&src_dt_dup);
@@ -422,10 +422,10 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_unpack_task_enqueue(void *src_buf,
 #ifdef ENABLE_NON_CONTIG_STEALING
     if (data_sz <= MPIDI_PIP_STEALING_THRESHOLD) {
         MPI_Aint actual_bytes;
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
+        // MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
         MPIR_Typerep_unpack(src_buf, data_sz, dest_buf, dest_count, dest_dt, 0, &actual_bytes);
         OPA_write_barrier();
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
+        // MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
         MPIR_Assert(actual_bytes == data_sz);
     } else {
         MPIR_Datatype *dest_dt_ptr;
@@ -449,10 +449,10 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_unpack_task_enqueue(void *src_buf,
     }
 #else /* ENABLE_NON_CONTIG_STEALING */
     MPI_Aint actual_bytes;
-    MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
+    // MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
     MPIR_Typerep_unpack(src_buf, data_sz, dest_buf, dest_count, dest_dt, 0, &actual_bytes);
     OPA_write_barrier();
-    MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
+    // MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
     MPIR_Assert(actual_bytes == data_sz);
 #endif /* ENABLE_NON_CONTIG_STEALING */
     return;
@@ -500,11 +500,11 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_unpack_task_enqueue(void *src_buf,
 {
     MPI_Datatype src_dt_dup;
     MPIR_PIP_Type_dup(src_dt_ptr, &src_dt_dup);
-
+    // MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
 #ifdef ENABLE_NON_CONTIG_STEALING
     if (data_sz <= MPIDI_PIP_STEALING_THRESHOLD) {
         MPI_Aint actual_bytes;
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
+        // MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
         MPIR_Typerep_pack(src_buf, src_count, src_dt_dup, 0, MPIDI_PIP_global.pkt_load, data_sz,
                           &actual_bytes);
         MPIR_Assert(actual_bytes == data_sz);
@@ -512,7 +512,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_unpack_task_enqueue(void *src_buf,
                             &actual_bytes);
         MPIR_Assert(actual_bytes == data_sz);
         OPA_write_barrier();
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
+        // MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
     } else {
         MPIR_Datatype *src_dt_dup_ptr;
         MPIR_Datatype *dest_dt_ptr;
@@ -549,7 +549,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_unpack_task_enqueue(void *src_buf,
     MPL_free(im_buf);
 #endif /* ENABLE_NON_CONTIG_STEALING */
     MPIR_Type_free_impl(&src_dt_dup);
-
+    // MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
     return;
 }
 
@@ -722,12 +722,14 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_pack(void *src_buf, MPI_Aint src_count,
     }
 
     *actual_pack_bytes = data_sz;
+    int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
+    MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
     if (data_sz <= MPIDI_PIP_STEALING_THRESHOLD) {
         MPI_Aint actual_bytes;
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
+        // MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
         MPIR_Typerep_pack(src_buf, src_count, src_dt, inoffset, dest_buf, data_sz, &actual_bytes);
         OPA_write_barrier();
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
+        // MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
         MPIR_Assert(actual_bytes == data_sz);
     } else {
         MPIR_Datatype *src_dt_ptr;
@@ -749,7 +751,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_pack(void *src_buf, MPI_Aint src_count,
         MPIDI_PIP_cancel_task(MPIDI_PIP_global.task_queue);
         MPIR_Handle_obj_free(&MPIDI_Task_mem, task);
     }
-
+    MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
     return mpi_errno;
 }
 
@@ -772,13 +774,15 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_unpack(void *src_buf, MPI_Aint insize,
     }
 
     *actual_unpack_bytes = data_sz;
+    int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
+    MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
     if (data_sz <= MPIDI_PIP_STEALING_THRESHOLD) {
         MPI_Aint actual_bytes;
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
+        // MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
         MPIR_Typerep_unpack(src_buf, data_sz, dest_buf, dest_count, dest_dt, outoffset,
                             &actual_bytes);
         OPA_write_barrier();
-        MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
+        // MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
         MPIR_Assert(actual_bytes == data_sz);
     } else {
         MPIR_Datatype *dest_dt_ptr;
@@ -801,7 +805,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_unpack(void *src_buf, MPI_Aint insize,
         MPIDI_PIP_cancel_task(MPIDI_PIP_global.task_queue);
         MPIR_Handle_obj_free(&MPIDI_Task_mem, task);
     }
-
+    MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
     return mpi_errno;
 }
 
@@ -813,10 +817,10 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_Task_remote_check_and_steal(MPIDI_PIP_ta
     int err, i;
     int cur_local_intra_copy = 0;
     int *local_copy_array = victim_pip_global->local_copy_state;
-    int *local_idle_array = victim_pip_global->local_idle_state;
+    // int *local_idle_array = victim_pip_global->local_idle_state;
     for (i = 0; i < numa_num_procs; ++i) {
         /* intra local copy */
-        if (local_copy_array[i] || local_idle_array[i])
+        if (local_copy_array[i])
             cur_local_intra_copy++;
     }
 
@@ -842,9 +846,9 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
         victim = curp->partner;
         MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
         if (victim_queue->head && victim_queue->partner == (uint64_t) curp) {
-            MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
+            // MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
             ret = MPIDI_PIP_exec_stolen_task(victim_queue);
-            MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
+            // MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
             if (ret == STEALING_SUCCESS) {
                 MPIDI_PIP_global.local_try = 0;
                 return;
@@ -860,9 +864,9 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
     if (victim != MPIDI_PIP_global.local_rank) {
         MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
         if (victim_queue->head) {
-            MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
+            // MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
             ret = MPIDI_PIP_exec_stolen_task(victim_queue);
-            MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
+            // MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
             if (ret == STEALING_SUCCESS) {
                 MPIDI_PIP_global.local_try = 0;
                 return;

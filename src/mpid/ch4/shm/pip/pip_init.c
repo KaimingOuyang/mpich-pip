@@ -128,14 +128,14 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
                             sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id], mpi_errno,
                             "local copy state", MPL_MEM_OTHER);
 
-        memset(MPIDI_PIP_global.local_copy_state, 0,
+        memset(MPIDI_PIP_global.local_copy_state, 1,
                sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id]);
 
-        MPIDI_PIP_global.local_idle_state =
-            (int *) MPL_malloc(sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id],
-                               MPL_MEM_OTHER);
-        memset(MPIDI_PIP_global.local_idle_state, 0,
-               sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id]);
+        // MPIDI_PIP_global.local_idle_state =
+        //     (int *) MPL_malloc(sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id],
+        //                        MPL_MEM_OTHER);
+        // memset(MPIDI_PIP_global.local_idle_state, 0,
+        //        sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id]);
 
         MPIDI_PIP_global.bdw_checking =
             (OPA_int_t *) MPL_malloc(sizeof(OPA_int_t) * MPIDI_PIP_global.num_numa_node,
@@ -154,8 +154,8 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
         //     MPIDI_PIP_global.pip_global_array[local_root]->numa_rmt_access;
         MPIDI_PIP_global.local_copy_state =
             MPIDI_PIP_global.pip_global_array[local_root]->local_copy_state;
-        MPIDI_PIP_global.local_idle_state =
-            MPIDI_PIP_global.pip_global_array[local_root]->local_idle_state;
+        // MPIDI_PIP_global.local_idle_state =
+        //     MPIDI_PIP_global.pip_global_array[local_root]->local_idle_state;
     }
 
     MPIDI_PIP_global.allow_rmt_stealing_ptr =
@@ -253,7 +253,7 @@ int MPIDI_PIP_mpi_finalize_hook(void)
     if (MPIDI_PIP_global.local_rank == MPIDI_PIP_global.numa_root_rank) {
         // MPL_free(MPIDI_PIP_global.numa_rmt_access);
         MPL_free(MPIDI_PIP_global.local_copy_state);
-        MPL_free(MPIDI_PIP_global.local_idle_state);
+        // MPL_free(MPIDI_PIP_global.local_idle_state);
         MPL_free(MPIDI_PIP_global.bdw_checking);
         MPL_free(MPIDI_PIP_global.allow_rmt_stealing);
     }

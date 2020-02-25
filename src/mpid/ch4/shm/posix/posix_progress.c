@@ -64,7 +64,7 @@ static int progress_recv(int blocking)
         empty_recv_queue = 1;
         goto fn_exit;
     } else {
-        MPIDI_PIP_global.local_idle_state[MPIDI_PIP_global.numa_local_rank] = 0;
+        // MPIDI_PIP_global.local_idle_state[MPIDI_PIP_global.numa_local_rank] = 0;
         empty_recv_queue = 0;
         // printf("rank %d - cur idle cnt %ld before incoming messages\n", MPIDI_PIP_global.local_rank,
         //        MPIDI_PIP_idle_cnt);
@@ -338,11 +338,11 @@ static int progress_send(int blocking)
         if (MPIDI_PIP_idle_cnt < MPIDI_PIP_IDLE_THRESHOLD) {
             MPIDI_PIP_idle_cnt++;
         } else {
-            MPIDI_PIP_global.local_idle_state[MPIDI_PIP_global.numa_local_rank] = 1;
+            // MPIDI_PIP_global.local_idle_state[MPIDI_PIP_global.numa_local_rank] = 1;
             MPIDI_PIP_steal_task();
         }
 #else
-        MPIDI_PIP_global.local_idle_state[MPIDI_PIP_global.numa_local_rank] = 1;
+        // MPIDI_PIP_global.local_idle_state[MPIDI_PIP_global.numa_local_rank] = 1;
         MPIDI_PIP_steal_task();
 #endif
     }

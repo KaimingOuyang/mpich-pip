@@ -57,6 +57,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_handle_lmt_rts_recv(uint64_t src_offset, 
         partner_post = partner;
 
     int copy_kind;
+    int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
+    MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
     if (src_is_contig && dest_dt_contig) {
         /* both are contiguous */
         MPIDI_PIP_memcpy_task_enqueue((char *) src_offset,
@@ -94,7 +96,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_handle_lmt_rts_recv(uint64_t src_offset, 
                                                                                        datatype),
                                            recv_data_sz, partner_post);
     }
-
+    // MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
     PIP_TRACE("handle_lmt_recv: handle matched rreq %p [source %d, tag %d, context_id 0x%x],"
               " copy dst %p, src %p, bytes %ld\n", rreq, MPIDIG_REQUEST(rreq, rank),
               MPIDIG_REQUEST(rreq, tag), MPIDIG_REQUEST(rreq, context_id),
