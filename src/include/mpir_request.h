@@ -259,7 +259,7 @@ static inline MPIR_Request *MPIR_Request_create(MPIR_Request_kind_t kind)
          * inheritance).  For example, do we really* want to set the
          * kind to UNDEFINED? And should the RMA values be set only
          * for RMA requests? */
-        MPIDI_PIP_idle_cnt = 0;
+        // MPIDI_PIP_idle_cnt = 0;
         req->dev.ch4.am.shm_am.pip.idle_cnt = &MPIDI_PIP_idle_cnt;
         MPIR_Object_set_ref(req, 1);
         req->kind = kind;
@@ -334,9 +334,8 @@ static inline void MPIR_Request_free(MPIR_Request * req)
         req->sync = NULL;
     }
 #endif
-
+    *req->dev.ch4.am.shm_am.pip.idle_cnt = 0;
     if (inuse == 0) {
-        *req->dev.ch4.am.shm_am.pip.idle_cnt = 0;
         MPL_DBG_MSG_P(MPIR_DBG_REQUEST, VERBOSE, "freeing request, handle=0x%08x", req->handle);
 
 #ifdef MPICH_DBG_OUTPUT

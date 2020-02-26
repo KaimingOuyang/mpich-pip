@@ -28,7 +28,7 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 
 #define MPIDI_PROC_COPY 1
 #define MPIDI_PROC_NOT_COPY 0
-#define MPIDI_PIP_IDLE_THRESHOLD 2
+#define MPIDI_PIP_IDLE_THRESHOLD 1
 
 /* Task kind */
 // #define MPIDI_STEALING_CASE 2
