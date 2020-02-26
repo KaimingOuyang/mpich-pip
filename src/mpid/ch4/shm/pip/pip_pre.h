@@ -38,6 +38,7 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 /* Local or remote stealing */
 #define MPIDI_PIP_LOCAL_STEALING 0
 #define MPIDI_PIP_REMOTE_STEALING 1
+#define MPIDI_PIP_REMOTE_PARTNER_STEALING 2
 
 /* Copy kind */
 #define MPIDI_PIP_MEMCPY 0

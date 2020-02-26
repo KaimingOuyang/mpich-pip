@@ -14,9 +14,11 @@
 
 #include "pip_pre.h"
 
-MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t * task_queue);
+MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t * task_queue,
+                                                        int stealing_type);
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * task_queue);
-MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_copy_size_decision(MPIDI_PIP_task_t * task);
+MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_copy_size_decision(MPIDI_PIP_task_t * task,
+                                                          int stealing_type);
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_memcpy_task(MPIDI_PIP_task_t * task, int copy_sz,
                                                          MPI_Aint offset);
 
@@ -179,7 +181,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_pack_unpack_task(MPIDI_PIP_tas
 MPL_STATIC_INLINE_PREFIX int MPIDI_obtain_task_info_safe(MPIDI_PIP_task_queue_t * task_queue,
                                                          MPIDI_PIP_task_t ** task_ret,
                                                          int *copy_sz_ret, MPI_Aint * offset_ret,
-                                                         int *copy_kind_ret)
+                                                         int *copy_kind_ret, int stealing_type)
 {
     MPIDI_PIP_task_t *task;
     int err, copy_sz, copy_kind;
@@ -192,7 +194,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_obtain_task_info_safe(MPIDI_PIP_task_queue_t 
     task = task_queue->head;
 #ifdef ENABLE_REVERSE_TASK_ENQUEUE
     if (task && task->cur_offset != 0) {
-        copy_sz = MPIDI_PIP_copy_size_decision(task);
+        copy_sz = MPIDI_PIP_copy_size_decision(task, stealing_type);
         task->cur_offset -= copy_sz;
         offset = task->cur_offset;
         copy_kind = task->copy_kind;
@@ -205,7 +207,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_obtain_task_info_safe(MPIDI_PIP_task_queue_t 
     }
 #else
     if (task && task->cur_offset != task->orig_data_sz) {
-        copy_sz = MPIDI_PIP_copy_size_decision(task);
+        copy_sz = MPIDI_PIP_copy_size_decision(task, stealing_type);
         offset = task->cur_offset;
         task->cur_offset += copy_sz;
         copy_kind = task->copy_kind;
@@ -236,7 +238,8 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * 
     MPI_Aint offset, init_src_offset, init_dest_offset;
     MPIDI_PIP_task_t *task;
 
-    MPIDI_obtain_task_info_safe(task_queue, &task, &copy_sz, &offset, &copy_kind);
+    MPIDI_obtain_task_info_safe(task_queue, &task, &copy_sz, &offset, &copy_kind,
+                                MPIDI_PIP_LOCAL_STEALING);
 
     if (copy_sz) {
         int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
@@ -554,7 +557,8 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_unpack_task_enqueue(void *src_buf,
 }
 
 
-MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_copy_size_decision(MPIDI_PIP_task_t * task)
+MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_copy_size_decision(MPIDI_PIP_task_t * task,
+                                                          int stealing_type)
 {
     int copy_sz;
     /* This size decision function is only for bebop machine */
@@ -563,6 +567,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_copy_size_decision(MPIDI_PIP_task_t * tas
     static const int PKT_64KB = 1 << 16;
     static const int PKT_96KB = PKT_32KB + PKT_64KB;
     static const int PKT_512KB = 1 << 19;
+
 #ifdef ENABLE_REVERSE_TASK_ENQUEUE
     size_t remaining_data = task->cur_offset;
 #else
@@ -570,19 +575,33 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_copy_size_decision(MPIDI_PIP_task_t * tas
 #endif
 
 #ifdef ENABLE_DYNAMIC_CHUNK
-    if (remaining_data <= PKT_16KB)
-        copy_sz = remaining_data;
-    else if (remaining_data <= PKT_96KB)
-        copy_sz = PKT_16KB;
-    else if (remaining_data <= PKT_512KB)
-        copy_sz = PKT_32KB;
-    else
-        copy_sz = PKT_96KB;
+    if (stealing_type == MPIDI_PIP_REMOTE_STEALING) {
+        if (remaining_data <= PKT_96KB)
+            copy_sz = 0;
+        else
+            copy_sz = PKT_32KB;
+    } else {
+        if (remaining_data <= PKT_16KB)
+            copy_sz = remaining_data;
+        else if (remaining_data <= PKT_96KB)
+            copy_sz = PKT_16KB;
+        else if (remaining_data <= PKT_512KB)
+            copy_sz = PKT_32KB;
+        else
+            copy_sz = PKT_64KB;
+    }
 #else
-    if (remaining_data <= PKT_16KB)
-        copy_sz = remaining_data;
-    else
-        copy_sz = PKT_64KB;
+    if (stealing_type != MPIDI_PIP_REMOTE_STEALING) {
+        if (remaining_data <= PKT_64KB)
+            copy_sz = remaining_data;
+        else
+            copy_sz = PKT_64KB;
+    } else {
+        if (remaining_data <= PKT_96KB)
+            copy_sz = 0;
+        else
+            copy_sz = PKT_32KB;
+    }
 #endif
     return copy_sz;
 }
@@ -671,7 +690,8 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_stolen_pack_unpack_task(MPIDI_PIP_t
 }
 
 
-MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t * task_queue)
+MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t * task_queue,
+                                                        int stealing_type)
 {
     void *src_buf, *dest_buf;
     int copy_sz, err, copy_kind;
@@ -679,7 +699,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t *
     MPIDI_PIP_task_t *task;
     int ret = STEALING_FAIL;
 
-    MPIDI_obtain_task_info_safe(task_queue, &task, &copy_sz, &offset, &copy_kind);
+    MPIDI_obtain_task_info_safe(task_queue, &task, &copy_sz, &offset, &copy_kind, stealing_type);
 
     if (copy_sz) {
         ret = STEALING_SUCCESS;
@@ -826,7 +846,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_Task_remote_check_and_steal(MPIDI_PIP_ta
 
     if (cur_local_intra_copy < MPIDI_PIP_MAX_NUM_LOCAL_STEALING) {
         MPIDI_PIP_global.allow_rmt_stealing_ptr[numa_id] = 1;
-        MPIDI_PIP_exec_stolen_task(task_queue);
+        MPIDI_PIP_exec_stolen_task(task_queue, MPIDI_PIP_REMOTE_STEALING);
         MPIDI_PIP_global.allow_rmt_stealing_ptr[numa_id] = 0;
     }
     return;
@@ -846,9 +866,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
         victim = curp->partner;
         MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
         if (victim_queue->head && victim_queue->partner == (uint64_t) curp) {
-            // MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
-            ret = MPIDI_PIP_exec_stolen_task(victim_queue);
-            // MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
+            ret = MPIDI_PIP_exec_stolen_task(victim_queue, MPIDI_PIP_LOCAL_STEALING);
             if (ret == STEALING_SUCCESS) {
                 MPIDI_PIP_global.local_try = 0;
                 return;
@@ -864,9 +882,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
     if (victim != MPIDI_PIP_global.local_rank) {
         MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
         if (victim_queue->head) {
-            // MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
-            ret = MPIDI_PIP_exec_stolen_task(victim_queue);
-            // MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
+            ret = MPIDI_PIP_exec_stolen_task(victim_queue, MPIDI_PIP_LOCAL_STEALING);
             if (ret == STEALING_SUCCESS) {
                 MPIDI_PIP_global.local_try = 0;
                 return;
@@ -881,7 +897,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
         if (victim_queue->partner == (uint64_t) curp) {
             // numa_num_procs = MPIDI_PIP_global.numa_num_procs[curp->partner_numa_id];
             // MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
-            ret = MPIDI_PIP_exec_stolen_task(victim_queue);
+            ret = MPIDI_PIP_exec_stolen_task(victim_queue, MPIDI_PIP_REMOTE_PARTNER_STEALING);
             if (ret == STEALING_SUCCESS) {
                 MPIDI_PIP_global.local_try = 0;
                 return;
@@ -924,7 +940,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
             MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
 
             if (victim_queue->head) {
-                MPIDI_PIP_exec_stolen_task(victim_queue);
+                MPIDI_PIP_exec_stolen_task(victim_queue, MPIDI_PIP_REMOTE_STEALING);
                 return;
             }
         }
