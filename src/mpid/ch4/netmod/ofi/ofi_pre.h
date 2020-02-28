@@ -140,6 +140,7 @@ typedef struct {
     int event_id;               /* fixed field, do not move */
     int util_id;
     MPI_Datatype datatype;
+    int *buf_use;
     union {
         MPIDI_OFI_pack_t *pack;
         struct iovec *nopack;
