@@ -158,7 +158,9 @@ static int recv_event(struct fi_cq_tagged_entry *wc, MPIR_Request * rreq, int ev
                             MPIDI_OFI_REQUEST(rreq, noncontig.pack.count),
                             MPIDI_OFI_REQUEST(rreq, noncontig.pack.datatype), 0,
                             &actual_unpack_bytes);
-        MPL_gpu_free_host(MPIDI_OFI_REQUEST(rreq, noncontig.pack.pack_buffer));
+        // MPL_gpu_free_host(MPIDI_OFI_REQUEST(rreq, noncontig.pack.pack_buffer));
+        MPIDI_OFI_free_pack_buffer(rreq);
+        // MPL_free(MPIDI_OFI_REQUEST(rreq, noncontig.pack));
         if (actual_unpack_bytes != (MPI_Aint) count) {
             rreq->status.MPI_ERROR =
                 MPIR_Err_create_code(MPI_SUCCESS,
@@ -309,9 +311,11 @@ int MPIDI_OFI_send_event(struct fi_cq_tagged_entry *wc, MPIR_Request * sreq, int
     MPIR_cc_decr(sreq->cc_ptr, &c);
 
     if (c == 0) {
-        if ((event_id == MPIDI_OFI_EVENT_SEND_PACK) &&
-            (MPIDI_OFI_REQUEST(sreq, noncontig.pack.pack_buffer))) {
-            MPL_gpu_free_host(MPIDI_OFI_REQUEST(sreq, noncontig.pack.pack_buffer));
+        if ((event_id == MPIDI_OFI_EVENT_SEND_PACK) && (MPIDI_OFI_REQUEST(sreq, noncontig.pack.pack_buffer))) {
+            // MPL_gpu_free_host(MPIDI_OFI_REQUEST(sreq, noncontig.pack.pack_buffer));
+            // printf("send event free pack buffer\n");
+            MPIDI_OFI_free_pack_buffer(sreq);
+            // MPL_free(MPIDI_OFI_REQUEST(sreq, noncontig.pack));
         } else if (MPIDI_OFI_ENABLE_PT2PT_NOPACK && (event_id == MPIDI_OFI_EVENT_SEND_NOPACK))
             MPL_free(MPIDI_OFI_REQUEST(sreq, noncontig.nopack));
 

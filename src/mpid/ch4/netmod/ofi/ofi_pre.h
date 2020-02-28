@@ -171,6 +171,7 @@ typedef struct {
     int event_id;               /* fixed field, do not move */
     int util_id;
     MPI_Datatype datatype;
+    int *buf_use;
     union {
         struct {
             void *buf;
