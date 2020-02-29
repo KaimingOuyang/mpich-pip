@@ -20,6 +20,7 @@ int MPIDI_PIP_mpi_init_task_queue(MPIDI_PIP_task_queue_t * task_queue)
     int mpi_errno = MPI_SUCCESS;
     task_queue->head = NULL;
     task_queue->partner = -1;
+    task_queue->head_task_kind = -1;
     MPID_Thread_mutex_create(&task_queue->lock, &err);
     if (err) {
         fprintf(stderr, "Init queue lock error\n");

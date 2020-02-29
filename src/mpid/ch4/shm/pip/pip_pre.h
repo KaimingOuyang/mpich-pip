@@ -76,6 +76,7 @@ typedef struct MPIDI_PIP_task {
     MPIR_OBJECT_HEADER;
     /* kind info */
     int copy_kind;              /* describe pack or unpack operations */
+    int task_kind;              /* intra or inter copy */
 
     /* basic buffer and size */
     void *src_buf;
@@ -102,6 +103,7 @@ typedef struct MPIDI_PIP_task {
 typedef struct MPIDI_PIP_task_queue {
     MPIDI_PIP_task_t *head;
     uint64_t partner;
+    int head_task_kind;
     MPID_Thread_mutex_t lock;
 } MPIDI_PIP_task_queue_t;
 

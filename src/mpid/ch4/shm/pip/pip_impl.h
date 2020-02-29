@@ -29,6 +29,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_publish_task(MPIDI_PIP_task_queue_t * ta
     MPID_Thread_mutex_lock(&task_queue->lock, &err);
     task_queue->head = task;
     task_queue->partner = partner;
+    task_queue->head_task_kind = task->task_kind;
     MPID_Thread_mutex_unlock(&task_queue->lock, &err);
 }
 
@@ -39,6 +40,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_cancel_task(MPIDI_PIP_task_queue_t * tas
     MPID_Thread_mutex_lock(&task_queue->lock, &err);
     task_queue->head = NULL;
     task_queue->partner = -1;
+    task_queue->head_task_kind = -1;
     MPID_Thread_mutex_unlock(&task_queue->lock, &err);
 }
 
@@ -424,9 +426,11 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * t
 
 
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_memcpy_task(MPIDI_PIP_task_t * task, void *src_buf,
-                                                         void *dest_buf, MPI_Aint data_sz)
+                                                         void *dest_buf, MPI_Aint data_sz,
+                                                         int task_kind)
 {
     task->copy_kind = MPIDI_PIP_MEMCPY;
+    task->task_kind = task_kind;
 
     task->src_buf = src_buf;
     task->dest_buf = dest_buf;
@@ -443,7 +447,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_memcpy_task(MPIDI_PIP_task_t * task
 
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_memcpy_task_enqueue(char *src_buf,
                                                             char *dest_buf, MPI_Aint data_sz,
-                                                            uint64_t partner)
+                                                            uint64_t partner, int task_kind)
 {
 #ifdef ENABLE_CONTIG_STEALING
     if (data_sz <= MPIDI_PIP_STEALING_THRESHOLD) {
@@ -453,7 +457,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_memcpy_task_enqueue(char *src_buf,
         // MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
     } else {
         MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
-        MPIDI_PIP_init_memcpy_task(task, src_buf, dest_buf, data_sz);
+        MPIDI_PIP_init_memcpy_task(task, src_buf, dest_buf, data_sz, task_kind);
         MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task, partner);
         do {
 #ifdef ENABLE_REVERSE_TASK_ENQUEUE
@@ -481,9 +485,10 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_memcpy_task_enqueue(char *src_buf,
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_pack_task(MPIDI_PIP_task_t * task, void *src_buf,
                                                        MPI_Aint src_count, MPI_Aint inoffset,
                                                        MPIR_Datatype * src_dt_ptr, void *dest_buf,
-                                                       MPI_Aint data_sz)
+                                                       MPI_Aint data_sz, int task_kind)
 {
     task->copy_kind = MPIDI_PIP_PACK;
+    task->task_kind = task_kind;
 
     task->src_buf = src_buf;
     task->dest_buf = dest_buf;
@@ -504,7 +509,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_pack_task(MPIDI_PIP_task_t * task, 
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_task_enqueue(void *src_buf, MPI_Aint src_count,
                                                           MPIR_Datatype * src_dt_ptr,
                                                           char *dest_buf, MPI_Aint data_sz,
-                                                          uint64_t partner)
+                                                          uint64_t partner, int task_kind)
 {
     MPI_Datatype src_dt_dup;
     MPIR_PIP_Type_dup(src_dt_ptr, &src_dt_dup);
@@ -521,7 +526,8 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_task_enqueue(void *src_buf, MPI_Ain
         MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
         MPIR_Datatype_get_ptr(src_dt_dup, src_dt_dup_ptr);
 
-        MPIDI_PIP_init_pack_task(task, src_buf, src_count, 0, src_dt_dup_ptr, dest_buf, data_sz);
+        MPIDI_PIP_init_pack_task(task, src_buf, src_count, 0, src_dt_dup_ptr, dest_buf, data_sz,
+                                 task_kind);
         MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task, partner);
         do {
 #ifdef ENABLE_REVERSE_TASK_ENQUEUE
@@ -553,9 +559,10 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_unpack_task(MPIDI_PIP_task_t * task
                                                          void *dest_buf, MPI_Aint dest_count,
                                                          MPI_Aint outoffset,
                                                          MPIR_Datatype * dest_dt_ptr,
-                                                         MPI_Aint data_sz)
+                                                         MPI_Aint data_sz, int task_kind)
 {
     task->copy_kind = MPIDI_PIP_UNPACK;
+    task->task_kind = task_kind;
 
     task->src_buf = src_buf;
     task->dest_buf = dest_buf;
@@ -576,7 +583,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_unpack_task(MPIDI_PIP_task_t * task
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_unpack_task_enqueue(void *src_buf,
                                                             void *dest_buf, MPI_Aint dest_count,
                                                             MPI_Datatype dest_dt, MPI_Aint data_sz,
-                                                            uint64_t partner)
+                                                            uint64_t partner, int task_kind)
 {
 #ifdef ENABLE_NON_CONTIG_STEALING
     if (data_sz <= MPIDI_PIP_STEALING_THRESHOLD) {
@@ -591,7 +598,8 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_unpack_task_enqueue(void *src_buf,
         MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
         MPIR_Datatype_get_ptr(dest_dt, dest_dt_ptr);
 
-        MPIDI_PIP_init_unpack_task(task, src_buf, dest_buf, dest_count, 0, dest_dt_ptr, data_sz);
+        MPIDI_PIP_init_unpack_task(task, src_buf, dest_buf, dest_count, 0, dest_dt_ptr, data_sz,
+                                   task_kind);
         MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task, partner);
         do {
 #ifdef ENABLE_REVERSE_TASK_ENQUEUE
@@ -625,9 +633,10 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_pack_unpack_task(MPIDI_PIP_task_t *
                                                               void *dest_buf, MPI_Aint dest_count,
                                                               MPI_Aint outoffset,
                                                               MPIR_Datatype * dest_dt_ptr,
-                                                              MPI_Aint data_sz)
+                                                              MPI_Aint data_sz, int task_kind)
 {
     task->copy_kind = MPIDI_PIP_PACK_UNPACK;
+    task->task_kind = task_kind;
 
     task->src_buf = src_buf;
     task->dest_buf = dest_buf;
@@ -655,7 +664,8 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_unpack_task_enqueue(void *src_buf,
                                                                  void *dest_buf,
                                                                  MPI_Aint dest_count,
                                                                  MPI_Datatype dest_dt,
-                                                                 MPI_Aint data_sz, uint64_t partner)
+                                                                 MPI_Aint data_sz, uint64_t partner,
+                                                                 int task_kind)
 {
     MPI_Datatype src_dt_dup;
     MPIR_PIP_Type_dup(src_dt_ptr, &src_dt_dup);
@@ -680,7 +690,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_pack_unpack_task_enqueue(void *src_buf,
         MPIR_Datatype_get_ptr(src_dt_dup, src_dt_dup_ptr);
 
         MPIDI_PIP_init_pack_unpack_task(task, src_buf, src_count, 0, src_dt_dup_ptr,
-                                        dest_buf, dest_count, 0, dest_dt_ptr, data_sz);
+                                        dest_buf, dest_count, 0, dest_dt_ptr, data_sz, task_kind);
         MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task, partner);
         do {
 #ifdef ENABLE_REVERSE_TASK_ENQUEUE
@@ -930,7 +940,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_pack(void *src_buf, MPI_Aint src_count,
         MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
         MPIR_Datatype_get_ptr(src_dt, src_dt_ptr);
 
-        MPIDI_PIP_init_pack_task(task, src_buf, src_count, inoffset, src_dt_ptr, dest_buf, data_sz);
+        MPIDI_PIP_init_pack_task(task, src_buf, src_count, inoffset, src_dt_ptr, dest_buf, data_sz,
+                                 MPIDI_PIP_INTRA_QUEUE);
         MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task, -1);
         do {
 #ifdef ENABLE_REVERSE_TASK_ENQUEUE
@@ -984,7 +995,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_unpack(void *src_buf, MPI_Aint insize,
         MPIR_Datatype_get_ptr(dest_dt, dest_dt_ptr);
 
         MPIDI_PIP_init_unpack_task(task, src_buf, dest_buf, dest_count, outoffset, dest_dt_ptr,
-                                   data_sz);
+                                   data_sz, MPIDI_PIP_INTRA_QUEUE);
         MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task, -1);
         do {
 #ifdef ENABLE_REVERSE_TASK_ENQUEUE
@@ -1055,7 +1066,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
     victim = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][rand() % numa_num_procs];
     if (victim != MPIDI_PIP_global.local_rank) {
         MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
-        if (victim_queue->head) {
+        if (victim_queue->head && victim_queue->head_task_kind != MPIDI_PIP_INTER_QUEUE) {
             ret = MPIDI_PIP_exec_stolen_task(victim_queue, MPIDI_PIP_LOCAL_STEALING);
             if (ret == STEALING_SUCCESS) {
                 MPIDI_PIP_global.local_try = 0;
@@ -1068,7 +1079,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
     while (curp != NULL) {
         victim = curp->partner;
         MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
-        if (victim_queue->partner == (uint64_t) curp) {
+        if (victim_queue->head && victim_queue->partner == (uint64_t) curp) {
             // numa_num_procs = MPIDI_PIP_global.numa_num_procs[curp->partner_numa_id];
             // MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
             ret = MPIDI_PIP_exec_stolen_task(victim_queue, MPIDI_PIP_REMOTE_PARTNER_STEALING);
