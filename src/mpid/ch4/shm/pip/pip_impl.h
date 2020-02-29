@@ -198,10 +198,6 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_obtain_task_info_safe(MPIDI_PIP_task_queue_t 
         task->cur_offset -= copy_sz;
         offset = task->cur_offset;
         copy_kind = task->copy_kind;
-        if (task->copy_kind == MPIDI_PIP_PACK)
-            offset += task->init_src_offset;
-        else if (task->copy_kind == MPIDI_PIP_UNPACK)
-            offset += task->init_dest_offset;
     } else {
         copy_sz = 0;
     }
@@ -211,10 +207,6 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_obtain_task_info_safe(MPIDI_PIP_task_queue_t 
         offset = task->cur_offset;
         task->cur_offset += copy_sz;
         copy_kind = task->copy_kind;
-        if (task->copy_kind == MPIDI_PIP_PACK)
-            offset += task->init_src_offset;
-        else if (task->copy_kind == MPIDI_PIP_UNPACK)
-            offset += task->init_dest_offset;
     } else {
         copy_sz = 0;
     }
