@@ -45,6 +45,7 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 #define MPIDI_PIP_PACK 1
 #define MPIDI_PIP_UNPACK 2
 #define MPIDI_PIP_PACK_UNPACK 3
+#define MPIDI_PIP_ACC 4
 
 #define STEALING_FAIL 0
 #define STEALING_SUCCESS 1
@@ -62,6 +63,14 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 #define CORES_PER_NUMA_NODE 18
 #define MPIDI_PIP_MAX_NUM_LOCAL_STEALING 4
 #endif
+
+typedef struct MPIDI_PIP_acc_iov {
+    MPI_Aint cur_iov;
+    uint64_t cur_addr;
+    MPI_Aint cur_len;
+    struct iovec *iovs;
+    int niov;
+} MPIDI_PIP_acc_iov_t;
 
 typedef struct MPIDI_PIP_task {
     MPIR_OBJECT_HEADER;
@@ -82,6 +91,12 @@ typedef struct MPIDI_PIP_task {
     MPI_Aint dest_count;
     MPIR_Datatype *dest_dt_ptr;
     MPI_Aint init_dest_offset;  /* dest initial offset */
+
+    /* accumulate structure */
+    MPIDI_PIP_acc_iov_t *acc_iov;
+    MPI_Datatype origin_dt;
+    MPI_Datatype target_dt;
+    MPI_User_function *uop;
 } MPIDI_PIP_task_t;
 
 typedef struct MPIDI_PIP_task_queue {

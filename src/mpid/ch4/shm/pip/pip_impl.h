@@ -181,11 +181,18 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_pack_unpack_task(MPIDI_PIP_tas
 MPL_STATIC_INLINE_PREFIX int MPIDI_obtain_task_info_safe(MPIDI_PIP_task_queue_t * task_queue,
                                                          MPIDI_PIP_task_t ** task_ret,
                                                          int *copy_sz_ret, MPI_Aint * offset_ret,
-                                                         int *copy_kind_ret, int stealing_type)
+                                                         int *copy_kind_ret,
+                                                         struct iovec **iov,
+                                                         uint64_t * start_addr_ret,
+                                                         MPI_Aint * start_len_ret, int *niov_ret,
+                                                         int stealing_type)
 {
     MPIDI_PIP_task_t *task;
     int err, copy_sz, copy_kind;
     MPI_Aint offset;
+    int start_iov, end_iov;
+    uint64_t start_addr;
+    MPI_Aint start_len;
     MPID_Thread_mutex_lock(&task_queue->lock, &err);
     if (err) {
         printf("MPIDI_obtain_task_info_safe lock get error %d\n", err);
@@ -211,11 +218,47 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_obtain_task_info_safe(MPIDI_PIP_task_queue_t 
         copy_sz = 0;
     }
 #endif
+
+    if (copy_sz && copy_kind == MPIDI_PIP_ACC) {
+        int rmt = copy_sz;
+        start_addr = task->acc_iov->cur_addr;
+        start_len = task->acc_iov->cur_len;
+        start_iov = end_iov = task->acc_iov->cur_iov;
+        while (1) {
+            if (task->acc_iov->cur_len < rmt) {
+                end_iov++;
+                rmt -= task->acc_iov->cur_len;
+                task->acc_iov->cur_addr = (uint64_t) task->acc_iov->iovs[end_iov].iov_base;
+                task->acc_iov->cur_len = (MPI_Aint) task->acc_iov->iovs[end_iov].iov_len;
+            } else if (task->acc_iov->cur_len == rmt) {
+                if (end_iov < task->acc_iov->niov - 1) {
+                    task->acc_iov->cur_iov = end_iov + 1;
+                    task->acc_iov->cur_addr = (uint64_t) task->acc_iov->iovs[end_iov + 1].iov_base;
+                    task->acc_iov->cur_len = (MPI_Aint) task->acc_iov->iovs[end_iov + 1].iov_len;
+                }
+
+                break;
+            } else {
+                task->acc_iov->cur_iov = end_iov;
+                task->acc_iov->cur_addr += rmt;
+                task->acc_iov->cur_len -= rmt;
+                break;
+            }
+        }
+    }
     MPID_Thread_mutex_unlock(&task_queue->lock, &err);
     if (err) {
         printf("MPIDI_obtain_task_info_safe lock release error %d\n", err);
         fflush(stdout);
     }
+
+    if (copy_sz && copy_kind == MPIDI_PIP_ACC) {
+        *iov = &task->acc_iov->iovs[start_iov];
+        *start_addr_ret = start_addr;
+        *start_len_ret = start_len;
+        *niov_ret = end_iov - start_iov + 1;
+    }
+
     *task_ret = task;
     *copy_sz_ret = copy_sz;
     *offset_ret = offset;
@@ -223,15 +266,138 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_obtain_task_info_safe(MPIDI_PIP_task_queue_t 
 }
 
 
+MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_acc_task(MPIDI_PIP_task_t * task, int copy_sz,
+                                                      MPI_Aint offset, struct iovec *iov,
+                                                      uint64_t start_addr, MPI_Aint start_len,
+                                                      int niov)
+{
+    int i;
+    int count, basic_sz;
+    MPIR_Datatype_get_size_macro(task->origin_dt, basic_sz);
+    uint64_t source_buf = (uint64_t) task->src_buf + offset;
+    void *target_buf;
+    MPI_Aint cur_work;
+    int rmt = copy_sz;
+    for (i = 0; i < niov; ++i) {
+        if (i == 0) {
+            cur_work = start_len < rmt ? start_len : rmt;
+            target_buf = (void *) start_addr;
+        } else {
+            cur_work = iov[i].iov_len < rmt ? iov[i].iov_len : rmt;
+            target_buf = iov[i].iov_base;
+        }
+
+        rmt -= cur_work;
+        count = cur_work / basic_sz;
+
+        (*task->uop) ((void *) source_buf, target_buf, &count, &task->origin_dt);
+        source_buf += cur_work;
+    }
+    OPA_write_barrier();
+    OPA_add_int(&task->done_data_sz, copy_sz);
+    return;
+}
+
+
+MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_acc_task(MPIDI_PIP_task_t * task,
+                                                      void *src_buf, MPI_Aint src_count,
+                                                      MPI_Datatype src_dtp, void *dest_buf,
+                                                      MPI_Aint target_count,
+                                                      MPI_Datatype target_dtp,
+                                                      MPI_User_function * uop, MPI_Aint data_sz,
+                                                      MPIDI_PIP_acc_iov_t * stealing_iov)
+{
+    /* current acc task does not support reverse stealing */
+    task->copy_kind = MPIDI_PIP_ACC;
+
+    task->src_buf = src_buf;
+    task->dest_buf = dest_buf;
+    task->cur_offset = 0;
+    task->orig_data_sz = data_sz;
+    OPA_store_int(&task->done_data_sz, 0);
+
+    task->src_count = src_count;
+    task->origin_dt = src_dtp;
+
+    task->dest_count = target_count;
+    task->target_dt = target_dtp;
+    task->acc_iov = stealing_iov;
+    task->uop = uop;
+
+    return;
+}
+
+MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_compute_acc_op(void *source_buf, int source_count,
+                                                      MPI_Datatype source_dtp, void *target_buf,
+                                                      int target_count, MPI_Datatype target_dtp,
+                                                      MPI_Op acc_op, int src_kind, size_t data_sz,
+                                                      MPIDI_PIP_acc_iov_t * stealing_iov)
+{
+
+    int mpi_errno = MPI_SUCCESS;
+    MPI_User_function *uop = NULL;
+    MPI_Aint source_dtp_size = 0, source_dtp_extent = 0;
+    int is_empty_source = FALSE;
+    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDIG_COMPUTE_ACC_OP);
+
+    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDIG_COMPUTE_ACC_OP);
+
+    /* first Judge if source buffer is empty */
+    if (acc_op == MPI_NO_OP) {
+        is_empty_source = TRUE;
+        goto fn_exit;
+    }
+
+    if (is_empty_source == FALSE) {
+        MPIR_Assert(MPIR_DATATYPE_IS_PREDEFINED(source_dtp));
+        MPIR_Datatype_get_size_macro(source_dtp, source_dtp_size);
+        MPIR_Datatype_get_extent_macro(source_dtp, source_dtp_extent);
+    }
+
+    if ((HANDLE_GET_KIND(acc_op) == HANDLE_KIND_BUILTIN)
+        && ((*MPIR_OP_HDL_TO_DTYPE_FN(acc_op)) (source_dtp) == MPI_SUCCESS)) {
+        /* get the function by indexing into the op table */
+        uop = MPIR_OP_HDL_TO_FN(acc_op);
+    } else {
+        /* --BEGIN ERROR HANDLING-- */
+        mpi_errno = MPIR_Err_create_code(MPI_SUCCESS, MPIR_ERR_RECOVERABLE,
+                                         __func__, __LINE__, MPI_ERR_OP,
+                                         "**opnotpredefined", "**opnotpredefined %d", acc_op);
+        return mpi_errno;
+        /* --END ERROR HANDLING-- */
+    }
+
+    MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
+    MPIDI_PIP_init_acc_task(task, source_buf, source_count, source_dtp,
+                            target_buf, target_count, target_dtp, uop, data_sz, stealing_iov);
+    MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task, -1);
+
+    do {
+        if (task->cur_offset != task->orig_data_sz)
+            MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue);
+    } while (OPA_load_int(&task->done_data_sz) != task->orig_data_sz);
+
+    MPIDI_PIP_cancel_task(MPIDI_PIP_global.task_queue);
+    MPIR_Handle_obj_free(&MPIDI_Task_mem, task);
+
+  fn_exit:
+    MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDIG_COMPUTE_ACC_OP);
+    return mpi_errno;
+}
+
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * task_queue)
 {
     void *src_buf, *dest_buf;
     int copy_sz, err, copy_kind;
     MPI_Aint offset, init_src_offset, init_dest_offset;
     MPIDI_PIP_task_t *task;
+    struct iovec *iov;
+    uint64_t start_addr;
+    MPI_Aint start_len;
+    int niov;
 
     MPIDI_obtain_task_info_safe(task_queue, &task, &copy_sz, &offset, &copy_kind,
-                                MPIDI_PIP_LOCAL_STEALING);
+                                &iov, &start_addr, &start_len, &niov, MPIDI_PIP_LOCAL_STEALING);
 
     if (copy_sz) {
         int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
@@ -241,15 +407,16 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * 
                 MPIDI_PIP_exec_memcpy_task(task, copy_sz, offset);
                 break;
             case MPIDI_PIP_PACK:
-                offset += init_src_offset;
                 MPIDI_PIP_exec_self_pack_task(task, copy_sz, offset);
                 break;
             case MPIDI_PIP_UNPACK:
-                offset += init_dest_offset;
                 MPIDI_PIP_exec_self_unpack_task(task, copy_sz, offset);
                 break;
             case MPIDI_PIP_PACK_UNPACK:
                 MPIDI_PIP_exec_self_pack_unpack_task(task, copy_sz, offset);
+                break;
+            case MPIDI_PIP_ACC:
+                MPIDI_PIP_exec_acc_task(task, copy_sz, offset, iov, start_addr, start_len, niov);
                 break;
         }
         // MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
@@ -566,6 +733,14 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_copy_size_decision(MPIDI_PIP_task_t * tas
     size_t remaining_data = task->orig_data_sz - task->cur_offset;
 #endif
 
+    /* 32KB task size for accumulate */
+    if (task->copy_kind == MPIDI_PIP_ACC) {
+        if (remaining_data <= PKT_32KB)
+            copy_sz = remaining_data;
+        else
+            copy_sz = PKT_32KB;
+        goto fn_exit;
+    }
 #ifdef ENABLE_DYNAMIC_CHUNK
     if (stealing_type == MPIDI_PIP_REMOTE_STEALING) {
         if (remaining_data <= PKT_96KB)
@@ -595,6 +770,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_copy_size_decision(MPIDI_PIP_task_t * tas
             copy_sz = PKT_32KB;
     }
 #endif
+  fn_exit:
     return copy_sz;
 }
 
@@ -691,7 +867,13 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t *
     MPIDI_PIP_task_t *task;
     int ret = STEALING_FAIL;
 
-    MPIDI_obtain_task_info_safe(task_queue, &task, &copy_sz, &offset, &copy_kind, stealing_type);
+    struct iovec *iov;
+    uint64_t start_addr;
+    MPI_Aint start_len;
+    int niov;
+
+    MPIDI_obtain_task_info_safe(task_queue, &task, &copy_sz, &offset, &copy_kind,
+                                &iov, &start_addr, &start_len, &niov, stealing_type);
 
     if (copy_sz) {
         ret = STEALING_SUCCESS;
@@ -707,6 +889,9 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t *
                 break;
             case MPIDI_PIP_PACK_UNPACK:
                 MPIDI_PIP_exec_stolen_pack_unpack_task(task, copy_sz, offset);
+                break;
+            case MPIDI_PIP_ACC:
+                MPIDI_PIP_exec_acc_task(task, copy_sz, offset, iov, start_addr, start_len, niov);
                 break;
         }
     } else

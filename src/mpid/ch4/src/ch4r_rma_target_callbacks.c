@@ -12,7 +12,7 @@
 #include "mpidimpl.h"
 #include "mpidch4r.h"
 #include "ch4r_rma_target_callbacks.h"
-
+#include "../shm/pip/pip_impl.h"
 static int ack_put(MPIR_Request * rreq);
 static int ack_cswap(MPIR_Request * rreq);
 static int ack_acc(MPIR_Request * rreq);
@@ -594,6 +594,74 @@ static int handle_acc_cmpl(MPIR_Request * rreq)
     }
 #endif
 
+#if defined MPIDI_PIP_ACC_STEALING && defined MPIDI_PIP_STEALING_ENABLE
+    size_t acc_sz;
+    MPIDI_Datatype_check_size(MPIDIG_REQUEST(rreq, req->areq.origin_datatype),
+                              MPIDIG_REQUEST(rreq, req->areq.origin_count), acc_sz);
+    // printf("rank %d - acc contiguous data_sz %ld\n", rreq->comm->rank, acc_sz);
+    // fflush(stdout);
+    if (acc_sz <= MPIDI_PIP_STEALING_THRESHOLD) {
+        if (MPIDIG_REQUEST(rreq, req->areq.dt_iov) == NULL) {
+            mpi_errno = MPIDIG_compute_acc_op(MPIDIG_REQUEST(rreq, req->areq.data),
+                                              MPIDIG_REQUEST(rreq, req->areq.origin_count),
+                                              MPIDIG_REQUEST(rreq, req->areq.origin_datatype),
+                                              MPIDIG_REQUEST(rreq, req->areq.target_addr),
+                                              MPIDIG_REQUEST(rreq, req->areq.target_count),
+                                              MPIDIG_REQUEST(rreq, req->areq.target_datatype),
+                                              MPIDIG_REQUEST(rreq, req->areq.op),
+                                              MPIDIG_ACC_SRCBUF_DEFAULT);
+            MPIR_ERR_CHECK(mpi_errno);
+        } else {
+            iov = (struct iovec *) MPIDIG_REQUEST(rreq, req->areq.dt_iov);
+            src_ptr = (char *) MPIDIG_REQUEST(rreq, req->areq.data);
+            for (i = 0; i < MPIDIG_REQUEST(rreq, req->areq.n_iov); i++) {
+                count = iov[i].iov_len / basic_sz;
+                MPIR_Assert(count > 0);
+
+                mpi_errno = MPIDIG_compute_acc_op(src_ptr, count,
+                                                  MPIDIG_REQUEST(rreq, req->areq.origin_datatype),
+                                                  iov[i].iov_base, count,
+                                                  MPIDIG_REQUEST(rreq, req->areq.target_datatype),
+                                                  MPIDIG_REQUEST(rreq, req->areq.op),
+                                                  MPIDIG_ACC_SRCBUF_DEFAULT);
+                MPIR_ERR_CHECK(mpi_errno);
+                src_ptr += count * basic_sz;
+            }
+            MPL_free(iov);
+        }
+    } else {
+        MPIDI_PIP_acc_iov_t stealing_iov;
+        if (MPIDIG_REQUEST(rreq, req->areq.dt_iov) == NULL) {
+            iov = (struct iovec *) malloc(sizeof(struct iovec));
+            iov->iov_base = MPIDIG_REQUEST(rreq, req->areq.target_addr);
+            iov->iov_len = acc_sz;
+
+            stealing_iov.cur_iov = 0;
+            stealing_iov.cur_addr = (uint64_t) iov->iov_base;
+            stealing_iov.cur_len = acc_sz;
+            stealing_iov.iovs = iov;
+            stealing_iov.niov = 1;
+        } else {
+            iov = (struct iovec *) MPIDIG_REQUEST(rreq, req->areq.dt_iov);
+
+            stealing_iov.cur_iov = 0;
+            stealing_iov.cur_addr = (uint64_t) iov[0].iov_base;
+            stealing_iov.cur_len = iov[0].iov_len;
+            stealing_iov.iovs = iov;
+            stealing_iov.niov = MPIDIG_REQUEST(rreq, req->areq.n_iov);
+        }
+
+        mpi_errno = MPIDI_PIP_compute_acc_op(MPIDIG_REQUEST(rreq, req->areq.data),
+                                             MPIDIG_REQUEST(rreq, req->areq.origin_count),
+                                             MPIDIG_REQUEST(rreq, req->areq.origin_datatype),
+                                             MPIDIG_REQUEST(rreq, req->areq.target_addr),
+                                             MPIDIG_REQUEST(rreq, req->areq.target_count),
+                                             MPIDIG_REQUEST(rreq, req->areq.target_datatype),
+                                             MPIDIG_REQUEST(rreq, req->areq.op),
+                                             MPIDIG_ACC_SRCBUF_DEFAULT, acc_sz, &stealing_iov);
+        MPL_free(iov);
+    }
+#else /* MPIDI_PIP_ACC_STEALING */
     if (MPIDIG_REQUEST(rreq, req->areq.dt_iov) == NULL) {
         mpi_errno = MPIDIG_compute_acc_op(MPIDIG_REQUEST(rreq, req->areq.data),
                                           MPIDIG_REQUEST(rreq, req->areq.origin_count),
@@ -622,6 +690,7 @@ static int handle_acc_cmpl(MPIR_Request * rreq)
         }
         MPL_free(iov);
     }
+#endif
 
 #ifndef MPIDI_CH4_DIRECT_NETMOD
     if (MPIDIG_WIN(win, shm_allocated)) {
