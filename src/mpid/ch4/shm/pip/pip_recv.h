@@ -388,41 +388,23 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_handle_lmt_rts_recv(uint64_t src_offset, 
                                       MPIDIG_REQUEST(rreq, buffer), MPIDIG_REQUEST(rreq, count),
                                       MPIDIG_REQUEST(rreq, datatype), recv_data_sz, task_kind);
     } else {
-#ifdef KNL
         /* both are non-contig */
-        if (inter_flag) {
-            MPIDI_SHM_ctrl_hdr_t cts_ctrl_hdr;
-            MPIDI_SHM_ctrl_pip_send_lmt_cts_t *slmt_cts_hdr = &cts_ctrl_hdr.pip_slmt_cts;
-            slmt_cts_hdr->remain_data = recv_data_sz;
-            slmt_cts_hdr->sreq_ptr = sreq_ptr;
-            slmt_cts_hdr->rreq_ptr = (uint64_t) rreq;
-            MPIDI_PIP_REQUEST(rreq, remain_data) = recv_data_sz;
-            MPIDI_PIP_REQUEST(rreq, offset) = 0;
-            mpi_errno =
-                MPIDI_SHM_do_ctrl_send(MPIDIG_REQUEST(rreq, rank),
-                                       MPIDIG_context_id_to_comm(MPIDIG_REQUEST(rreq, context_id)),
-                                       MPIDI_SHM_PIP_SEND_LMT_CTS, &cts_ctrl_hdr);
+        MPIDI_SHM_ctrl_hdr_t cts_ctrl_hdr;
+        MPIDI_SHM_ctrl_pip_send_lmt_cts_t *slmt_cts_hdr = &cts_ctrl_hdr.pip_slmt_cts;
+        slmt_cts_hdr->remain_data = recv_data_sz;
+        slmt_cts_hdr->sreq_ptr = sreq_ptr;
+        slmt_cts_hdr->rreq_ptr = (uint64_t) rreq;
+        MPIDI_PIP_REQUEST(rreq, remain_data) = recv_data_sz;
+        MPIDI_PIP_REQUEST(rreq, offset) = 0;
+        mpi_errno =
+        MPIDI_SHM_do_ctrl_send(MPIDIG_REQUEST(rreq, rank),
+        MPIDIG_context_id_to_comm(MPIDIG_REQUEST(rreq, context_id)),
+        MPIDI_SHM_PIP_SEND_LMT_CTS, &cts_ctrl_hdr);
 
-            MPIR_STATUS_SET_COUNT(rreq->status, recv_data_sz);
-            rreq->status.MPI_SOURCE = MPIDIG_REQUEST(rreq, rank);
-            rreq->status.MPI_TAG = MPIDIG_REQUEST(rreq, tag);
-            goto fn_exit;
-        } else {
-            MPIDI_PIP_pack_unpack_task_enqueue((void *) src_offset,
-                                               src_count, src_dt_ptr, MPIDIG_REQUEST(rreq, buffer),
-                                               MPIDIG_REQUEST(rreq, count), MPIDIG_REQUEST(rreq,
-                                                                                           datatype),
-                                               recv_data_sz, task_kind);
-        }
-
-#else /* broadwell */
-        MPIDI_PIP_pack_unpack_task_enqueue((void *) src_offset,
-                                           src_count, src_dt_ptr, MPIDIG_REQUEST(rreq, buffer),
-                                           MPIDIG_REQUEST(rreq, count), MPIDIG_REQUEST(rreq,
-                                                                                       datatype),
-                                           recv_data_sz, task_kind);
-#endif
-
+        MPIR_STATUS_SET_COUNT(rreq->status, recv_data_sz);
+        rreq->status.MPI_SOURCE = MPIDIG_REQUEST(rreq, rank);
+        rreq->status.MPI_TAG = MPIDIG_REQUEST(rreq, tag);
+        goto fn_exit;
     }
 
     PIP_TRACE("handle_lmt_recv: handle matched rreq %p [source %d, tag %d, context_id 0x%x],"
