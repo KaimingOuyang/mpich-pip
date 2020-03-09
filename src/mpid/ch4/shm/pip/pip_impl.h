@@ -336,22 +336,13 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_compute_acc_op(void *source_buf, int sour
 
     int mpi_errno = MPI_SUCCESS;
     MPI_User_function *uop = NULL;
-    MPI_Aint source_dtp_size = 0, source_dtp_extent = 0;
-    int is_empty_source = FALSE;
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDIG_COMPUTE_ACC_OP);
 
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDIG_COMPUTE_ACC_OP);
 
     /* first Judge if source buffer is empty */
     if (acc_op == MPI_NO_OP) {
-        is_empty_source = TRUE;
         goto fn_exit;
-    }
-
-    if (is_empty_source == FALSE) {
-        MPIR_Assert(MPIR_DATATYPE_IS_PREDEFINED(source_dtp));
-        MPIR_Datatype_get_size_macro(source_dtp, source_dtp_size);
-        MPIR_Datatype_get_extent_macro(source_dtp, source_dtp_extent);
     }
 
     if ((HANDLE_GET_KIND(acc_op) == HANDLE_KIND_BUILTIN)
@@ -734,13 +725,13 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_copy_size_decision(MPIDI_PIP_task_t * tas
 #endif
 
     /* 32KB task size for accumulate */
-    if (task->copy_kind == MPIDI_PIP_ACC) {
-        if (remaining_data <= PKT_32KB)
-            copy_sz = remaining_data;
-        else
-            copy_sz = PKT_32KB;
-        goto fn_exit;
-    }
+    // if (task->copy_kind == MPIDI_PIP_ACC) {
+    //     if (remaining_data <= PKT_32KB)
+    //         copy_sz = remaining_data;
+    //     else
+    //         copy_sz = PKT_32KB;
+    //     goto fn_exit;
+    // }
 #ifdef ENABLE_DYNAMIC_CHUNK
     if (stealing_type == MPIDI_PIP_REMOTE_STEALING) {
         if (remaining_data <= PKT_96KB)

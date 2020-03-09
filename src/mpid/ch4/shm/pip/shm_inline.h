@@ -10,5 +10,6 @@
 #include "pip_control.h"
 #include "pip_send.h"
 #include "pip_recv.h"
+#include "pip_rma.h"
 
 #endif /* XPMEM_INLINE_H_INCLUDED */

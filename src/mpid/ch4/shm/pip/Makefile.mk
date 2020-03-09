@@ -15,6 +15,7 @@ if BUILD_SHM_POSIX
 noinst_HEADERS += src/mpid/ch4/shm/pip/pip_pre.h   \
 			      src/mpid/ch4/shm/pip/pip_impl.h  \
 			      src/mpid/ch4/shm/pip/pip_send.h  \
+			      src/mpid/ch4/shm/pip/pip_rma.h  \
 			      src/mpid/ch4/shm/pip/pip_recv.h  
 
 mpi_core_sources += src/mpid/ch4/shm/pip/globals.c \

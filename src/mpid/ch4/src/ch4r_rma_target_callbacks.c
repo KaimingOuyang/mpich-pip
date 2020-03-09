@@ -594,7 +594,7 @@ static int handle_acc_cmpl(MPIR_Request * rreq)
     }
 #endif
 
-#if defined MPIDI_PIP_ACC_STEALING && defined MPIDI_PIP_STEALING_ENABLE
+#if defined MPIDI_CH4_SHM_ENABLE_PIP && defined MPIDI_PIP_STEALING_ENABLE && defined MPIDI_PIP_OFI_ACC_STEALING
     size_t acc_sz;
     MPIDI_Datatype_check_size(MPIDIG_REQUEST(rreq, req->areq.origin_datatype),
                               MPIDIG_REQUEST(rreq, req->areq.origin_count), acc_sz);
