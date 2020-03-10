@@ -156,8 +156,10 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_do_accumulate(const void *origin_addr,
         base = shared_table[local_target_rank].shm_base_addr;
     }
 
-    if (MPIDIG_WIN(win, shm_allocated))
-        MPIDI_POSIX_RMA_MUTEX_LOCK(posix_win->shm_mutex_ptr);
+    if (MPIDIG_WIN(win, shm_allocated)) {
+        mpi_errno = MPIDI_SHM_PIP_rma_lock(posix_win->shm_mutex_ptr);
+        MPIR_ERR_CHECK(mpi_errno);
+    }
 
     mpi_errno = MPIDI_PIP_compute_accumulate((void *) origin_addr, origin_count, origin_datatype,
                                              (char *) base + disp_unit * target_disp,

@@ -176,7 +176,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_accumulate(const void *origin_addr, i
 
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_SHM_MPI_ACCUMULATE);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_SHM_MPI_ACCUMULATE);
-#if defined MPIDI_CH4_SHM_ENABLE_PIP && defined MPIDI_PIP_STEALING_ENABLE && defined MPIDI_PIP_SHM_ACC_STEALING
+#if defined MPIDI_CH4_SHM_ENABLE_PIP && defined MPIDI_PIP_SHM_ACC_STEALING
     ret = MPIDI_PIP_mpi_accumulate(origin_addr, origin_count, origin_datatype,
                                    target_rank, target_disp, target_count,
                                    target_datatype, op, win);

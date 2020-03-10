@@ -587,14 +587,15 @@ static int handle_acc_cmpl(MPIR_Request * rreq)
     }
 #ifndef MPIDI_CH4_DIRECT_NETMOD
     if (MPIDIG_WIN(win, shm_allocated)) {
-        mpi_errno = MPIDI_SHM_rma_op_cs_enter_hook(win);
+        mpi_errno = MPIDI_SHM_PIP_rma_lock(win->dev.shm.posix.shm_mutex_ptr);
+        // mpi_errno = MPIDI_SHM_rma_op_cs_enter_hook(win);
         MPIR_ERR_CHECK(mpi_errno);
 
         shm_locked = 1;
     }
 #endif
 
-#if defined MPIDI_CH4_SHM_ENABLE_PIP && defined MPIDI_PIP_STEALING_ENABLE && defined MPIDI_PIP_OFI_ACC_STEALING
+#if defined MPIDI_CH4_SHM_ENABLE_PIP && defined MPIDI_PIP_OFI_ACC_STEALING
     size_t acc_sz;
     MPIDI_Datatype_check_size(MPIDIG_REQUEST(rreq, req->areq.origin_datatype),
                               MPIDIG_REQUEST(rreq, req->areq.origin_count), acc_sz);

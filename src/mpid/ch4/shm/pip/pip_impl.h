@@ -1117,4 +1117,10 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
     return;
 }
 
+MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_PIP_rma_lock(MPL_proc_mutex_t * mutex_ptr)
+{
+    while (pthread_mutex_trylock(mutex_ptr))
+        MPIDI_PIP_steal_task();
+}
+
 #endif
