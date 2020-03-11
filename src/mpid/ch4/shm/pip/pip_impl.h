@@ -16,7 +16,7 @@
 
 MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t * task_queue,
                                                         int stealing_type);
-MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * task_queue);
+MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * task_queue);
 MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_copy_size_decision(MPIDI_PIP_task_t * task,
                                                           int stealing_type);
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_memcpy_task(MPIDI_PIP_task_t * task, int copy_sz,
@@ -178,7 +178,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_pack_unpack_task(MPIDI_PIP_tas
 }
 
 
-MPL_STATIC_INLINE_PREFIX int MPIDI_obtain_task_info_safe(MPIDI_PIP_task_queue_t * task_queue,
+MPL_STATIC_INLINE_PREFIX void MPIDI_obtain_task_info_safe(MPIDI_PIP_task_queue_t * task_queue,
                                                          MPIDI_PIP_task_t ** task_ret,
                                                          int *copy_sz_ret, MPI_Aint * offset_ret,
                                                          int *copy_kind_ret,
@@ -193,11 +193,15 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_obtain_task_info_safe(MPIDI_PIP_task_queue_t 
     int start_iov, end_iov;
     uint64_t start_addr;
     MPI_Aint start_len;
-    MPID_Thread_mutex_lock(&task_queue->lock, &err);
-    if (err) {
-        printf("MPIDI_obtain_task_info_safe lock get error %d\n", err);
-        fflush(stdout);
+    if(pthread_mutex_trylock(&task_queue->lock)){
+       *copy_sz_ret = 0;
+       return;
     }
+    // MPID_Thread_mutex_lock(&task_queue->lock, &err);
+    // if (err) {
+    //     printf("MPIDI_obtain_task_info_safe lock get error %d\n", err);
+    //     fflush(stdout);
+    // }
     task = task_queue->head;
 #ifdef ENABLE_REVERSE_TASK_ENQUEUE
     if (task && task->cur_offset != 0) {
@@ -376,7 +380,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_compute_acc_op(void *source_buf, int sour
     return mpi_errno;
 }
 
-MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * task_queue)
+MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * task_queue)
 {
     void *src_buf, *dest_buf;
     int copy_sz, err, copy_kind;
@@ -386,13 +390,14 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * 
     uint64_t start_addr;
     MPI_Aint start_len;
     int niov;
-
+    int ret;
     MPIDI_obtain_task_info_safe(task_queue, &task, &copy_sz, &offset, &copy_kind,
                                 &iov, &start_addr, &start_len, &niov, MPIDI_PIP_LOCAL_STEALING);
 
     if (copy_sz) {
         int numa_local_rank = MPIDI_PIP_global.numa_local_rank;
         // MPIDI_PIP_global.local_copy_state[numa_local_rank] = 1;
+        ret = STEALING_SUCCESS;
         switch (copy_kind) {
             case MPIDI_PIP_MEMCPY:
                 MPIDI_PIP_exec_memcpy_task(task, copy_sz, offset);
@@ -411,9 +416,10 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * 
                 break;
         }
         // MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
-    }
+    }else
+        ret = STEALING_FAIL;
 
-    return;
+    return ret;
 }
 
 
