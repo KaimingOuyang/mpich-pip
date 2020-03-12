@@ -6,7 +6,7 @@
  */
 
 #include "mpiimpl.h"
-
+#include "../../../mpid/ch4/shm/pip/pip_pre.h"
 /*
 === BEGIN_MPI_T_CVAR_INFO_BLOCK ===
 
@@ -232,7 +232,8 @@ int MPI_Barrier(MPI_Comm comm)
 
     /* Convert MPI object handles to object pointers */
     MPIR_Comm_get_ptr(comm, comm_ptr);
-
+    printf("barrier rank %d - local_rank %d\n", comm_ptr->rank, MPIDI_PIP_global.local_rank);
+    fflush(stdout);
     /* Validate parameters and objects (post conversion) */
 #ifdef HAVE_ERROR_CHECKING
     {
