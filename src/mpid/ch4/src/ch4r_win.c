@@ -387,10 +387,18 @@ static int win_finalize(MPIR_Win ** win_ptr)
         /* if more than one process on a node, we use shared memory by default */
         if (win->comm_ptr->node_comm != NULL && MPIDIG_WIN(win, mmap_addr)) {
             if (MPIDIG_WIN(win, mmap_sz) > 0) {
+#ifdef MPIDI_CH4_SHM_ENABLE_PIP
+                if (win->comm_ptr->node_comm->rank == 0) {
+                    MPL_free(MPIDIG_WIN(win, mmap_addr));
+                }
+                mpi_errno = MPI_SUCCESS;
+#else
                 /* destroy shared window memory */
                 mpi_errno = MPIDIU_destroy_shm_segment(MPIDIG_WIN(win, mmap_sz),
                                                        &MPIDIG_WIN(win, shm_segment_handle),
                                                        &MPIDIG_WIN(win, mmap_addr));
+
+#endif
                 MPIR_ERR_CHECK(mpi_errno);
             }
 
@@ -515,6 +523,24 @@ static int win_shm_alloc_impl(MPI_Aint size, int disp_unit, MPIR_Comm * comm_ptr
      * each process. */
     mapsize = MPIDIU_get_mapsize(total_shm_size, &page_sz);
 
+#ifdef MPIDI_CH4_SHM_ENABLE_PIP
+    errflag = MPIR_ERR_NONE;
+    if (shm_comm_ptr == NULL) {
+        *base_ptr = MPL_malloc(mapsize, MPL_MEM_RMA);
+    } else if (shm_comm_ptr->rank == 0) {
+        // printf("rank 0 - alloc shared buffer %ld\n", mapsize);
+        // fflush(stdout);
+        MPIDIG_WIN(win, mmap_addr) = MPL_malloc(mapsize, MPL_MEM_RMA);
+        memset(MPIDIG_WIN(win, mmap_addr), 0, mapsize);
+        // printf("rank 0 - complete alloc %p\n", MPIDIG_WIN(win, mmap_addr));
+        // fflush(stdout);
+        MPIR_Bcast(&MPIDIG_WIN(win, mmap_addr), 1, MPI_LONG_LONG, 0, shm_comm_ptr, &errflag);
+    } else {
+        MPIR_Bcast(&MPIDIG_WIN(win, mmap_addr), 1, MPI_LONG_LONG, 0, shm_comm_ptr, &errflag);
+        // printf("rank %d - complete alloc %p\n", shm_comm_ptr->rank, MPIDIG_WIN(win, mmap_addr));
+        // fflush(stdout);
+    }
+#else
     /* first try global symmetric heap segment allocation */
     if (global_symheap_flag) {
         MPIDIG_WIN(win, mmap_sz) = mapsize;
@@ -533,6 +559,7 @@ static int win_shm_alloc_impl(MPI_Aint size, int disp_unit, MPIR_Comm * comm_ptr
     if (!global_symheap_flag || symheap_mapfail_flag) {
         if (shm_comm_ptr != NULL && mapsize) {
             MPIDIG_WIN(win, mmap_sz) = mapsize;
+
             mpi_errno = MPIDIU_allocate_shm_segment(shm_comm_ptr, mapsize,
                                                     &MPIDIG_WIN(win, shm_segment_handle),
                                                     &MPIDIG_WIN(win, mmap_addr), &shm_mapfail_flag);
@@ -556,7 +583,7 @@ static int win_shm_alloc_impl(MPI_Aint size, int disp_unit, MPIR_Comm * comm_ptr
             MPL_VG_MEM_INIT(*base_ptr, size);
         }
     }
-
+#endif
     /* compute the base addresses of each process within the shared memory segment */
     if (shm_comm_ptr != NULL && MPIDIG_WIN(win, mmap_addr)) {
         char *cur_base = (char *) MPIDIG_WIN(win, mmap_addr);
