@@ -560,9 +560,22 @@ static int win_shm_alloc_impl(MPI_Aint size, int disp_unit, MPIR_Comm * comm_ptr
         if (shm_comm_ptr != NULL && mapsize) {
             MPIDIG_WIN(win, mmap_sz) = mapsize;
 
+#ifdef MPIDI_CH4_SHM_ENABLE_PIP
+            MPIR_Errflag_t errflag = MPIR_ERR_NONE;
+            if (shm_comm_ptr->rank == 0) {
+                MPIDIG_WIN(win, mmap_addr) = MPL_calloc(mapsize, sizeof(char), MPL_MEM_RMA);
+                MPIR_Bcast(&MPIDIG_WIN(win, mmap_addr), 1, MPI_LONG_LONG, 0, shm_comm_ptr,
+                           &errflag);
+            } else {
+                MPIR_Bcast(&MPIDIG_WIN(win, mmap_addr), 1, MPI_LONG_LONG, 0, shm_comm_ptr,
+                           &errflag);
+            }
+            MPIDIG_WIN(win, shm_segment_handle) = 0;
+#else
             mpi_errno = MPIDIU_allocate_shm_segment(shm_comm_ptr, mapsize,
                                                     &MPIDIG_WIN(win, shm_segment_handle),
                                                     &MPIDIG_WIN(win, mmap_addr), &shm_mapfail_flag);
+#endif
             if (mpi_errno != MPI_SUCCESS)
                 goto fn_fail;
 
