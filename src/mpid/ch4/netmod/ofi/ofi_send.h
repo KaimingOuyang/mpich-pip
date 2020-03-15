@@ -213,7 +213,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_OFI_send_normal(const void *buf, MPI_Aint cou
          * registered buffer should be equivalent with respect to performance. */
         // MPL_gpu_malloc_host((void **) &MPIDI_OFI_REQUEST(sreq, noncontig.pack.pack_buffer),
         //                     data_sz);
-        MPIDI_OFI_malloc_pack_buffer(sreq, data_sz);
+        // MPIDI_OFI_malloc_pack_buffer(sreq, data_sz);
+        MPIDI_OFI_REQUEST(sreq, noncontig.pack.pack_buffer) = MPL_malloc(data_sz, MPL_MEM_BUFFER);
         MPIR_ERR_CHKANDJUMP1(MPIDI_OFI_REQUEST(sreq, noncontig.pack.pack_buffer) == NULL, mpi_errno,
                              MPI_ERR_OTHER, "**nomem", "**nomem %s", "Send Pack buffer alloc");
 

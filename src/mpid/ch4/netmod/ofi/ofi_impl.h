@@ -24,6 +24,21 @@
     MPIDI_OFI_AV(&MPIDIU_get_av((avtid), (lpid))).dest[0][0]
 
 #define MPIDI_OFI_WIN(win)     ((win)->dev.netmod.ofi)
+#define MPIDI_OFI_DEFAULT_PREALLOCATE_MEM   469762048   // 448MB
+
+MPL_STATIC_INLINE_PREFIX void MPIDI_OFI_preallocate_mem()
+{
+    size_t page_size = 4096;
+    size_t index;
+    char *buf = (char *) MPL_malloc(MPIDI_OFI_DEFAULT_PREALLOCATE_MEM, MPL_MEM_BUFFER);
+    /* touch to get physical memory */
+    for (index = 0; index < MPIDI_OFI_DEFAULT_PREALLOCATE_MEM; index += page_size) {
+        buf[index] = 0;
+    }
+
+    MPL_free(buf);
+    return;
+}
 
 MPL_STATIC_INLINE_PREFIX void MPIDI_OFI_malloc_pack_buffer(MPIR_Request * req, MPI_Aint data_sz)
 {
@@ -54,10 +69,10 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_OFI_malloc_pack_buffer(MPIR_Request * req, M
 
     if (i == pack_buf_cnt) {
         MPL_gpu_malloc_host((void **) &pack_buf[pack_buf_cnt], data_sz);
-        // pack_buf[pack_buf_cnt] = MPL_malloc(data_sz + sizeof(MPIDI_OFI_pack_t), MPL_MEM_BUFFER);
+        // pack_buf[pack_buf_cnt] = MPL_malloc(data_sz, MPL_MEM_BUFFER);
         pack_sz[pack_buf_cnt] = data_sz;
         buf_use[pack_buf_cnt] = 1;
-        MPIDI_OFI_REQUEST(req, noncontig.pack) = pack_buf[i];
+        MPIDI_OFI_REQUEST(req, noncontig.pack.pack_buffer) = pack_buf[i];
         MPIDI_OFI_REQUEST(req, buf_use) = &buf_use[pack_buf_cnt];
         pack_buf_cnt++;
     }
