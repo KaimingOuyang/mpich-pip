@@ -99,51 +99,6 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_OFI_free_pack_buffer(MPIR_Request * req)
     return;
 }
 
-MPL_STATIC_INLINE_PREFIX void MPIDI_OFI_malloc_pack_buffer(MPIR_Request * req, MPI_Aint data_sz)
-{
-    static void **pack_buf = NULL;
-    static size_t *pack_sz;
-    static int *buf_use;
-    static int pack_buf_cnt = 0;
-    static int max_pack_buf_cnt = 64;
-    if (pack_buf == NULL) {
-        pack_buf = (void **) MPL_calloc(max_pack_buf_cnt, sizeof(void *), MPL_MEM_BUFFER);
-        pack_sz = (size_t *) MPL_calloc(max_pack_buf_cnt, sizeof(size_t), MPL_MEM_BUFFER);
-        buf_use = (int *) MPL_calloc(max_pack_buf_cnt, sizeof(int), MPL_MEM_BUFFER);
-        // memset(buf_use, 0, sizeof(int) * max_pack_buf_cnt);
-        pack_buf[0] = MPL_malloc(data_sz + sizeof(MPIDI_OFI_pack_t), MPL_MEM_BUFFER);
-        pack_sz[0] = data_sz;
-        pack_buf_cnt++;
-    }
-
-    int i;
-    for (i = 0; i < pack_buf_cnt; ++i) {
-        if (!buf_use[i] && data_sz <= pack_sz[i]) {
-            MPIDI_OFI_REQUEST(req, noncontig.pack) = pack_buf[i];
-            MPIDI_OFI_REQUEST(req, buf_use) = &buf_use[i];
-            buf_use[i] = 1;
-            break;
-        }
-    }
-
-    if (i == pack_buf_cnt) {
-        pack_buf[pack_buf_cnt] = MPL_calloc(data_sz + sizeof(MPIDI_OFI_pack_t), sizeof(char), MPL_MEM_BUFFER);
-        pack_sz[pack_buf_cnt] = data_sz;
-        buf_use[pack_buf_cnt] = 1;
-        MPIDI_OFI_REQUEST(req, noncontig.pack) = pack_buf[i];
-        MPIDI_OFI_REQUEST(req, buf_use) = &buf_use[pack_buf_cnt];
-        pack_buf_cnt++;
-    }
-    MPIR_Assert(pack_buf_cnt < max_pack_buf_cnt);
-    return;
-}
-
-MPL_STATIC_INLINE_PREFIX void MPIDI_OFI_free_pack_buffer(MPIR_Request * req)
-{
-    *MPIDI_OFI_REQUEST(req, buf_use) = 0;
-    return;
-}
-
 /* Get op index.
  * TODO: OP_NULL is the oddball. Change configure to table this correctly */
 MPL_STATIC_INLINE_PREFIX int MPIDI_OFI_get_mpi_acc_op_index(int op)
