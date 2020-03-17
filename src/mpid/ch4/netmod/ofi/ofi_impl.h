@@ -60,10 +60,6 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_OFI_malloc_pack_buffer(MPIR_Request * req, M
         pack_buf = (void **) MPL_calloc(max_pack_buf_cnt, sizeof(void *), MPL_MEM_BUFFER);
         pack_sz = (size_t *) MPL_calloc(max_pack_buf_cnt, sizeof(size_t), MPL_MEM_BUFFER);
         buf_use = (int *) MPL_calloc(max_pack_buf_cnt, sizeof(int), MPL_MEM_BUFFER);
-        // memset(buf_use, 0, sizeof(int) * max_pack_buf_cnt);
-        pack_buf[0] = MPL_malloc(data_sz + sizeof(MPIDI_OFI_pack_t), MPL_MEM_BUFFER);
-        pack_sz[0] = data_sz;
-        pack_buf_cnt++;
     }
 
     int i;

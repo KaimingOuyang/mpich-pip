@@ -992,10 +992,10 @@ int MPIDI_OFI_mpi_init_hook(int rank, int size, int appnum, int *tag_bits, MPIR_
     /* index datatypes for RMA atomics */
     MPIDI_OFI_index_datatypes();
 
-#ifdef MPIDI_CH4_SHM_ENABLE_PIP
+// #ifdef MPIDI_CH4_SHM_ENABLE_PIP
     /* preallocate 400MB memory and keep it in glibc buffer pool in pip env */
-    MPIDI_OFI_preallocate_mem();
-#endif
+//     MPIDI_OFI_preallocate_mem();
+// #endif
   fn_exit:
 
     /* -------------------------------- */
