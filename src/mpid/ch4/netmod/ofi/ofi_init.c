@@ -773,10 +773,10 @@ int MPIDI_OFI_mpi_init_hook(int rank, int size, int appnum, int *tag_bits, MPIR_
     MPIDI_OFI_index_datatypes();
 
     MPIDI_OFI_global.deferred_am_isend_q = NULL;
-#ifdef MPIDI_CH4_SHM_ENABLE_PIP
-    /* preallocate 400MB memory and keep it in glibc buffer pool in pip env */
-    MPIDI_OFI_preallocate_mem();
-#endif
+// #ifdef MPIDI_CH4_SHM_ENABLE_PIP
+//     /* preallocate 400MB memory and keep it in glibc buffer pool in pip env */
+//     MPIDI_OFI_preallocate_mem();
+// #endif
 
   fn_exit:
     *tag_bits = MPIDI_OFI_TAG_BITS;
