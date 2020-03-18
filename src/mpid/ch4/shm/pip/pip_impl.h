@@ -179,13 +179,13 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_pack_unpack_task(MPIDI_PIP_tas
 
 
 MPL_STATIC_INLINE_PREFIX void MPIDI_obtain_task_info_safe(MPIDI_PIP_task_queue_t * task_queue,
-                                                         MPIDI_PIP_task_t ** task_ret,
-                                                         int *copy_sz_ret, MPI_Aint * offset_ret,
-                                                         int *copy_kind_ret,
-                                                         struct iovec **iov,
-                                                         uint64_t * start_addr_ret,
-                                                         MPI_Aint * start_len_ret, int *niov_ret,
-                                                         int stealing_type)
+                                                          MPIDI_PIP_task_t ** task_ret,
+                                                          int *copy_sz_ret, MPI_Aint * offset_ret,
+                                                          int *copy_kind_ret,
+                                                          struct iovec **iov,
+                                                          uint64_t * start_addr_ret,
+                                                          MPI_Aint * start_len_ret, int *niov_ret,
+                                                          int stealing_type)
 {
     MPIDI_PIP_task_t *task;
     int err, copy_sz, copy_kind;
@@ -193,9 +193,9 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_obtain_task_info_safe(MPIDI_PIP_task_queue_t
     int start_iov, end_iov;
     uint64_t start_addr;
     MPI_Aint start_len;
-    if(pthread_mutex_trylock(&task_queue->lock)){
-       *copy_sz_ret = 0;
-       return;
+    if (pthread_mutex_trylock(&task_queue->lock.mutex)) {
+        *copy_sz_ret = 0;
+        return;
     }
     // MPID_Thread_mutex_lock(&task_queue->lock, &err);
     // if (err) {
@@ -416,7 +416,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * t
                 break;
         }
         // MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
-    }else
+    } else
         ret = STEALING_FAIL;
 
     return ret;
