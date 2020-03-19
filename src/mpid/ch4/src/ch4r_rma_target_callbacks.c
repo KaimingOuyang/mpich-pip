@@ -594,34 +594,34 @@ static int handle_acc_cmpl(MPIR_Request * rreq)
     }
 #endif
 
-    if (MPIDIG_REQUEST(rreq, req->areq.dt_iov) == NULL) {
-        mpi_errno = MPIDIG_compute_acc_op(MPIDIG_REQUEST(rreq, req->areq.data),
-                                          MPIDIG_REQUEST(rreq, req->areq.origin_count),
-                                          MPIDIG_REQUEST(rreq, req->areq.origin_datatype),
-                                          MPIDIG_REQUEST(rreq, req->areq.target_addr),
-                                          MPIDIG_REQUEST(rreq, req->areq.target_count),
-                                          MPIDIG_REQUEST(rreq, req->areq.target_datatype),
-                                          MPIDIG_REQUEST(rreq, req->areq.op),
-                                          MPIDIG_ACC_SRCBUF_DEFAULT);
-        MPIR_ERR_CHECK(mpi_errno);
-    } else {
-        iov = (struct iovec *) MPIDIG_REQUEST(rreq, req->areq.dt_iov);
-        src_ptr = (char *) MPIDIG_REQUEST(rreq, req->areq.data);
-        for (i = 0; i < MPIDIG_REQUEST(rreq, req->areq.n_iov); i++) {
-            count = iov[i].iov_len / basic_sz;
-            MPIR_Assert(count > 0);
+    // if (MPIDIG_REQUEST(rreq, req->areq.dt_iov) == NULL) {
+    //     mpi_errno = MPIDIG_compute_acc_op(MPIDIG_REQUEST(rreq, req->areq.data),
+    //                                       MPIDIG_REQUEST(rreq, req->areq.origin_count),
+    //                                       MPIDIG_REQUEST(rreq, req->areq.origin_datatype),
+    //                                       MPIDIG_REQUEST(rreq, req->areq.target_addr),
+    //                                       MPIDIG_REQUEST(rreq, req->areq.target_count),
+    //                                       MPIDIG_REQUEST(rreq, req->areq.target_datatype),
+    //                                       MPIDIG_REQUEST(rreq, req->areq.op),
+    //                                       MPIDIG_ACC_SRCBUF_DEFAULT);
+    //     MPIR_ERR_CHECK(mpi_errno);
+    // } else {
+    //     iov = (struct iovec *) MPIDIG_REQUEST(rreq, req->areq.dt_iov);
+    //     src_ptr = (char *) MPIDIG_REQUEST(rreq, req->areq.data);
+    //     for (i = 0; i < MPIDIG_REQUEST(rreq, req->areq.n_iov); i++) {
+    //         count = iov[i].iov_len / basic_sz;
+    //         MPIR_Assert(count > 0);
 
-            mpi_errno = MPIDIG_compute_acc_op(src_ptr, count,
-                                              MPIDIG_REQUEST(rreq, req->areq.origin_datatype),
-                                              iov[i].iov_base, count,
-                                              MPIDIG_REQUEST(rreq, req->areq.target_datatype),
-                                              MPIDIG_REQUEST(rreq, req->areq.op),
-                                              MPIDIG_ACC_SRCBUF_DEFAULT);
-            MPIR_ERR_CHECK(mpi_errno);
-            src_ptr += count * basic_sz;
-        }
-        MPL_free(iov);
-    }
+    //         mpi_errno = MPIDIG_compute_acc_op(src_ptr, count,
+    //                                           MPIDIG_REQUEST(rreq, req->areq.origin_datatype),
+    //                                           iov[i].iov_base, count,
+    //                                           MPIDIG_REQUEST(rreq, req->areq.target_datatype),
+    //                                           MPIDIG_REQUEST(rreq, req->areq.op),
+    //                                           MPIDIG_ACC_SRCBUF_DEFAULT);
+    //         MPIR_ERR_CHECK(mpi_errno);
+    //         src_ptr += count * basic_sz;
+    //     }
+    //     MPL_free(iov);
+    // }
 
 #ifndef MPIDI_CH4_DIRECT_NETMOD
     if (MPIDIG_WIN(win, shm_allocated)) {
