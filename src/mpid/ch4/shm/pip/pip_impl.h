@@ -16,7 +16,7 @@
 
 MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t * task_queue,
                                                         int stealing_type, int victim);
-MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * task_queue);
+MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * task_queue);
 MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_copy_size_decision(MPIDI_PIP_task_t * task,
                                                           int stealing_type);
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_memcpy_task(MPIDI_PIP_task_t * task, int copy_sz,

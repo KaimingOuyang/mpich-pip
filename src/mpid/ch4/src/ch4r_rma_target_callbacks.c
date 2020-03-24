@@ -651,7 +651,8 @@ static int handle_acc_cmpl(MPIR_Request * rreq)
             stealing_iov.iovs = iov;
             stealing_iov.niov = MPIDIG_REQUEST(rreq, req->areq.n_iov);
         }
-
+        printf("grank %d - enqueue DIG OFF-node acc, size %ld\n", MPIDI_PIP_global.grank, acc_sz);
+        fflush(stdout);
         mpi_errno = MPIDI_PIP_compute_acc_op(MPIDIG_REQUEST(rreq, req->areq.data),
                                              MPIDIG_REQUEST(rreq, req->areq.origin_count),
                                              MPIDIG_REQUEST(rreq, req->areq.origin_datatype),
