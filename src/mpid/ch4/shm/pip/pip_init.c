@@ -48,8 +48,8 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     MPIDI_PIP_global.local_rank = local_rank;
     MPIDI_PIP_global.rank = rank;
     MPIDI_PIP_global.grank = MPIR_Process.node_local_map[local_rank];
-    printf("init - local_rank %d\n", MPIDI_PIP_global.local_rank);
-    fflush(stdout);
+    // printf("init - local_rank %d\n", MPIDI_PIP_global.local_rank);
+    // fflush(stdout);
     /* Share MPIDI_PIP_global for future information inquiry purpose */
     uint64_t pip_global_addr = (uint64_t) & MPIDI_PIP_global;
     MPIDU_Init_shm_put(&pip_global_addr, sizeof(MPIDI_PIP_global_t *));
