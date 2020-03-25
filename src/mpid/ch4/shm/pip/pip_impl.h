@@ -193,15 +193,12 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_obtain_task_info_safe(MPIDI_PIP_task_queue_t
     int start_iov, end_iov;
     uint64_t start_addr;
     MPI_Aint start_len;
-    if (pthread_mutex_trylock(&task_queue->lock.mutex)) {
-        *copy_sz_ret = 0;
-        return;
+
+    MPID_Thread_mutex_lock(&task_queue->lock, &err);
+    if (err) {
+        printf("MPIDI_obtain_task_info_safe lock get error %d\n", err);
+        fflush(stdout);
     }
-    // MPID_Thread_mutex_lock(&task_queue->lock, &err);
-    // if (err) {
-    //     printf("MPIDI_obtain_task_info_safe lock get error %d\n", err);
-    //     fflush(stdout);
-    // }
     task = task_queue->head;
 #ifdef ENABLE_REVERSE_TASK_ENQUEUE
     if (task && task->cur_offset != 0) {
