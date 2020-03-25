@@ -6,7 +6,7 @@
 
 #include "mpidimpl.h"
 #include "pip_recv.h"
-
+#ifdef MPIDI_CH4_SHM_ENABLE_PIP
 int MPIDI_PIP_ctrl_send_lmt_send_fin_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr)
 {
     int mpi_errno = MPI_SUCCESS;
@@ -153,7 +153,7 @@ int MPIDI_PIP_ctrl_send_lmt_cts_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr)
     while (MPIDI_PIP_global.cells[buffer_index].full == 0 && send_data < remain_data) {
         send_data += MPIDI_PIP_CELL_SIZE;
         buffer_index = (buffer_index + 1) % MPIDI_PIP_CELL_NUM;
-        if(buffer_index == start_index)
+        if (buffer_index == start_index)
             break;
     }
     MPIDI_PIP_global.buffer_index = buffer_index;
@@ -247,3 +247,4 @@ int MPIDI_PIP_ctrl_send_lmt_pkt_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr)
     }
     return mpi_errno;
 }
+#endif

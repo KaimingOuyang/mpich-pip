@@ -11,7 +11,7 @@
 #include "shm_control.h"
 #include "pip_pre.h"
 #include "pip_impl.h"
-
+#ifdef MPIDI_CH4_SHM_ENABLE_PIP
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_memcpy_task(MPIDI_PIP_task_t * task, void *src_buf,
                                                          size_t copy_sz, void *dest_buf,
                                                          int task_kind)
@@ -310,6 +310,6 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_handle_lmt_rts_recv(uint64_t src_offset, 
   fn_fail:
     goto fn_exit;
 }
-
+#endif
 
 #endif /* PIP_RECV_H_INCLUDED */
