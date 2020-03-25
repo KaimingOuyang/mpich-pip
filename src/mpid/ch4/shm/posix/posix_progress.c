@@ -50,9 +50,6 @@ static int progress_recv(int blocking)
     if (MPIDI_POSIX_OK != result) {
         empty_recv_queue = 1;
         goto fn_exit;
-    } else {
-        MPIDI_PIP_global.local_idle_state[MPIDI_PIP_global.numa_local_rank] = 0;
-        empty_recv_queue = 0;
     }
 
     /* Process the eager message */
