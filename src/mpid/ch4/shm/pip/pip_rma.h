@@ -104,8 +104,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_compute_accumulate(void *origin_addr,
         dest_count = source_count;
         dest_dtp = target_dtp_ptr->basic_type;
     }
-    printf("grank %d - enqueue ON-node acc, size %ld\n", MPIDI_PIP_global.grank, total_len);
-    fflush(stdout);
+    // printf("grank %d - enqueue ON-node acc, size %ld\n", MPIDI_PIP_global.grank, total_len);
+    // fflush(stdout);
     mpi_errno = MPIDI_PIP_compute_acc_op(packed_buf,
                                          source_count,
                                          source_dtp,

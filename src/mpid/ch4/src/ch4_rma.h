@@ -479,7 +479,14 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_accumulate_safe(const void *origin_addr,
 
     MPID_THREAD_CS_ENTER(VCI, MPIDI_global.vci_lock);
     MPIDI_workq_vci_progress_unsafe();
-
+#ifdef PROFILE_ACC
+    if(win->comm_ptr->rank == 0){
+      MPI_Aint origin_data_sz;
+      MPIDI_Datatype_check_size(origin_datatype, origin_count, origin_data_sz);
+      printf("target %d, data size %ld\n", target_rank, origin_data_sz);
+      fflush(stdout);
+    }
+#endif
     mpi_errno = MPIDI_accumulate_unsafe(origin_addr, origin_count, origin_datatype, target_rank,
                                         target_disp, target_count, target_datatype, op, win);
 

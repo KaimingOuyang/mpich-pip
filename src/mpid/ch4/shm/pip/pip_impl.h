@@ -896,10 +896,10 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t *
             }else{
                 stype = "LOCAL";
             }
-            printf("grank %d (%d) - steal gvictim %d (%d) ACC task, copy_sz %d, offset %ld, niov %d, stealing_type %s\n",
-                 MPIDI_PIP_global.grank, MPIDI_PIP_global.local_rank, victim + MPIDI_PIP_global.grank / 36 * 36, victim, copy_sz,
-                 offset, niov, stype);
-            fflush(stdout);
+            // printf("grank %d (%d) - steal gvictim %d (%d) ACC task, copy_sz %d, offset %ld, niov %d, stealing_type %s\n",
+            //      MPIDI_PIP_global.grank, MPIDI_PIP_global.local_rank, victim + MPIDI_PIP_global.grank / 36 * 36, victim, copy_sz,
+            //      offset, niov, stype);
+            // fflush(stdout);
         }
         MPIDI_PIP_global.total_stealing_cnt++;
         ret = STEALING_SUCCESS;
