@@ -41,7 +41,16 @@ int MPIDIG_get_acc_ack_origin_cb(MPIR_Request * req)
 
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDIG_GET_ACC_ACK_ORIGIN_CB);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDIG_GET_ACC_ACK_ORIGIN_CB);
+#if defined MPIDI_CH4_SHM_ENABLE_PIP && defined MPIDI_PIP_OFI_GET_ACC_STEALING
+    if (MPIDIG_REQUEST(req, req->buf_use) == NULL)
+        MPL_free(MPIDIG_REQUEST(req, req->areq.data));
+    else {
+        *MPIDIG_REQUEST(req, req->buf_use) = 0;
+        MPIDIG_REQUEST(req, req->areq.data) = NULL;
+    }
+#else
     MPL_free(MPIDIG_REQUEST(req, req->areq.data));
+#endif
 
     MPID_Request_complete(req);
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDIG_GET_ACC_ACK_ORIGIN_CB);

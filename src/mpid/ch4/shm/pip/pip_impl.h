@@ -220,7 +220,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_obtain_task_info_safe(MPIDI_PIP_task_queue_t
     }
 #endif
 
-    if (copy_sz && copy_kind == MPIDI_PIP_ACC) {
+    if (copy_sz && (copy_kind == MPIDI_PIP_ACC || copy_kind == MPIDI_PIP_GET_ACC_COPY)) {
         int rmt = copy_sz;
         start_addr = task->acc_iov->cur_addr;
         start_len = task->acc_iov->cur_len;
@@ -253,7 +253,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_obtain_task_info_safe(MPIDI_PIP_task_queue_t
         fflush(stdout);
     }
 
-    if (copy_sz && copy_kind == MPIDI_PIP_ACC) {
+    if (copy_sz && (copy_kind == MPIDI_PIP_ACC || copy_kind == MPIDI_PIP_GET_ACC_COPY)) {
         *iov = &task->acc_iov->iovs[start_iov];
         *start_addr_ret = start_addr;
         *start_len_ret = start_len;
@@ -266,6 +266,36 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_obtain_task_info_safe(MPIDI_PIP_task_queue_t
     *copy_kind_ret = copy_kind;
 }
 
+MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_get_acc_copy_task(MPIDI_PIP_task_t * task, int copy_sz,
+                                                               MPI_Aint offset, struct iovec *iov,
+                                                               uint64_t start_addr,
+                                                               MPI_Aint start_len, int niov)
+{
+    int i;
+    char *dest_buf = (char *) task->dest_buf + offset;
+    void *src_buf;
+    MPI_Aint cur_work;
+    int rmt = copy_sz;
+    printf("rank %d - dest_buf %p, copy_sz %d, offset %ld, start_addr %p, start_len %ld, niov %d\n",
+           MPIDI_PIP_global.local_rank, dest_buf, copy_sz, offset, (void*) start_addr, start_len, niov);
+    fflush(stdout);
+    for (i = 0; i < niov; ++i) {
+        if (i == 0) {
+            cur_work = start_len < rmt ? start_len : rmt;
+            src_buf = (void *) start_addr;
+        } else {
+            cur_work = iov[i].iov_len < rmt ? iov[i].iov_len : rmt;
+            src_buf = iov[i].iov_base;
+        }
+
+        rmt -= cur_work;
+
+        memcpy((void *) dest_buf, src_buf, cur_work);
+        dest_buf += cur_work;
+    }
+    OPA_write_barrier();
+    OPA_add_int(&task->done_data_sz, copy_sz);
+}
 
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_acc_task(MPIDI_PIP_task_t * task, int copy_sz,
                                                       MPI_Aint offset, struct iovec *iov,
@@ -299,6 +329,41 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_exec_acc_task(MPIDI_PIP_task_t * task, i
     return;
 }
 
+MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_get_acc_copy_task(MPIDI_PIP_task_t * task,
+                                                               void *dest_buf, MPI_Aint data_sz,
+                                                               MPIDI_PIP_acc_iov_t * stealing_iov)
+{
+    task->copy_kind = MPIDI_PIP_GET_ACC_COPY;
+
+    task->src_buf = NULL;
+    task->dest_buf = dest_buf;
+    task->cur_offset = 0;
+    task->orig_data_sz = data_sz;
+    OPA_store_int(&task->done_data_sz, 0);
+
+    task->acc_iov = stealing_iov;
+
+    return;
+}
+
+
+MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_get_acc_copy(void *dest_buf, MPI_Aint data_sz,
+                                                    MPIDI_PIP_acc_iov_t * stealing_iov)
+{
+    int mpi_errno = MPI_SUCCESS;
+    MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
+    MPIDI_PIP_init_get_acc_copy_task(task, dest_buf, data_sz, stealing_iov);
+    MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task, -1);
+
+    do {
+        if (task->cur_offset != task->orig_data_sz)
+            MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue);
+    } while (OPA_load_int(&task->done_data_sz) != task->orig_data_sz);
+
+    MPIDI_PIP_cancel_task(MPIDI_PIP_global.task_queue);
+    MPIR_Handle_obj_free(&MPIDI_Task_mem, task);
+    return mpi_errno;
+}
 
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_acc_task(MPIDI_PIP_task_t * task,
                                                       void *src_buf, MPI_Aint src_count,
@@ -410,6 +475,10 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_exec_self_task(MPIDI_PIP_task_queue_t * t
                 break;
             case MPIDI_PIP_ACC:
                 MPIDI_PIP_exec_acc_task(task, copy_sz, offset, iov, start_addr, start_len, niov);
+                break;
+            case MPIDI_PIP_GET_ACC_COPY:
+                MPIDI_PIP_exec_get_acc_copy_task(task, copy_sz, offset, iov, start_addr, start_len,
+                                                 niov);
                 break;
         }
         // MPIDI_PIP_global.local_copy_state[numa_local_rank] = 0;
@@ -887,6 +956,11 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t *
             case MPIDI_PIP_ACC:
                 MPIDI_PIP_exec_acc_task(task, copy_sz, offset, iov, start_addr, start_len, niov);
                 break;
+            case MPIDI_PIP_GET_ACC_COPY:
+                MPIDI_PIP_exec_get_acc_copy_task(task, copy_sz, offset, iov, start_addr, start_len,
+                                                 niov);
+                break;
+
         }
     } else
         ret = STEALING_FAIL;

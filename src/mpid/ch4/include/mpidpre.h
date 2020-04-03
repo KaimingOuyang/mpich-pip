@@ -169,7 +169,7 @@ typedef struct MPIDIG_req_ext_t {
     MPIR_Request *request;
     uint64_t status;
     struct MPIDIG_req_ext_t *next, *prev;
-
+    int *buf_use;
 } MPIDIG_req_ext_t;
 
 typedef struct MPIDIG_req_t {

@@ -39,6 +39,50 @@ static int get_ack_target_cmpl_cb(MPIR_Request * get_req);
 static int get_acc_ack_target_cmpl_cb(MPIR_Request * areq);
 static int cswap_ack_target_cmpl_cb(MPIR_Request * rreq);
 
+void MPIDIG_malloc_tmp_buffer(MPI_Aint data_sz, void **buf_ptr, int **buf_use_ptr)
+{
+    static void **pack_buf = NULL;
+    static size_t *pack_sz;
+    static int *buf_use;
+    static int pack_buf_cnt = 0;
+    static int max_pack_buf_cnt = 64;
+    if (pack_buf == NULL) {
+        pack_buf = (void **) MPL_calloc(max_pack_buf_cnt, sizeof(void *), MPL_MEM_BUFFER);
+        pack_sz = (size_t *) MPL_calloc(max_pack_buf_cnt, sizeof(size_t), MPL_MEM_BUFFER);
+        buf_use = (int *) MPL_calloc(max_pack_buf_cnt, sizeof(int), MPL_MEM_BUFFER);
+    }
+
+    int i;
+    for (i = 0; i < pack_buf_cnt; ++i) {
+        if (!buf_use[i] && data_sz <= pack_sz[i]) {
+            *buf_ptr = pack_buf[i];
+            *buf_use_ptr = &buf_use[i];
+            buf_use[i] = 1;
+            break;
+        }
+    }
+
+    if (i == pack_buf_cnt) {
+        size_t j, page_sz;
+        size_t buf_sz = data_sz;
+
+        pack_buf[pack_buf_cnt] = MPL_malloc(buf_sz, MPL_MEM_BUFFER);
+        char *tmp_buf = (char *) pack_buf[pack_buf_cnt];
+
+        page_sz = 4096;
+        for (j = 0; j < buf_sz; j += page_sz)
+            tmp_buf[j] = 0;
+
+        pack_sz[pack_buf_cnt] = data_sz;
+        buf_use[pack_buf_cnt] = 1;
+        *buf_ptr = pack_buf[i];
+        *buf_use_ptr = &buf_use[pack_buf_cnt];
+        pack_buf_cnt++;
+    }
+    MPIR_Assert(pack_buf_cnt < max_pack_buf_cnt);
+    return;
+}
+
 int MPIDIG_RMA_Init_targetcb_pvars(void)
 {
     int mpi_errno = MPI_SUCCESS;
@@ -599,8 +643,6 @@ static int handle_acc_cmpl(MPIR_Request * rreq)
     size_t acc_sz;
     MPIDI_Datatype_check_size(MPIDIG_REQUEST(rreq, req->areq.origin_datatype),
                               MPIDIG_REQUEST(rreq, req->areq.origin_count), acc_sz);
-    // printf("rank %d - acc contiguous data_sz %ld\n", rreq->comm->rank, acc_sz);
-    // fflush(stdout);
     if (acc_sz <= MPIDI_PIP_STEALING_THRESHOLD) {
         if (MPIDIG_REQUEST(rreq, req->areq.dt_iov) == NULL) {
             mpi_errno = MPIDIG_compute_acc_op(MPIDIG_REQUEST(rreq, req->areq.data),
@@ -727,6 +769,7 @@ static int handle_get_acc_cmpl(MPIR_Request * rreq)
     struct iovec *iov;
     char *src_ptr, *original = NULL;
     size_t data_sz;
+    int *buf_use;
     int shm_locked ATTRIBUTE((unused)) = 0;
     MPIR_Win *win ATTRIBUTE((unused)) = MPIDIG_REQUEST(rreq, req->areq.win_ptr);
 
@@ -738,9 +781,6 @@ static int handle_get_acc_cmpl(MPIR_Request * rreq)
     data_sz = MPIDIG_REQUEST(rreq, req->areq.data_sz);
 
     /* MPIDI_CS_ENTER(); */
-
-    original = (char *) MPL_malloc(data_sz, MPL_MEM_RMA);
-    MPIR_Assert(original);
 
     if (MPIDIG_REQUEST(rreq, req->areq.op) == MPI_NO_OP) {
         MPIDIG_REQUEST(rreq, req->areq.origin_count) = MPIDIG_REQUEST(rreq, req->areq.target_count);
@@ -754,8 +794,99 @@ static int handle_get_acc_cmpl(MPIR_Request * rreq)
     }
 #endif
 
-    if (MPIDIG_REQUEST(rreq, req->areq.dt_iov) == NULL) {
+#if defined MPIDI_CH4_SHM_ENABLE_PIP && defined MPIDI_PIP_OFI_GET_ACC_STEALING
+    if (data_sz <= MPIDI_PIP_STEALING_THRESHOLD) {
+        original = (char *) MPL_malloc(data_sz, MPL_MEM_RMA);
+        MPIR_Assert(original);
+        if (MPIDIG_REQUEST(rreq, req->areq.dt_iov) == NULL) {
+            MPIR_Memcpy(original, MPIDIG_REQUEST(rreq, req->areq.target_addr),
+                        basic_sz * MPIDIG_REQUEST(rreq, req->areq.target_count));
 
+            mpi_errno = MPIDIG_compute_acc_op(MPIDIG_REQUEST(rreq, req->areq.data),
+                                              MPIDIG_REQUEST(rreq, req->areq.origin_count),
+                                              MPIDIG_REQUEST(rreq, req->areq.origin_datatype),
+                                              MPIDIG_REQUEST(rreq, req->areq.target_addr),
+                                              MPIDIG_REQUEST(rreq, req->areq.target_count),
+                                              MPIDIG_REQUEST(rreq, req->areq.target_datatype),
+                                              MPIDIG_REQUEST(rreq, req->areq.op),
+                                              MPIDIG_ACC_SRCBUF_DEFAULT);
+            MPIR_ERR_CHECK(mpi_errno);
+        } else {
+            iov = (struct iovec *) MPIDIG_REQUEST(rreq, req->areq.dt_iov);
+            src_ptr = (char *) MPIDIG_REQUEST(rreq, req->areq.data);
+            for (i = 0; i < MPIDIG_REQUEST(rreq, req->areq.n_iov); i++) {
+                count = iov[i].iov_len / basic_sz;
+                MPIR_Assert(count > 0);
+
+                MPIR_Memcpy(original + offset, iov[i].iov_base, count * basic_sz);
+                offset += count * basic_sz;
+
+                mpi_errno = MPIDIG_compute_acc_op(src_ptr, count,
+                                                  MPIDIG_REQUEST(rreq, req->areq.origin_datatype),
+                                                  iov[i].iov_base, count,
+                                                  MPIDIG_REQUEST(rreq, req->areq.target_datatype),
+                                                  MPIDIG_REQUEST(rreq, req->areq.op),
+                                                  MPIDIG_ACC_SRCBUF_DEFAULT);
+                MPIR_ERR_CHECK(mpi_errno);
+                src_ptr += count * basic_sz;
+            }
+            MPL_free(iov);
+        }
+    } else {
+        MPIDIG_malloc_tmp_buffer(data_sz, (void **) &original, &buf_use);
+        MPIR_Assert(original);
+        MPIDIG_REQUEST(rreq, req->buf_use) = buf_use;
+
+        if (MPIDIG_REQUEST(rreq, req->areq.dt_iov) == NULL) {
+            MPIDI_PIP_memcpy_task_enqueue((char *) MPIDIG_REQUEST(rreq, req->areq.target_addr),
+                                          (char *) original, data_sz, -1);
+            // MPIR_Memcpy(original, MPIDIG_REQUEST(rreq, req->areq.target_addr),
+            //             basic_sz * MPIDIG_REQUEST(rreq, req->areq.target_count));
+
+            mpi_errno = MPIDIG_compute_acc_op(MPIDIG_REQUEST(rreq, req->areq.data),
+                                              MPIDIG_REQUEST(rreq, req->areq.origin_count),
+                                              MPIDIG_REQUEST(rreq, req->areq.origin_datatype),
+                                              MPIDIG_REQUEST(rreq, req->areq.target_addr),
+                                              MPIDIG_REQUEST(rreq, req->areq.target_count),
+                                              MPIDIG_REQUEST(rreq, req->areq.target_datatype),
+                                              MPIDIG_REQUEST(rreq, req->areq.op),
+                                              MPIDIG_ACC_SRCBUF_DEFAULT);
+            MPIR_ERR_CHECK(mpi_errno);
+        } else {
+            MPIDI_PIP_acc_iov_t stealing_iov;
+            iov = (struct iovec *) MPIDIG_REQUEST(rreq, req->areq.dt_iov);
+
+            stealing_iov.cur_iov = 0;
+            stealing_iov.cur_addr = (uint64_t) iov[0].iov_base;
+            stealing_iov.cur_len = iov[0].iov_len;
+            stealing_iov.iovs = iov;
+            stealing_iov.niov = MPIDIG_REQUEST(rreq, req->areq.n_iov);
+
+            MPIDI_PIP_get_acc_copy(original, data_sz, &stealing_iov);
+
+            src_ptr = (char *) MPIDIG_REQUEST(rreq, req->areq.data);
+            for (i = 0; i < MPIDIG_REQUEST(rreq, req->areq.n_iov); i++) {
+                count = iov[i].iov_len / basic_sz;
+                MPIR_Assert(count > 0);
+
+                // MPIR_Memcpy(original + offset, iov[i].iov_base, count * basic_sz);
+                // offset += count * basic_sz;
+
+                mpi_errno = MPIDIG_compute_acc_op(src_ptr, count,
+                                                  MPIDIG_REQUEST(rreq, req->areq.origin_datatype),
+                                                  iov[i].iov_base, count,
+                                                  MPIDIG_REQUEST(rreq, req->areq.target_datatype),
+                                                  MPIDIG_REQUEST(rreq, req->areq.op),
+                                                  MPIDIG_ACC_SRCBUF_DEFAULT);
+                MPIR_ERR_CHECK(mpi_errno);
+                src_ptr += count * basic_sz;
+            }
+            MPL_free(iov);
+        }
+    }
+#else
+    original = (char *) MPL_malloc(data_sz, MPL_MEM_RMA);
+    if (MPIDIG_REQUEST(rreq, req->areq.dt_iov) == NULL) {
         MPIR_Memcpy(original, MPIDIG_REQUEST(rreq, req->areq.target_addr),
                     basic_sz * MPIDIG_REQUEST(rreq, req->areq.target_count));
 
@@ -789,6 +920,7 @@ static int handle_get_acc_cmpl(MPIR_Request * rreq)
         }
         MPL_free(iov);
     }
+#endif /* #if defined MPIDI_CH4_SHM_ENABLE_PIP && defined MPIDI_PIP_SHM_ACC_STEALING */
 
 #ifndef MPIDI_CH4_DIRECT_NETMOD
     if (MPIDIG_WIN(win, shm_allocated)) {
@@ -1955,6 +2087,7 @@ int MPIDIG_acc_target_msg_cb(int handler_id, void *am_hdr, void **data, size_t *
 
     *target_cmpl_cb = acc_target_cmpl_cb;
     MPIDIG_REQUEST(rreq, req->seq_no) = OPA_fetch_and_add_int(&MPIDI_global.nxt_seq_no, 1);
+    MPIDIG_REQUEST(rreq, req->buf_use) = NULL;
 #ifndef MPIDI_CH4_DIRECT_NETMOD
     MPIDI_REQUEST(rreq, is_local) = is_local;
 #endif
