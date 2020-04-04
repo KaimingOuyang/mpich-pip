@@ -145,9 +145,21 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_get(void *origin_addr, int origin_cou
 
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_SHM_MPI_GET);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_SHM_MPI_GET);
+#if defined MPIDI_CH4_SHM_ENABLE_PIP && defined MPIDI_PIP_SHM_GET_STEALING
+    MPI_Aint data_sz;
+    MPIDI_Datatype_check_size(target_datatype, target_count, data_sz);
+    if (data_sz <= MPIDI_PIP_STEALING_THRESHOLD) {
+        ret = MPIDI_POSIX_mpi_get(origin_addr, origin_count, origin_datatype, target_rank,
+                                  target_disp, target_count, target_datatype, win);
+    } else {
+        ret = MPIDI_PIP_mpi_get(origin_addr, origin_count, origin_datatype, target_rank,
+                                target_disp, target_count, target_datatype, win);
+    }
 
+#else
     ret = MPIDI_POSIX_mpi_get(origin_addr, origin_count, origin_datatype, target_rank,
                               target_disp, target_count, target_datatype, win);
+#endif
 
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_SHM_MPI_GET);
     return ret;

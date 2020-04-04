@@ -10,6 +10,103 @@
 #include "pip_pre.h"
 #include "pip_impl.h"
 
+MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_do_get(void *origin_addr,
+                                              int origin_count,
+                                              MPI_Datatype origin_datatype,
+                                              int target_rank,
+                                              MPI_Aint target_disp,
+                                              int target_count, MPI_Datatype target_datatype,
+                                              MPIR_Win * win)
+{
+    int mpi_errno = MPI_SUCCESS;
+    size_t origin_data_sz = 0, target_data_sz = 0;
+    int disp_unit = 0;
+    void *base = NULL;
+    int dest_type_iscontig, src_type_ifcontig;
+    MPIDIG_RMA_OP_CHECK_SYNC(target_rank, win);
+
+    MPIDI_Datatype_check_origin_target_size(origin_datatype, target_datatype,
+                                            origin_count, target_count,
+                                            origin_data_sz, target_data_sz);
+    if (origin_data_sz == 0 || target_data_sz == 0)
+        goto fn_exit;
+
+    if (target_rank == win->comm_ptr->rank) {
+        base = win->base;
+        disp_unit = win->disp_unit;
+    } else {
+        MPIDIG_win_shared_info_t *shared_table = MPIDIG_WIN(win, shared_table);
+        int local_target_rank = win->comm_ptr->intranode_table[target_rank];
+        disp_unit = shared_table[local_target_rank].disp_unit;
+        base = shared_table[local_target_rank].shm_base_addr;
+    }
+
+    MPI_Aint src_data_sz, recv_data_sz;
+    uint64_t partner_post = -1;
+    char *src_buf = (char *) base + disp_unit * target_disp;
+    char *dest_buf = (char *) origin_addr;
+    MPIDI_Datatype_check_contig_size(target_datatype, target_count, src_type_ifcontig, src_data_sz);
+    MPIDI_Datatype_check_contig_size(origin_datatype, origin_count, dest_type_iscontig,
+                                     recv_data_sz);
+    recv_data_sz = src_data_sz >= recv_data_sz ? recv_data_sz : src_data_sz;
+
+    MPIR_Datatype *src_dt_ptr;
+
+    if (src_type_ifcontig && dest_type_iscontig) {
+        /* both are contiguous */
+        MPIDI_PIP_memcpy_task_enqueue(src_buf, dest_buf, recv_data_sz, partner_post);
+    } else if (!src_type_ifcontig && dest_type_iscontig) {
+        /* src data is non-contig */
+        MPIR_Datatype_get_ptr(target_datatype, src_dt_ptr);
+        MPIDI_PIP_pack_task_enqueue((void *) src_buf, target_count, src_dt_ptr,
+                                    dest_buf, recv_data_sz, partner_post);
+    } else if (src_type_ifcontig && !dest_type_iscontig) {
+        /* dest data is non-contig */
+        MPIDI_PIP_unpack_task_enqueue((void *) src_buf,
+                                      dest_buf, origin_count,
+                                      origin_datatype, recv_data_sz, partner_post);
+    } else {
+        /* both are non-contig */
+        MPIR_Datatype_get_ptr(target_datatype, src_dt_ptr);
+        MPIDI_PIP_pack_unpack_task_enqueue((void *) src_buf,
+                                           target_count, src_dt_ptr, dest_buf,
+                                           origin_count, origin_datatype,
+                                           recv_data_sz, partner_post);
+    }
+
+    // mpi_errno = MPIR_Localcopy((char *) base + disp_unit * target_disp, target_count,
+    //                            target_datatype, origin_addr, origin_count, origin_datatype);
+
+  fn_exit:
+    return mpi_errno;
+  fn_fail:
+    goto fn_exit;
+}
+
+MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_mpi_get(void *origin_addr,
+                                               int origin_count,
+                                               MPI_Datatype
+                                               origin_datatype,
+                                               int target_rank,
+                                               MPI_Aint target_disp,
+                                               int target_count,
+                                               MPI_Datatype target_datatype, MPIR_Win * win)
+{
+    int mpi_errno = MPI_SUCCESS;
+
+    /* CH4 schedules operation only based on process locality.
+     * Thus the target might not be in shared memory of the window.*/
+    if (!MPIDIG_WIN(win, shm_allocated) && target_rank != win->comm_ptr->rank) {
+        mpi_errno = MPIDIG_mpi_get(origin_addr, origin_count, origin_datatype,
+                                   target_rank, target_disp, target_count, target_datatype, win);
+    } else {
+        mpi_errno = MPIDI_PIP_do_get(origin_addr, origin_count, origin_datatype, target_rank,
+                                     target_disp, target_count, target_datatype, win);
+    }
+
+    return mpi_errno;
+}
+
 MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_compute_accumulate(void *origin_addr,
                                                           int origin_count,
                                                           MPI_Datatype origin_datatype,
