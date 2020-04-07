@@ -16,7 +16,8 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 #define PIP_TRACE(...) \
     MPL_DBG_MSG_FMT(MPIDI_CH4_SHM_PIP_GENERAL,VERBOSE,(MPL_DBG_FDEST, "PIP "__VA_ARGS__))
 
-#define MPIDI_TASK_PREALLOC 64
+#define MPIDI_TASK_PREALLOC 2
+#define MPIDI_PARTNER_PREALLOC 16
 #define MPIDI_MAX_TASK_THRESHOLD 60
 #define MPIDI_PIP_PKT_SIZE 65536        /* 64KB */
 #define MPIDI_PIP_L2_CACHE_THRESHOLD 131072     /* 64KB * 2 this size has two considerations, one is keeping head data in L2 cache in receiver, the other is reducing the chances of remote process stealing, lock contention and remote data access overhead that will slow down the copy due to small data_sz. */
