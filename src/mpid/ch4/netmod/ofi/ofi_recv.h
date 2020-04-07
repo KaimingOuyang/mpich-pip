@@ -188,9 +188,14 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_OFI_do_irecv(void *buf,
          * registered buffer should be equivalent with respect to performance. */
         // MPL_gpu_malloc_host((void **) &MPIDI_OFI_REQUEST(rreq, noncontig.pack.pack_buffer),
         //                     data_sz);
-        // MPIDI_OFI_REQUEST(rreq, noncontig.pack.pack_buffer) =
-        //     (MPIDI_OFI_pack_t *) MPL_malloc(data_sz + sizeof(MPIDI_OFI_pack_t), MPL_MEM_BUFFER);
-        MPIDI_OFI_malloc_pack_buffer(rreq, data_sz);
+        MPIDI_OFI_REQUEST(rreq, noncontig.pack.pack_buffer) = MPL_malloc(data_sz, MPL_MEM_BUFFER);
+        // MPIDI_OFI_malloc_pack_buffer(rreq, data_sz);
+        size_t i;
+        const size_t page_sz = 4096;
+        const size_t total_buf_sz = data_sz;
+        char *buf = (char *) MPIDI_OFI_REQUEST(rreq, noncontig.pack);
+        for (i = 0; i < total_buf_sz; i += page_sz)
+            buf[i] = '0';
         MPIR_ERR_CHKANDJUMP1(MPIDI_OFI_REQUEST(rreq, noncontig.pack.pack_buffer) == NULL, mpi_errno,
                              MPI_ERR_OTHER, "**nomem", "**nomem %s", "Recv Pack Buffer alloc");
         recv_buf = MPIDI_OFI_REQUEST(rreq, noncontig.pack.pack_buffer);
