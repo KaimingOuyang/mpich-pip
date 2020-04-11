@@ -314,8 +314,13 @@ static inline int MPIDI_OFI_do_handle_long_am(MPIDI_OFI_am_header_t * msg_hdr,
         data_sz = MPL_MIN(data_sz, in_data_sz);
         MPIDI_OFI_AMREQUEST_HDR(rreq, lmt_cntr) =
             ((data_sz - 1) / MPIDI_OFI_global.max_msg_size) + 1;
+        struct timespec start;
+        clock_gettime(CLOCK_MONOTONIC, &start);
         MPIDI_OFI_do_rdma_read(p_data, lmt_msg->src_offset, data_sz, lmt_msg->context_id,
                                lmt_msg->src_rank, rreq);
+        // clock_gettime(CLOCK_MONOTONIC, &end);
+        MPIDI_PIP_global.acc_data_trans_time -= (double) start.tv_sec + (double) start.tv_nsec / 1e9;
+        // (double) (end.tv_sec - start.tv_sec) + (double) (end.tv_nsec - start.tv_nsec) / 1e9;
         MPIR_STATUS_SET_COUNT(rreq->status, data_sz);
     } else {
         done = 0;

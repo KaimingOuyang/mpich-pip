@@ -162,6 +162,7 @@ typedef struct MPIDI_PIP_global {
     OPA_int_t *bdw_checking_ptr;
 
     double acc_time;
+    double acc_data_trans_time;
 } MPIDI_PIP_global_t;
 
 typedef struct {
