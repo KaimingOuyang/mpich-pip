@@ -594,6 +594,8 @@ static int handle_acc_cmpl(MPIR_Request * rreq)
     }
 #endif
 
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
     if (MPIDIG_REQUEST(rreq, req->areq.dt_iov) == NULL) {
         mpi_errno = MPIDIG_compute_acc_op(MPIDIG_REQUEST(rreq, req->areq.data),
                                           MPIDIG_REQUEST(rreq, req->areq.origin_count),
@@ -622,6 +624,9 @@ static int handle_acc_cmpl(MPIR_Request * rreq)
         }
         MPL_free(iov);
     }
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    MPIDI_PIP_global.acc_time +=
+        (double) (end.tv_sec - start.tv_sec) + (double) (end.tv_nsec - start.tv_nsec) / 1e9;
 
 #ifndef MPIDI_CH4_DIRECT_NETMOD
     if (MPIDIG_WIN(win, shm_allocated)) {

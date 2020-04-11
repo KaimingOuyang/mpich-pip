@@ -161,9 +161,13 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_do_get(void *origin_addr,
         disp_unit = shared_table[local_target_rank].disp_unit;
         base = shared_table[local_target_rank].shm_base_addr;
     }
-
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
     mpi_errno = MPIR_Localcopy((char *) base + disp_unit * target_disp, target_count,
                                target_datatype, origin_addr, origin_count, origin_datatype);
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    MPIDI_PIP_global.acc_time +=
+        (double) (end.tv_sec - start.tv_sec) + (double) (end.tv_nsec - start.tv_nsec) / 1e9;
 
   fn_exit:
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_POSIX_DO_GET);

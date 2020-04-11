@@ -133,6 +133,8 @@ typedef struct MPIDI_PIP_global {
     /* pack/unpack load for stealing */
     int buffer_index;
     MPIDI_PIP_cell_t cells[MPIDI_PIP_CELL_NUM];
+
+    double acc_time;
 } MPIDI_PIP_global_t;
 
 typedef struct {
