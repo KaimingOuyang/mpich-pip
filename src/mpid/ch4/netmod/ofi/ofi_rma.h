@@ -200,7 +200,10 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_OFI_allocate_win_request_put_get(MPIR_Win * w
     MPIDI_OFI_count_iovecs(origin_count, target_count, 0, origin_datatype,
                            target_datatype, MPI_DATATYPE_NULL, origin_bytes, target_bytes, 0,
                            max_pipe, &alloc_iovs);
-
+    if(alloc_iovs > MPIDI_PIP_global.max_seg)
+      MPIDI_PIP_global.max_seg = alloc_iovs;
+    if(alloc_iovs < MPIDI_PIP_global.min_seg)
+      MPIDI_PIP_global.min_seg = alloc_iovs;
     alloc_iov_size = MPIDI_OFI_align_iov_len(alloc_iovs * o_size)
         + MPIDI_OFI_align_iov_len(alloc_iovs * t_size)
         + MPIDI_OFI_IOVEC_ALIGN - 1;    /* in case iov_store[0] is not aligned as we want */

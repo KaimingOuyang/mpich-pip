@@ -137,6 +137,8 @@ typedef struct MPIDI_PIP_global {
     double get_iov_init_time;
     double get_iov_merge_time;
     double get_time;
+    size_t max_seg;
+    size_t min_seg;
 } MPIDI_PIP_global_t;
 
 typedef struct {

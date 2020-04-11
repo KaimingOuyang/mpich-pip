@@ -198,7 +198,12 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     /* one-time barrier */
     OPA_store_int(&MPIDI_PIP_global.fin_procs, 0);
     MPIDU_Init_shm_barrier();
-    MPIDI_PIP_global.fin_procs_ptr = &MPIDI_PIP_global.pip_global_array[0]->fin_procs;
+    MPIDI_PIP_global.fin_procs_ptr = &MPIDI_PIP_global.pip_global_array[0]->fin_procs; 
+    MPIDI_PIP_global.get_iov_init_time = 0;
+    MPIDI_PIP_global.get_iov_merge_time = 0;
+    MPIDI_PIP_global.get_time = 0;
+    MPIDI_PIP_global.max_seg = 0;
+    MPIDI_PIP_global.min_seg = ((size_t) 1 << 31) - 1;
 
     /* For stealing rand seeds */
     srand(time(NULL) + MPIDI_PIP_global.local_rank * MPIDI_PIP_global.local_rank);
