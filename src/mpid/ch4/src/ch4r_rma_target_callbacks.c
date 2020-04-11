@@ -1083,6 +1083,9 @@ static int acc_target_cmpl_cb(MPIR_Request * rreq)
     if (!MPIDIG_check_cmpl_order(rreq, acc_target_cmpl_cb))
         return mpi_errno;
 
+    struct timespec end;
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    MPIDI_PIP_global.acc_data_trans_time += (double) end.tv_sec + (double) end.tv_nsec / 1e9;
     mpi_errno = handle_acc_cmpl(rreq);
     MPIR_ERR_CHECK(mpi_errno);
 

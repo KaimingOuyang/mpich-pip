@@ -135,6 +135,7 @@ typedef struct MPIDI_PIP_global {
     MPIDI_PIP_cell_t cells[MPIDI_PIP_CELL_NUM];
 
     double acc_time;
+    double acc_data_trans_time;
 } MPIDI_PIP_global_t;
 
 typedef struct {
