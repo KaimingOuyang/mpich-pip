@@ -643,6 +643,8 @@ static int handle_acc_cmpl(MPIR_Request * rreq)
     size_t acc_sz;
     MPIDI_Datatype_check_size(MPIDIG_REQUEST(rreq, req->areq.origin_datatype),
                               MPIDIG_REQUEST(rreq, req->areq.origin_count), acc_sz);
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
     if (acc_sz <= MPIDI_PIP_STEALING_THRESHOLD) {
         if (MPIDIG_REQUEST(rreq, req->areq.dt_iov) == NULL) {
             mpi_errno = MPIDIG_compute_acc_op(MPIDIG_REQUEST(rreq, req->areq.data),
@@ -704,6 +706,9 @@ static int handle_acc_cmpl(MPIR_Request * rreq)
                                              MPIDIG_ACC_SRCBUF_DEFAULT, acc_sz, &stealing_iov);
         MPL_free(iov);
     }
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    MPIDI_PIP_global.acc_time +=
+        (double) (end.tv_sec - start.tv_sec) + (double) (end.tv_nsec - start.tv_nsec) / 1e9;
 #else /* MPIDI_PIP_ACC_STEALING */
     if (MPIDIG_REQUEST(rreq, req->areq.dt_iov) == NULL) {
         mpi_errno = MPIDIG_compute_acc_op(MPIDIG_REQUEST(rreq, req->areq.data),
