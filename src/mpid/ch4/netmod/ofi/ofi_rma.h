@@ -658,8 +658,11 @@ static inline int MPIDI_OFI_do_get(void *origin_addr,
         targetv = &req->noncontig->iov.put_get.targetv[cur_t];
         omax = MPIDI_OFI_global.rma_iov_limit;
         tmax = MPIDI_OFI_global.rma_iov_limit;
-
+        struct timespec start, end;
+        clock_gettime(CLOCK_MONOTONIC, &start);
         rc = MPIDI_OFI_merge_segment(&p, originv, omax, targetv, tmax, &oout, &tout);
+        clock_gettime(CLOCK_MONOTONIC, &end);
+        MPIDI_PIP_global.get_iov_time += (double) (end.tv_sec - start.tv_sec) + (double) (end.tv_nsec - start.tv_nsec) / 1e9;
 
         if (rc == MPIDI_OFI_SEG_DONE)
             break;
