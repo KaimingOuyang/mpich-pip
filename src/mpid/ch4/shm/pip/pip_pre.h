@@ -134,7 +134,9 @@ typedef struct MPIDI_PIP_global {
     int buffer_index;
     MPIDI_PIP_cell_t cells[MPIDI_PIP_CELL_NUM];
 
-    double get_iov_time;
+    double get_iov_init_time;
+    double get_iov_merge_time;
+    double get_time;
 } MPIDI_PIP_global_t;
 
 typedef struct {

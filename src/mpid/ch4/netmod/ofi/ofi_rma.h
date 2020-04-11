@@ -627,11 +627,15 @@ static inline int MPIDI_OFI_do_get(void *origin_addr,
         goto fn_exit;
     }
 
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
     mpi_errno =
         MPIDI_OFI_allocate_win_request_put_get(win, origin_count, target_count, target_rank,
                                                origin_datatype, target_datatype, origin_bytes,
                                                target_bytes, MPIDI_OFI_global.max_msg_size, &req,
                                                &flags, &ep, sigreq);
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    MPIDI_PIP_global.get_iov_init_time += (double) (end.tv_sec - start.tv_sec) + (double) (end.tv_nsec - start.tv_nsec) / 1e9;
     MPIR_ERR_CHECK(mpi_errno);
 
     offset = target_disp * MPIDI_OFI_winfo_disp_unit(win, target_rank);
@@ -658,11 +662,11 @@ static inline int MPIDI_OFI_do_get(void *origin_addr,
         targetv = &req->noncontig->iov.put_get.targetv[cur_t];
         omax = MPIDI_OFI_global.rma_iov_limit;
         tmax = MPIDI_OFI_global.rma_iov_limit;
-        struct timespec start, end;
+        
         clock_gettime(CLOCK_MONOTONIC, &start);
         rc = MPIDI_OFI_merge_segment(&p, originv, omax, targetv, tmax, &oout, &tout);
         clock_gettime(CLOCK_MONOTONIC, &end);
-        MPIDI_PIP_global.get_iov_time += (double) (end.tv_sec - start.tv_sec) + (double) (end.tv_nsec - start.tv_nsec) / 1e9;
+        MPIDI_PIP_global.get_iov_merge_time += (double) (end.tv_sec - start.tv_sec) + (double) (end.tv_nsec - start.tv_nsec) / 1e9;
 
         if (rc == MPIDI_OFI_SEG_DONE)
             break;
@@ -680,7 +684,10 @@ static inline int MPIDI_OFI_do_get(void *origin_addr,
         msg.rma_iov = targetv;
         msg.rma_iov_count = tout;
         MPIDI_OFI_INIT_CHUNK_CONTEXT(win, sigreq);
+        clock_gettime(CLOCK_MONOTONIC, &start);
         MPIDI_OFI_CALL_RETRY(fi_readmsg(ep, &msg, flags), rdma_write, FALSE);
+        clock_gettime(CLOCK_MONOTONIC, &end);
+        MPIDI_PIP_global.get_time += (double) (end.tv_sec - start.tv_sec) + (double) (end.tv_nsec - start.tv_nsec) / 1e9;
 
         /* By default, progress is called only during fence, which significantly
          * slows down the RMA operations for large non-contiguous data. Adding manual

@@ -118,13 +118,19 @@ int MPI_Finalize(void)
     int rank = MPIR_Process.comm_world->rank;
     MPIR_FUNC_TERSE_FINALIZE_STATE_DECL(MPID_STATE_MPI_FINALIZE);
 
-    double total_time;
+    double total_get_iov_init_time;
+    double total_get_iov_merge_time;
+    double total_get_time;
     MPIR_Errflag_t errflag = MPIR_ERR_NONE;
 
-    MPIR_Reduce(&MPIDI_PIP_global.get_iov_time, &total_time, 1, MPI_DOUBLE, MPI_SUM, 0,
+    MPIR_Reduce(&MPIDI_PIP_global.get_iov_init_time, &total_get_iov_init_time, 1, MPI_DOUBLE, MPI_SUM, 0,
+                MPIR_Process.comm_world, &errflag);
+    MPIR_Reduce(&MPIDI_PIP_global.get_iov_merge_time, &total_get_iov_merge_time, 1, MPI_DOUBLE, MPI_SUM, 0,
+                MPIR_Process.comm_world, &errflag);
+    MPIR_Reduce(&MPIDI_PIP_global.total_get_time, &total_get_time, 1, MPI_DOUBLE, MPI_SUM, 0,
                 MPIR_Process.comm_world, &errflag);
     if(MPIR_Process.comm_world->rank == 0){
-        printf("%d %.3lf\n", MPIR_Process.size, total_time / MPIR_Process.size);
+        printf("%d iov_init %.3lf, iov_merge %.3lf, get %.3lf\n", MPIR_Process.size, total_get_iov_init_time / MPIR_Process.size, total_get_iov_merge_time / MPIR_Process.size, total_get_time / MPIR_Process.size);
         fflush(stdout);
     }
 
