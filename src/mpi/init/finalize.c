@@ -125,8 +125,9 @@ int MPI_Finalize(void)
                 MPIR_Process.comm_world, &errflag);
     MPIR_Reduce(&MPIDI_PIP_global.acc_data_trans_time, &total_acc_data_trans_time, 1, MPI_DOUBLE, MPI_SUM, 0,
                 MPIR_Process.comm_world, &errflag);
+    const int cores = 36;
     if(MPIR_Process.comm_world->rank == 0){
-        printf("%d %.3lf %.3lf\n", MPIR_Process.size, total_acc_time / MPIR_Process.size, total_acc_data_trans_time / MPIR_Process.size);   
+        printf("%d %.3lf %.3lf\n", MPIR_Process.size, total_acc_time / (MPIR_Process.size / cores) , total_acc_data_trans_time / MPIR_Process.size);   
         fflush(stdout);
     }
 
