@@ -53,9 +53,6 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_do_get(void *origin_addr,
     MPIR_Datatype *src_dt_ptr;
 
 
-    struct timespec start, end;
-    clock_gettime(CLOCK_MONOTONIC, &start);
-
     if (src_type_ifcontig && dest_type_iscontig) {
         /* both are contiguous */
         MPIDI_PIP_memcpy_task_enqueue(src_buf, dest_buf, recv_data_sz, partner_post);
@@ -77,9 +74,6 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_do_get(void *origin_addr,
                                            origin_count, origin_datatype,
                                            recv_data_sz, partner_post);
     }
-    clock_gettime(CLOCK_MONOTONIC, &end);
-    MPIDI_PIP_global.acc_time +=
-        (double) (end.tv_sec - start.tv_sec) + (double) (end.tv_nsec - start.tv_nsec) / 1e9;
     // mpi_errno = MPIR_Localcopy((char *) base + disp_unit * target_disp, target_count,
     //                            target_datatype, origin_addr, origin_count, origin_datatype);
 
@@ -264,9 +258,16 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_do_accumulate(const void *origin_addr,
         MPIR_ERR_CHECK(mpi_errno);
     }
 
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    
     mpi_errno = MPIDI_PIP_compute_accumulate((void *) origin_addr, origin_count, origin_datatype,
                                              (char *) base + disp_unit * target_disp,
                                              target_count, target_datatype, op);
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    MPIDI_PIP_global.acc_time +=
+        (double) (end.tv_sec - start.tv_sec) + (double) (end.tv_nsec - start.tv_nsec) / 1e9;
+
     if (MPIDIG_WIN(win, shm_allocated))
         MPIDI_POSIX_RMA_MUTEX_UNLOCK(posix_win->shm_mutex_ptr);
 
