@@ -200,7 +200,8 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     MPIDU_Init_shm_barrier();
     MPIDI_PIP_global.fin_procs_ptr = &MPIDI_PIP_global.pip_global_array[0]->fin_procs;
 
-    MPIDI_PIP_global.acc_time = 0.0;
+    MPIDI_PIP_global.acc_comp_time_with_lock = 0.0;
+    MPIDI_PIP_global.acc_comp_time = 0.0;
     MPIDI_PIP_global.acc_data_trans_time = 0.0;
     MPIDI_PIP_global.acc_data_trans_cnt = 0;
     // MPIDI_PIP_global.acc_cnt = 0;

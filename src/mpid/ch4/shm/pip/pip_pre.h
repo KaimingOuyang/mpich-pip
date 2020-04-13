@@ -134,7 +134,8 @@ typedef struct MPIDI_PIP_global {
     int buffer_index;
     MPIDI_PIP_cell_t cells[MPIDI_PIP_CELL_NUM];
 
-    double acc_time;
+    double acc_comp_time_with_lock;
+    double acc_comp_time;
     double acc_data_trans_time;
     size_t acc_data_trans_cnt;
 } MPIDI_PIP_global_t;

@@ -271,21 +271,24 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_do_accumulate(const void *origin_addr,
         base = shared_table[local_target_rank].shm_base_addr;
     }
 
-    struct timespec start, end;
-    clock_gettime(CLOCK_MONOTONIC, &start);
+    // struct timespec start, end;
+    // clock_gettime(CLOCK_MONOTONIC, &start);
+    extern double MPI_Wtime();
+    MPIDI_PIP_global.acc_comp_time_with_lock -= MPI_Wtime();
     if (MPIDIG_WIN(win, shm_allocated))
         MPIDI_POSIX_RMA_MUTEX_LOCK(posix_win->shm_mutex_ptr);
 
-
+    MPIDI_PIP_global.acc_comp_time -= MPI_Wtime();
     mpi_errno = MPIDI_POSIX_compute_accumulate((void *) origin_addr, origin_count, origin_datatype,
                                                (char *) base + disp_unit * target_disp,
                                                target_count, target_datatype, op);
-
+    MPIDI_PIP_global.acc_comp_time += MPI_Wtime();
     if (MPIDIG_WIN(win, shm_allocated))
         MPIDI_POSIX_RMA_MUTEX_UNLOCK(posix_win->shm_mutex_ptr);
-    clock_gettime(CLOCK_MONOTONIC, &end);
-    MPIDI_PIP_global.acc_time +=
-        (double) (end.tv_sec - start.tv_sec) + (double) (end.tv_nsec - start.tv_nsec) / 1e9;
+    MPIDI_PIP_global.acc_comp_time_with_lock += MPI_Wtime();
+    // clock_gettime(CLOCK_MONOTONIC, &end);
+    // MPIDI_PIP_global.acc_time_with_lock +=
+    //     (double) (end.tv_sec - start.tv_sec) + (double) (end.tv_nsec - start.tv_nsec) / 1e9;
 
   fn_exit:
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_POSIX_DO_ACCUMULATE);
