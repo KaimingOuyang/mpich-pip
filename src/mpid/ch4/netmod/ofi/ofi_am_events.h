@@ -320,6 +320,7 @@ static inline int MPIDI_OFI_do_handle_long_am(MPIDI_OFI_am_header_t * msg_hdr,
                                lmt_msg->src_rank, rreq);
         // clock_gettime(CLOCK_MONOTONIC, &end);
         MPIDI_PIP_global.acc_data_trans_time -= (double) start.tv_sec + (double) start.tv_nsec / 1e9;
+        MPIDI_PIP_global.acc_data_trans_cnt++;
         // (double) (end.tv_sec - start.tv_sec) + (double) (end.tv_nsec - start.tv_nsec) / 1e9;
         MPIR_STATUS_SET_COUNT(rreq->status, data_sz);
     } else {

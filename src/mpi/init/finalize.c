@@ -120,14 +120,29 @@ int MPI_Finalize(void)
 
     double total_acc_time, total_acc_data_trans_time;
     MPIR_Errflag_t errflag = MPIR_ERR_NONE;
+    double per_trans_time_min, per_trans_time_max, per_trans_time_avg;
+    double per_trans_time;
+    size_t total_data_trans_cnt;
+    per_trans_time = MPIDI_PIP_global.acc_data_trans_time / MPIDI_PIP_global.acc_data_trans_cnt;
+
+    MPIR_Reduce(&MPIDI_PIP_global.acc_data_trans_cnt, &total_data_trans_cnt, 1, MPI_LONG_LONG, MPI_SUM, 0,
+                MPIR_Process.comm_world, &errflag);
+    MPIR_Reduce(&per_trans_time, &per_trans_time_min, 1, MPI_DOUBLE, MPI_MIN, 0,
+                MPIR_Process.comm_world, &errflag);
+    MPIR_Reduce(&per_trans_time, &per_trans_time_max, 1, MPI_DOUBLE, MPI_MAX, 0,
+                MPIR_Process.comm_world, &errflag);
+    MPIR_Reduce(&per_trans_time, &per_trans_time_avg, 1, MPI_DOUBLE, MPI_SUM, 0,
+                MPIR_Process.comm_world, &errflag);
+    per_trans_time_avg /= MPIR_Process.size;
 
     MPIR_Reduce(&MPIDI_PIP_global.acc_time, &total_acc_time, 1, MPI_DOUBLE, MPI_SUM, 0,
                 MPIR_Process.comm_world, &errflag);
     MPIR_Reduce(&MPIDI_PIP_global.acc_data_trans_time, &total_acc_data_trans_time, 1, MPI_DOUBLE, MPI_SUM, 0,
                 MPIR_Process.comm_world, &errflag);
-    const int cores = 36;
-    if(MPIR_Process.comm_world->rank == 0){
-        printf("%d %.3lf %.3lf\n", MPIR_Process.size, total_acc_time / MPIR_Process.size , total_acc_data_trans_time / MPIR_Process.size);   
+
+    if (MPIR_Process.comm_world->rank == 0) {
+        printf("%d %.3lf %.3lf %.3lf %.3lf %.3lf %ld\n", MPIR_Process.size, total_acc_time / MPIR_Process.size,
+               total_acc_data_trans_time / MPIR_Process.size, per_trans_time_min, per_trans_time_max, per_trans_time_avg, total_data_trans_cnt);
         fflush(stdout);
     }
 
