@@ -119,7 +119,14 @@ int MPI_Finalize(void)
     MPIR_FUNC_TERSE_FINALIZE_STATE_DECL(MPID_STATE_MPI_FINALIZE);
 
     MPIR_ERRTEST_INITIALIZED_ORDIE();
-
+    uint32_t global_stealing_cnt;
+    MPIR_Errflag_t err_flag = MPIR_ERR_NONE;
+    MPIR_Reduce(&MPIDI_PIP_global.total_stealing_cnt, &global_stealing_cnt, 1, MPI_DOUBLE, MPI_SUM,
+                0, MPIR_Process.comm_world, &err_flag);
+    if (rank == 0) {
+        printf("%d %d\n", MPIR_Process.size, global_stealing_cnt);
+        fflush(stdout);
+    }
     /* Note: Only one thread may ever call MPI_Finalize (MPI_Finalize may
      * be called at most once in any program) */
     MPII_finalize_thread_and_enter_cs();

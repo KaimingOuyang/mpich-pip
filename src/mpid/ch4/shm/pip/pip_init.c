@@ -245,17 +245,17 @@ int MPIDI_PIP_mpi_finalize_hook(void)
 
     OPA_add_int(MPIDI_PIP_global.fin_procs_ptr, 1);
     while (OPA_load_int(MPIDI_PIP_global.fin_procs_ptr) != MPIDI_PIP_global.num_local);
-    if (MPIDI_PIP_global.local_rank == 0) {
-        int rmt_stealing_cnt = 0;
-        int total_stealing_cnt = 0;
-        for (i = 0; i < MPIDI_PIP_global.num_local; ++i) {
-            rmt_stealing_cnt += MPIDI_PIP_global.pip_global_array[i]->rmt_stealing_cnt;
-            total_stealing_cnt += MPIDI_PIP_global.pip_global_array[i]->total_stealing_cnt;
-        }
-        printf("Node %d - total remote stealing cnt %d, total stealing %d\n",
-               MPIDI_PIP_global.grank / 36, rmt_stealing_cnt, total_stealing_cnt);
-        fflush(stdout);
-    }
+    // if (MPIDI_PIP_global.local_rank == 0) {
+    //     int rmt_stealing_cnt = 0;
+    //     int total_stealing_cnt = 0;
+    //     for (i = 0; i < MPIDI_PIP_global.num_local; ++i) {
+    //         rmt_stealing_cnt += MPIDI_PIP_global.pip_global_array[i]->rmt_stealing_cnt;
+    //         total_stealing_cnt += MPIDI_PIP_global.pip_global_array[i]->total_stealing_cnt;
+    //     }
+    //     printf("Node %d - total remote stealing cnt %d, total stealing %d\n",
+    //            MPIDI_PIP_global.grank / 36, rmt_stealing_cnt, total_stealing_cnt);
+    //     fflush(stdout);
+    // }
     // printf("rank %d - finalize pip\n", MPIDI_PIP_global.local_rank);
     // fflush(stdout);
     MPIR_Assert(MPIDI_PIP_global.task_queue->head == NULL);
