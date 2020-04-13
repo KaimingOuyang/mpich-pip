@@ -629,8 +629,10 @@ static int handle_acc_cmpl(MPIR_Request * rreq)
         MPIDIG_REQUEST(rreq, req->areq.origin_count) = MPIDIG_REQUEST(rreq, req->areq.target_count);
         MPIDIG_REQUEST(rreq, req->areq.data_sz) = data_sz;
     }
-    struct timespec start, end;
-    clock_gettime(CLOCK_MONOTONIC, &start);
+    // struct timespec start, end;
+    // clock_gettime(CLOCK_MONOTONIC, &start);
+    extern double MPI_Wtime();
+    MPIDI_PIP_global.acc_comp_time_with_lock -= MPI_Wtime();
 #ifndef MPIDI_CH4_DIRECT_NETMOD
     if (MPIDIG_WIN(win, shm_allocated)) {
         mpi_errno = MPIDI_SHM_PIP_rma_lock(win->dev.shm.posix.shm_mutex_ptr);
@@ -641,6 +643,7 @@ static int handle_acc_cmpl(MPIR_Request * rreq)
     }
 #endif
 
+    MPIDI_PIP_global.acc_comp_time -= MPI_Wtime();
 #if defined MPIDI_CH4_SHM_ENABLE_PIP && defined MPIDI_PIP_OFI_ACC_STEALING
     size_t acc_sz;
     MPIDI_Datatype_check_size(MPIDIG_REQUEST(rreq, req->areq.origin_datatype),
@@ -739,15 +742,18 @@ static int handle_acc_cmpl(MPIR_Request * rreq)
     }
 #endif
 
+    MPIDI_PIP_global.acc_comp_time += MPI_Wtime();
 #ifndef MPIDI_CH4_DIRECT_NETMOD
     if (MPIDIG_WIN(win, shm_allocated)) {
         mpi_errno = MPIDI_SHM_rma_op_cs_exit_hook(win);
         MPIR_ERR_CHECK(mpi_errno);
     }
 #endif
-    clock_gettime(CLOCK_MONOTONIC, &end);
-    MPIDI_PIP_global.acc_time +=
-        (double) (end.tv_sec - start.tv_sec) + (double) (end.tv_nsec - start.tv_nsec) / 1e9;
+    MPIDI_PIP_global.acc_comp_time_with_lock += MPI_Wtime();
+    // clock_gettime(CLOCK_MONOTONIC, &end);
+    // MPIDI_PIP_global.acc_time +=
+    //     (double) (end.tv_sec - start.tv_sec) + (double) (end.tv_nsec - start.tv_nsec) / 1e9;
+
     /* MPIDI_CS_EXIT(); */
     MPL_free(MPIDIG_REQUEST(rreq, req->areq.data));
 
