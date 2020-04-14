@@ -122,11 +122,16 @@ int MPI_Finalize(void)
     MPIR_Errflag_t errflag = MPIR_ERR_NONE;
     double per_trans_time_min, per_trans_time_max, per_trans_time_avg;
     double per_trans_time;
-    size_t total_data_trans_cnt;
+    double max_acc_comp_time, max_acc_comp_time_with_lock;
+    double max_acc_data_trans_time;
+    size_t total_data_trans_cnt, total_acc_comp_cnt;
     per_trans_time = MPIDI_PIP_global.acc_data_trans_time / MPIDI_PIP_global.acc_data_trans_cnt;
 
     MPIR_Reduce(&MPIDI_PIP_global.acc_data_trans_cnt, &total_data_trans_cnt, 1, MPI_LONG_LONG,
                 MPI_SUM, 0, MPIR_Process.comm_world, &errflag);
+    MPIR_Reduce(&MPIDI_PIP_global.acc_comp_cnt, &total_acc_comp_cnt, 1, MPI_LONG_LONG,
+                MPI_SUM, 0, MPIR_Process.comm_world, &errflag);
+
     MPIR_Reduce(&per_trans_time, &per_trans_time_min, 1, MPI_DOUBLE, MPI_MIN, 0,
                 MPIR_Process.comm_world, &errflag);
     MPIR_Reduce(&per_trans_time, &per_trans_time_max, 1, MPI_DOUBLE, MPI_MAX, 0,
@@ -134,6 +139,14 @@ int MPI_Finalize(void)
     MPIR_Reduce(&per_trans_time, &per_trans_time_avg, 1, MPI_DOUBLE, MPI_SUM, 0,
                 MPIR_Process.comm_world, &errflag);
     per_trans_time_avg /= MPIR_Process.size;
+
+    MPIR_Reduce(&MPIDI_PIP_global.acc_comp_time, &max_acc_comp_time, 1, MPI_DOUBLE, MPI_MAX, 0,
+                MPIR_Process.comm_world, &errflag);
+    MPIR_Reduce(&MPIDI_PIP_global.acc_comp_time_with_lock, &max_acc_comp_time_with_lock, 1,
+                MPI_DOUBLE, MPI_MAX, 0, MPIR_Process.comm_world, &errflag);
+    MPIR_Reduce(&MPIDI_PIP_global.acc_data_trans_time, &max_acc_data_trans_time, 1, MPI_DOUBLE,
+                MPI_MAX, 0, MPIR_Process.comm_world, &errflag);
+
 
     MPIR_Reduce(&MPIDI_PIP_global.acc_comp_time, &total_acc_comp_time, 1, MPI_DOUBLE, MPI_SUM, 0,
                 MPIR_Process.comm_world, &errflag);
@@ -143,11 +156,13 @@ int MPI_Finalize(void)
                 MPI_SUM, 0, MPIR_Process.comm_world, &errflag);
 
     if (MPIR_Process.comm_world->rank == 0) {
-        printf("%d %.3lf %.3lf %.3lf %.3lf %.3lf %.3lf %ld\n", MPIR_Process.size,
-               total_acc_comp_time_with_lock / MPIR_Process.size,
-               total_acc_comp_time / MPIR_Process.size,
-               total_acc_data_trans_time / MPIR_Process.size, per_trans_time_min,
-               per_trans_time_max, per_trans_time_avg, total_data_trans_cnt);
+        printf
+            ("%d avg_comp_wlock %.3lf max_wlock %.3lf avg_acc_comp %.3lf max_acc_comp %.3lf avg_trans %.3lf max_trans %.3lf pt_min %.3lf pt_max %.3lf pt_avg %.3lf trans_cnt %ld acc_cnt %ld\n",
+             MPIR_Process.size, total_acc_comp_time_with_lock / MPIR_Process.size,
+             max_acc_comp_time_with_lock, total_acc_comp_time / MPIR_Process.size,
+             max_acc_comp_time, total_acc_data_trans_time / MPIR_Process.size,
+             max_acc_data_trans_time, per_trans_time_min, per_trans_time_max, per_trans_time_avg,
+             total_data_trans_cnt, total_acc_comp_cnt);
         fflush(stdout);
     }
 

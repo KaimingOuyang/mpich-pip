@@ -226,6 +226,7 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     MPIDI_PIP_global.acc_comp_time = 0.0;
     MPIDI_PIP_global.acc_data_trans_time = 0.0;
     MPIDI_PIP_global.acc_data_trans_cnt = 0;
+    MPIDI_PIP_global.acc_comp_cnt = 0;
     // MPIDI_PIP_global.acc_cnt = 0;
     /* For stealing rand seeds */
     srand(time(NULL) + MPIDI_PIP_global.local_rank * MPIDI_PIP_global.local_rank);
