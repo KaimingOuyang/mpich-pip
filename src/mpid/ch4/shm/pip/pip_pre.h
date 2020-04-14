@@ -138,6 +138,7 @@ typedef struct MPIDI_PIP_global {
     double acc_comp_time;
     double acc_data_trans_time;
     size_t acc_data_trans_cnt;
+    size_t acc_comp_cnt;
 } MPIDI_PIP_global_t;
 
 typedef struct {

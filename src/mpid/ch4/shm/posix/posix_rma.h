@@ -274,6 +274,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_POSIX_do_accumulate(const void *origin_addr,
     // struct timespec start, end;
     // clock_gettime(CLOCK_MONOTONIC, &start);
     extern double MPI_Wtime();
+    MPIDI_PIP_global.acc_comp_cnt += 1;
     MPIDI_PIP_global.acc_comp_time_with_lock -= MPI_Wtime();
     if (MPIDIG_WIN(win, shm_allocated))
         MPIDI_POSIX_RMA_MUTEX_LOCK(posix_win->shm_mutex_ptr);

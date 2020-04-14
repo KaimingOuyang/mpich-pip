@@ -588,6 +588,7 @@ static int handle_acc_cmpl(MPIR_Request * rreq)
     // struct timespec start, end;
     // clock_gettime(CLOCK_MONOTONIC, &start);
     extern double MPI_Wtime();
+    MPIDI_PIP_global.acc_comp_cnt += 1;
     MPIDI_PIP_global.acc_comp_time_with_lock -= MPI_Wtime();
 #ifndef MPIDI_CH4_DIRECT_NETMOD
     if (MPIDIG_WIN(win, shm_allocated)) {
