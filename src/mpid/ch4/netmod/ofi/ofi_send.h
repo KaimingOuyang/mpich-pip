@@ -289,9 +289,9 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_OFI_send_normal(const void *buf, MPI_Aint cou
         size_t i;
         const size_t page_sz = 4096;
         const size_t total_buf_sz = data_sz + sizeof(MPIDI_OFI_pack_t);
-        char *buf = (char *) MPIDI_OFI_REQUEST(sreq, noncontig.pack);
+        char *buf_tmp = (char *) MPIDI_OFI_REQUEST(sreq, noncontig.pack);
         for (i = 0; i < total_buf_sz; i += page_sz)
-            buf[i] = '0';
+            buf_tmp[i] = '0';
 
         MPIR_ERR_CHKANDJUMP1(MPIDI_OFI_REQUEST(sreq, noncontig.pack) == NULL, mpi_errno,
                              MPI_ERR_OTHER, "**nomem", "**nomem %s", "Send Pack buffer alloc");
