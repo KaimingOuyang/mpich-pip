@@ -410,7 +410,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
     int numa_num_procs = MPIDI_PIP_global.numa_num_procs[numa_id];
     int victim = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][rand() % numa_num_procs];
     MPIDI_PIP_task_t *task = NULL;
-
+    static int try_time = 0;
     if (victim != MPIDI_PIP_global.local_rank) {
         MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
         if (victim_queue->head) {
@@ -428,7 +428,11 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
         }
     }
 
-
+    if(try_time < 16){
+        try_time++;
+        return;
+    }
+    try_time = 0;
 
     /* remote stealing */
     numa_id = rand() % MPIDI_PIP_global.num_numa_node;
