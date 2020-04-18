@@ -59,6 +59,11 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
         MPIDU_Init_shm_get(i, sizeof(MPIDI_PIP_global_t *), &MPIDI_PIP_global.pip_global_array[i]);
     MPIDU_Init_shm_barrier();
 
+    cpu_set_t mask;
+    CPU_ZERO(&mask);
+    CPU_SET(rank, &mask);
+    sched_setaffinity(getpid(), sizeof(cpu_set_t), &mask);
+
     /* bind rank to cpu */
     int num_numa_node = numa_num_task_nodes();
     char *MODE = getenv("BIND_MODE");
