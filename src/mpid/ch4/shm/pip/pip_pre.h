@@ -98,7 +98,8 @@ typedef struct MPIDI_PIP_global {
     uint32_t rank;
     uint32_t num_numa_node;
     uint32_t local_numa_id;
-
+    uint32_t partner_numa_id;
+    
     MPIDI_PIP_task_queue_t *task_queue;
     MPIDI_PIP_task_queue_t **task_queue_array;
     MPIDI_PIP_task_queue_t *compl_queue;
