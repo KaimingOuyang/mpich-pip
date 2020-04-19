@@ -61,7 +61,7 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
 
     cpu_set_t mask;
     CPU_ZERO(&mask);
-    CPU_SET(rank, &mask);
+    CPU_SET(local_rank, &mask);
     sched_setaffinity(getpid(), sizeof(cpu_set_t), &mask);
 
     /* bind rank to cpu */
