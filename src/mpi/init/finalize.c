@@ -124,8 +124,16 @@ int MPI_Finalize(void)
     MPIR_Reduce(&MPIDI_PIP_global.total_stealing_cnt, &global_stealing_cnt, 1, MPI_DOUBLE, MPI_SUM,
                 0, MPIR_Process.comm_world, &err_flag);
     if (rank == 0) {
-        printf("%d %d\n", MPIR_Process.size, global_stealing_cnt);
-        fflush(stdout);
+        char *filename = getenv("MINIGHOST_OUT");
+        if(filename == NULL){
+            printf("%d %d\n", MPIR_Process.size, global_stealing_cnt);
+            fflush(stdout);   
+        }else{
+            FILE *fp = fopen(filename, "a");
+            fprintf(fp, "%d %d\n", MPIR_Process.size, global_stealing_cnt);
+            fclose(fp);
+            // fflush(stdout);
+        }
     }
     /* Note: Only one thread may ever call MPI_Finalize (MPI_Finalize may
      * be called at most once in any program) */
