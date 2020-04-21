@@ -876,18 +876,18 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t *
             if (MPIDI_PIP_global.interp_queue.head)
                 partner =
                     MPIDI_PIP_global.interp_queue.head->partner + MPIDI_PIP_global.grank / 36 * 36;
-            printf
-                ("grank %d - steal gvictim %d ofi PACK, copy_sz %d, intraq %p, interq %p, partner %d\n",
-                 MPIDI_PIP_global.grank, victim + MPIDI_PIP_global.grank / 36 * 36, copy_sz,
-                 MPIDI_PIP_global.intrap_queue.head, MPIDI_PIP_global.interp_queue.head, partner);
-            fflush(stdout);
+            // printf
+            //     ("grank %d - steal gvictim %d ofi PACK, copy_sz %d, intraq %p, interq %p, partner %d\n",
+            //      MPIDI_PIP_global.grank, victim + MPIDI_PIP_global.grank / 36 * 36, copy_sz,
+            //      MPIDI_PIP_global.intrap_queue.head, MPIDI_PIP_global.interp_queue.head, partner);
+            // fflush(stdout);
         } else if (copy_kind == MPIDI_PIP_UNPACK) {
             MPIDI_PIP_global.rmt_stealing_cnt++;
-            printf
-                ("grank %d - steal gvictim %d ofi UNPACK, copy_sz %d, intraq %p, interq %p, partner %d\n",
-                 MPIDI_PIP_global.grank, victim + MPIDI_PIP_global.grank / 36 * 36, copy_sz,
-                 MPIDI_PIP_global.intrap_queue.head, MPIDI_PIP_global.interp_queue.head, partner);
-            fflush(stdout);
+            // printf
+            //     ("grank %d - steal gvictim %d ofi UNPACK, copy_sz %d, intraq %p, interq %p, partner %d\n",
+            //      MPIDI_PIP_global.grank, victim + MPIDI_PIP_global.grank / 36 * 36, copy_sz,
+            //      MPIDI_PIP_global.intrap_queue.head, MPIDI_PIP_global.interp_queue.head, partner);
+            // fflush(stdout);
         } else if (copy_kind == MPIDI_PIP_ACC){
             char *stype;
             if(stealing_type == MPIDI_PIP_REMOTE_STEALING){
