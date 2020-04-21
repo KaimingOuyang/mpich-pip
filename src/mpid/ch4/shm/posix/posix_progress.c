@@ -304,6 +304,10 @@ static int progress_send(int blocking)
                                         &curr_sreq_hdr->iov_ptr, &curr_sreq_hdr->iov_num);
 
         if ((MPIDI_POSIX_NOK == result) || curr_sreq_hdr->iov_num) {
+            if(empty_recv_queue){
+                MPIDI_PIP_global.local_idle_state[MPIDI_PIP_global.numa_local_rank] = 1;
+                MPIDI_PIP_steal_task();
+            }
             goto fn_exit;
         }
 
