@@ -120,6 +120,33 @@ int MPI_Finalize(void)
 
     MPIR_ERRTEST_INITIALIZED_ORDIE();
 
+    double pack_time, unpack_time;
+    uint64_t pack_cnt, unpack_cnt;
+    MPIR_Errflag_t err_flag = MPIR_ERR_NONE;
+    MPIR_Reduce(&MPIDI_PIP_global.ofi_pack, &pack_time, 1, MPI_DOUBLE, MPI_SUM,
+                0, MPIR_Process.comm_world, &err_flag);
+    MPIR_Reduce(&MPIDI_PIP_global.ofi_unpack, &unpack_time, 1, MPI_DOUBLE, MPI_SUM,
+                0, MPIR_Process.comm_world, &err_flag);
+    MPIR_Reduce(&MPIDI_PIP_global.ofi_pack_cnt, &pack_cnt, 1, MPI_LONG_LONG, MPI_SUM,
+                0, MPIR_Process.comm_world, &err_flag);
+    MPIR_Reduce(&MPIDI_PIP_global.ofi_unpack_cnt, &unpack_cnt, 1, MPI_LONG_LONG, MPI_SUM,
+                0, MPIR_Process.comm_world, &err_flag);
+    if (rank == 0) {
+        char *filename = getenv("FILE_OUT");
+        if(filename == NULL){
+            printf("%d %.3lf %.3lf %ld %.3lf %.3lf %ld\n", MPIR_Process.size, pack_time, pack_time / pack_cnt, pack_cnt, 
+                unpack_time, unpack_time / unpack_cnt, unpack_cnt);
+            fflush(stdout);   
+        }else{
+            FILE *fp = fopen(filename, "a");
+            fprintf(fp, "%d %.3lf %.3lf %ld %.3lf %.3lf %ld\n", MPIR_Process.size, pack_time, pack_time / pack_cnt, pack_cnt, 
+                unpack_time, unpack_time / unpack_cnt, unpack_cnt);
+            // fprintf(fp, "%d %d\n", MPIR_Process.size, global_stealing_cnt);
+            fclose(fp);
+            // fflush(stdout);
+        }
+    }
+
     /* Note: Only one thread may ever call MPI_Finalize (MPI_Finalize may
      * be called at most once in any program) */
     MPII_finalize_thread_and_enter_cs();

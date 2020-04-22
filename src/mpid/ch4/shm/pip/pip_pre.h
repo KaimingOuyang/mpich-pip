@@ -160,6 +160,9 @@ typedef struct MPIDI_PIP_global {
     int *allow_rmt_stealing_ptr;
     OPA_int_t *bdw_checking;
     OPA_int_t *bdw_checking_ptr;
+
+    double ofi_pack, ofi_unpack;
+    uint64_t ofi_pack_cnt, ofi_unpack_cnt;
 } MPIDI_PIP_global_t;
 
 typedef struct {

@@ -226,6 +226,10 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
         MPIDI_PIP_global.grank_to_lrank[MPIR_Process.node_local_map[i]] = i;
     }
     MPIDI_PIP_global.local_try = 0;
+    MPIDI_PIP_global.ofi_pack = 0.0;
+    MPIDI_PIP_global.ofi_unpack = 0.0;
+    MPIDI_PIP_global.ofi_pack_cnt = 0;
+    MPIDI_PIP_global.ofi_unpack_cnt = 0;
     /* For stealing rand seeds */
     srand(time(NULL) + MPIDI_PIP_global.local_rank * MPIDI_PIP_global.local_rank);
 

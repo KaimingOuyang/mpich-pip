@@ -113,11 +113,15 @@ static int recv_event(struct fi_cq_tagged_entry *wc, MPIR_Request * rreq, int ev
         (MPIDI_OFI_REQUEST(rreq, noncontig.pack))) {
         MPI_Aint actual_unpack_bytes;
 #ifdef ENABLE_OFI_STEALING
+        extern double MPI_Wtime();
+        MPIDI_PIP_global.ofi_unpack -= MPI_Wtime();
         MPIDI_PIP_unpack(MPIDI_OFI_REQUEST(rreq, noncontig.pack->pack_buffer), count,
                          MPIDI_OFI_REQUEST(rreq, noncontig.pack->buf),
                          MPIDI_OFI_REQUEST(rreq, noncontig.pack->count),
                          MPIDI_OFI_REQUEST(rreq, noncontig.pack->datatype), 0,
                          &actual_unpack_bytes);
+        MPIDI_PIP_global.ofi_unpack += MPI_Wtime();
+        MPIDI_PIP_global.ofi_unpack_cnt++;
 #else
         MPIR_Typerep_unpack(MPIDI_OFI_REQUEST(rreq, noncontig.pack->pack_buffer), count,
                             MPIDI_OFI_REQUEST(rreq, noncontig.pack->buf),

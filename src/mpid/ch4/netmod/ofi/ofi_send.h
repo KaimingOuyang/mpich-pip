@@ -298,9 +298,13 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_OFI_send_normal(const void *buf, MPI_Aint cou
 
         MPI_Aint actual_pack_bytes;
 #ifdef ENABLE_OFI_STEALING
+        extern double MPI_Wtime();
+        MPIDI_PIP_global.ofi_pack -= MPI_Wtime();
         MPIDI_PIP_pack(buf, count, datatype, 0,
                        MPIDI_OFI_REQUEST(sreq, noncontig.pack->pack_buffer), data_sz,
                        &actual_pack_bytes);
+        MPIDI_PIP_global.ofi_pack += MPI_Wtime();
+        MPIDI_PIP_global.ofi_pack_cnt++;
 #else
         MPIR_Typerep_pack(buf, count, datatype, 0,
                           MPIDI_OFI_REQUEST(sreq, noncontig.pack->pack_buffer), data_sz,
