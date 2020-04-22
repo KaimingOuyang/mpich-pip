@@ -1168,7 +1168,8 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
     // }
 
     /* remote stealing */
-    numa_id = MPIDI_PIP_global.partner_numa;
+    // numa_id = MPIDI_PIP_global.partner_numa;
+    numa_id = rand() % MPIDI_PIP_global.num_numa_node;
     numa_num_procs = MPIDI_PIP_global.numa_num_procs[numa_id];
     if (numa_num_procs != 0) {
         if (OPA_cas_int(&MPIDI_PIP_global.bdw_checking_ptr[numa_id], 0, 1) == 0) {
