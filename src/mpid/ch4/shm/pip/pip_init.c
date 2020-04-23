@@ -139,7 +139,7 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
         MPIDI_PIP_global.local_idle_state =
             (int *) MPL_malloc(sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id],
                                MPL_MEM_OTHER);
-        memset(MPIDI_PIP_global.local_idle_state, 0,
+        memset(MPIDI_PIP_global.local_idle_state, 0x1,
                sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id]);
 
         MPIDI_PIP_global.bdw_checking =
@@ -233,6 +233,7 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     }
     MPIDI_PIP_global.numa_partner = local_numa_id ^ 1;
     MPIDI_PIP_global.local_try = 0;
+
     /* For stealing rand seeds */
     srand(time(NULL) + MPIDI_PIP_global.local_rank * MPIDI_PIP_global.local_rank);
 
