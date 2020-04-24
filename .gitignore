@@ -1,4 +1,10 @@
 # Lines that start with '#' are comments.  See gitignore(5) for more info.
+clean_code.sh
+.vscode
+*/hwloc
+*/libfabric
+*/ucx
+*/izem
 
 # objects and archives
 *.[oa]

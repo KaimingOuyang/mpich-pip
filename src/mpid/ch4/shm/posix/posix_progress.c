@@ -312,6 +312,8 @@ static int progress_send(int blocking)
                                         &curr_sreq_hdr->iov_ptr, &curr_sreq_hdr->iov_num);
 
         if ((MPIDI_POSIX_NOK == result) || curr_sreq_hdr->iov_num) {
+            if (empty_recv_queue)
+                goto fn_stealing;
             goto fn_exit;
         }
 
@@ -333,7 +335,7 @@ static int progress_send(int blocking)
             MPIDI_POSIX_am_release_req_hdr(&curr_sreq_hdr);
         }
     } else if (empty_recv_queue) {
-
+      fn_stealing:
 #ifdef ENABLE_IDLECNT_STEALING
         if (MPIDI_PIP_idle_cnt < MPIDI_PIP_IDLE_THRESHOLD) {
             MPIDI_PIP_idle_cnt++;
@@ -342,7 +344,7 @@ static int progress_send(int blocking)
             MPIDI_PIP_steal_task();
         }
 #else
-        // MPIDI_PIP_global.local_idle_state[MPIDI_PIP_global.numa_local_rank] = 1;
+        //MPIDI_PIP_global.local_idle_state[MPIDI_PIP_global.numa_local_rank] = 1;
         MPIDI_PIP_steal_task();
 #endif
     }
