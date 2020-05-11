@@ -23,6 +23,11 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_lmt_rts_isend(const void *buf, MPI_Aint c
     MPI_Aint true_lb;
     bool is_contig;
     MPIR_Datatype *src_datatype = NULL;
+    MPIR_Info *info_used_ptr = NULL;
+    const char *key = "post_comm_access";
+    int valuelen = 64;
+    char value[64];
+    int flag;
     MPIDI_SHM_ctrl_hdr_t ctrl_hdr;
     MPIDI_SHM_ctrl_pip_send_lmt_rts_t *slmt_rts_hdr = &ctrl_hdr.pip_slmt_rts;
 
@@ -79,6 +84,24 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_lmt_rts_isend(const void *buf, MPI_Aint c
     }
     slmt_rts_hdr->partner = (uint64_t) partner;
 #endif
+
+    /* get info hint from comm */
+    mpi_errno = MPIR_Comm_get_info_impl(comm, &info_used_ptr);
+    if (mpi_errno != MPI_SUCCESS)
+        goto fn_fail;
+    MPIR_Info_get_impl(info_used_ptr, key, valuelen, value, &flag);
+    if(!flag){
+      /* didn't find set keys */
+      slmt_rts_hdr->post_comm_access = RANDOM;
+    }else{
+      if(strcmp(value, "LO_TO_HI") == 0){
+        slmt_rts_hdr->post_comm_access = LO_TO_HI;
+      }else if(strcmp(value, "HI_TO_LO") == 0){
+        slmt_rts_hdr->post_comm_access = HI_TO_LO;
+      }else{
+        slmt_rts_hdr->post_comm_access = RANDOM;
+      }
+    }
 
     PIP_TRACE("pip_lmt_isend: shm ctrl_id %d, src_offset 0x%lx, data_sz 0x%lx, sreq_ptr 0x%lx, "
               "src_lrank %d, match info[dest %d, src_rank %d, tag %d, context_id 0x%x]\n",

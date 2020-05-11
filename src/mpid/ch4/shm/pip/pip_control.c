@@ -91,14 +91,16 @@ int MPIDI_PIP_ctrl_send_lmt_rts_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr)
         MPIDIG_REQUEST(rreq, tag) = slmt_rts_hdr->tag;
         MPIDIG_REQUEST(rreq, context_id) = slmt_rts_hdr->context_id;
 
-        /* Complete XPMEM receive */
+        /* Complete PIP receive */
         mpi_errno = MPIDI_PIP_handle_lmt_rts_recv(slmt_rts_hdr->src_offset, slmt_rts_hdr->src_count,
                                                   slmt_rts_hdr->data_sz,
                                                   slmt_rts_hdr->sreq_ptr, slmt_rts_hdr->is_contig,
                                                   slmt_rts_hdr->src_dt_ptr,
                                                   slmt_rts_hdr->src_lrank,
                                                   slmt_rts_hdr->partner,
-                                                  slmt_rts_hdr->partner_queue, rreq);
+                                                  slmt_rts_hdr->partner_queue, 
+                                                  slmt_rts_hdr->post_comm_access,
+                                                  rreq);
         MPIR_ERR_CHECK(mpi_errno);
     } else {
         /* Enqueue unexpected receive request */
@@ -114,7 +116,7 @@ int MPIDI_PIP_ctrl_send_lmt_rts_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr)
         MPIDIG_REQUEST(rreq, context_id) = slmt_rts_hdr->context_id;
         MPIDI_REQUEST(rreq, is_local) = 1;
 
-        /* store XPMEM internal info */
+        /* store PIP internal info */
         MPIDI_PIP_REQUEST(rreq, unexp_rreq).src_offset = slmt_rts_hdr->src_offset;
         MPIDI_PIP_REQUEST(rreq, unexp_rreq).data_sz = slmt_rts_hdr->data_sz;
         MPIDI_PIP_REQUEST(rreq, unexp_rreq).sreq_ptr = slmt_rts_hdr->sreq_ptr;
@@ -124,7 +126,7 @@ int MPIDI_PIP_ctrl_send_lmt_rts_cb(MPIDI_SHM_ctrl_hdr_t * ctrl_hdr)
         MPIDI_PIP_REQUEST(rreq, unexp_rreq).src_count = slmt_rts_hdr->src_count;
         MPIDI_PIP_REQUEST(rreq, unexp_rreq).partner = slmt_rts_hdr->partner;
         MPIDI_PIP_REQUEST(rreq, unexp_rreq).partner_queue = slmt_rts_hdr->partner_queue;
-
+        MPIDI_PIP_REQUEST(rreq, unexp_rreq).post_comm_access = slmt_rts_hdr->post_comm_access;
         MPIDI_SHM_REQUEST(rreq, status) |= MPIDI_SHM_REQ_PIP_SEND_LMT;
 
         if (root_comm) {

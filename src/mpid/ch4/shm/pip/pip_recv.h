@@ -17,7 +17,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_handle_lmt_rts_recv(uint64_t src_offset, 
                                                            int src_is_contig,
                                                            MPIR_Datatype * src_dt_ptr,
                                                            int src_lrank, uint64_t partner,
-                                                           int partner_queue, MPIR_Request * rreq)
+                                                           int partner_queue, int post_comm_access,
+                                                           MPIR_Request * rreq)
 {
     int mpi_errno = MPI_SUCCESS;
     MPI_Aint data_sz, recv_data_sz;
@@ -32,6 +33,9 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_handle_lmt_rts_recv(uint64_t src_offset, 
                                         dest_dt_contig, data_sz, true_lb);
     if (src_data_sz > data_sz)
         rreq->status.MPI_ERROR = MPI_ERR_TRUNCATE;
+
+    /* record hint for now. */
+    MPIDI_PIP_global.post_comm_access = post_comm_access;
 
     /* Copy data to receive buffer */
     recv_data_sz = MPL_MIN(src_data_sz, data_sz);

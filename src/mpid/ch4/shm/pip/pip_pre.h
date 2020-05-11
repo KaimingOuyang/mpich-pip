@@ -54,6 +54,7 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 #define MPIDI_PIP_NOT_COMPLETE  0
 #define MPIDI_PIP_COMPLETE      1
 
+
 #ifdef BEBOP
 #define CORES_PER_NUMA_NODE 18
 #define MPIDI_PIP_MAX_NUM_LOCAL_STEALING 4
@@ -72,6 +73,12 @@ typedef struct MPIDI_PIP_acc_iov {
     struct iovec *iovs;
     int niov;
 } MPIDI_PIP_acc_iov_t;
+
+/* Post comm access */
+#define LO_TO_HI 0
+#define HI_TO_LO 1
+#define RANDOM 2
+
 
 typedef struct MPIDI_PIP_task {
     MPIR_OBJECT_HEADER;
@@ -160,6 +167,9 @@ typedef struct MPIDI_PIP_global {
     int *allow_rmt_stealing_ptr;
     OPA_int_t *bdw_checking;
     OPA_int_t *bdw_checking_ptr;
+
+    int pkt_size;
+    int post_comm_access;
 } MPIDI_PIP_global_t;
 
 typedef struct {
@@ -170,6 +180,7 @@ typedef struct {
     int partner_queue;
     int src_lrank;
     int is_contig;
+    int post_comm_access;
     MPIR_Datatype *src_dt_ptr;
     MPI_Aint src_count;
 } MPIDI_PIP_am_unexp_rreq_t;

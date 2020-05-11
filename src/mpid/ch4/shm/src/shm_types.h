@@ -57,6 +57,7 @@ typedef struct MPIDI_SHM_ctrl_pip_send_lmt_rts {
     MPI_Aint src_count;
     uint64_t partner;
     int partner_queue;
+    int post_comm_access;
 
     /* matching info */
     int src_rank;
