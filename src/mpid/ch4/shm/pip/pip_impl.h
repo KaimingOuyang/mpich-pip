@@ -804,35 +804,11 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_copy_size_decision(MPIDI_PIP_task_t * tas
     //         copy_sz = PKT_32KB;
     //     goto fn_exit;
     // }
-#ifdef ENABLE_DYNAMIC_CHUNK
-    if (stealing_type == MPIDI_PIP_REMOTE_STEALING) {
-        if (remaining_data <= PKT_96KB)
-            copy_sz = 0;
-        else
-            copy_sz = PKT_32KB;
-    } else {
-        if (remaining_data <= PKT_16KB)
-            copy_sz = remaining_data;
-        else if (remaining_data <= PKT_96KB)
-            copy_sz = PKT_16KB;
-        else if (remaining_data <= PKT_512KB)
-            copy_sz = PKT_32KB;
-        else
-            copy_sz = PKT_64KB;
+    if(remaining_data != task->orig_data_sz){
+        copy_sz = remaining_data;
+    }else{
+        copy_sz = task->orig_data_sz >> 1;
     }
-#else
-    if (stealing_type != MPIDI_PIP_REMOTE_STEALING) {
-        if (remaining_data <= PKT_64KB)
-            copy_sz = remaining_data;
-        else
-            copy_sz = PKT_64KB;
-    } else {
-        if (remaining_data <= PKT_96KB)
-            copy_sz = 0;
-        else
-            copy_sz = PKT_32KB;
-    }
-#endif
   fn_exit:
     return copy_sz;
 }
