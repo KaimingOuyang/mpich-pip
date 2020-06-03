@@ -219,7 +219,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_SHM_mpi_isend(const void *buf, MPI_Aint count
     size_t data_sz;
 
     MPIDI_Datatype_check_contig_size(datatype, count, dt_contig, data_sz);
-    if (data_sz > MPIR_CVAR_CH4_PIP_LMT_MSG_SIZE) {
+    if (data_sz > 0) {
         /* SHM only issues contig large message through XPMEM.
          * TODO: support noncontig send message */
         mpi_errno = MPIDI_PIP_lmt_rts_isend(buf, count, datatype, rank, tag, comm,
