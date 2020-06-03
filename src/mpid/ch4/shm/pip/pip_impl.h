@@ -784,11 +784,11 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_copy_size_decision(MPIDI_PIP_task_t * tas
 {
     int copy_sz;
     /* This size decision function is only for bebop machine */
-    static const int PKT_16KB = 1 << 14;
-    static const int PKT_32KB = 1 << 15;
-    static const int PKT_64KB = 1 << 16;
-    static const int PKT_96KB = PKT_32KB + PKT_64KB;
-    static const int PKT_512KB = 1 << 19;
+    // static const int PKT_16KB = 1 << 14;
+    // static const int PKT_32KB = 1 << 15;
+    // static const int PKT_64KB = 1 << 16;
+    // static const int PKT_96KB = PKT_32KB + PKT_64KB;
+    // static const int PKT_512KB = 1 << 19;
 
 #ifdef ENABLE_REVERSE_TASK_ENQUEUE
     size_t remaining_data = task->cur_offset;
@@ -916,6 +916,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t *
 
     if (copy_sz) {
         ret = STEALING_SUCCESS;
+        printf("rank %d - stealing size %d\n", MPIDI_PIP_global.rank, copy_sz);
         switch (copy_kind) {
             case MPIDI_PIP_MEMCPY:
                 MPIDI_PIP_exec_memcpy_task(task, copy_sz, offset);
