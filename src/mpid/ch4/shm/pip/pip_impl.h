@@ -515,7 +515,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_memcpy_task_enqueue(char *src_buf,
     if (data_sz <= MPIDI_PIP_STEALING_THRESHOLD) {
         // MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 1;
         MPIR_Memcpy(dest_buf, src_buf, data_sz);
-        OPA_write_barrier();
+        //OPA_write_barrier();
         // MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
     } else {
         MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
