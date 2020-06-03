@@ -29,6 +29,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_publish_task(MPIDI_PIP_task_queue_t * ta
     MPID_Thread_mutex_lock(&task_queue->lock, &err);
     task_queue->head = task;
     task_queue->partner = partner;
+    task_queue->size = task->orig_data_sz;
     MPID_Thread_mutex_unlock(&task_queue->lock, &err);
 }
 
@@ -215,6 +216,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_obtain_task_info_safe(MPIDI_PIP_task_queue_t
         offset = task->cur_offset;
         task->cur_offset += copy_sz;
         copy_kind = task->copy_kind;
+        task_queue->size -= copy_sz;
     } else {
         copy_sz = 0;
     }
@@ -916,7 +918,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_exec_stolen_task(MPIDI_PIP_task_queue_t *
 
     if (copy_sz) {
         ret = STEALING_SUCCESS;
-        printf("rank %d - stealing size %d\n", MPIDI_PIP_global.rank, copy_sz);
+        // printf("rank %d - stealing size %d\n", MPIDI_PIP_global.rank, copy_sz);
         switch (copy_kind) {
             case MPIDI_PIP_MEMCPY:
                 MPIDI_PIP_exec_memcpy_task(task, copy_sz, offset);
@@ -1103,7 +1105,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
     victim = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][rand() % numa_num_procs];
     if (victim != MPIDI_PIP_global.local_rank) {
         MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
-        if (victim_queue->head) {
+        if (victim_queue->head && victim_queue->size != 0) {
             ret = MPIDI_PIP_exec_stolen_task(victim_queue, MPIDI_PIP_LOCAL_STEALING);
             if (ret == STEALING_SUCCESS) {
                 MPIDI_PIP_global.local_try = 0;

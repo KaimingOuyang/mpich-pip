@@ -110,6 +110,7 @@ typedef struct MPIDI_PIP_task {
 typedef struct MPIDI_PIP_task_queue {
     MPIDI_PIP_task_t *head;
     uint64_t partner;
+    uint32_t size;
     MPID_Thread_mutex_t lock;
 } MPIDI_PIP_task_queue_t;
 
