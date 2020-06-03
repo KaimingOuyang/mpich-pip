@@ -35,8 +35,6 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_lmt_rts_isend(const void *buf, MPI_Aint c
     MPIDI_Datatype_check_contig_size_lb(datatype, count, is_contig, data_sz, true_lb);
     MPIR_Datatype_get_ptr(datatype, src_datatype);
 
-    MPIR_Assert(data_sz > MPIR_CVAR_CH4_PIP_LMT_MSG_SIZE);
-
     /* pip internal info */
     if (is_contig)
         slmt_rts_hdr->src_offset = (uint64_t) buf + true_lb;
