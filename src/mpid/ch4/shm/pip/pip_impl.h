@@ -508,7 +508,7 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_init_memcpy_task(MPIDI_PIP_task_t * task
     return;
 }
 
-
+#include <papi.h>
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_memcpy_task_enqueue(char *src_buf,
                                                             char *dest_buf, MPI_Aint data_sz,
                                                             uint64_t partner)
@@ -520,9 +520,52 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_memcpy_task_enqueue(char *src_buf,
         OPA_write_barrier();
         // MPIDI_PIP_global.local_copy_state[MPIDI_PIP_global.numa_local_rank] = 0;
     } else {
+        #define EVENT_LEN 1
+        static int events[EVENT_LEN] = {PAPI_TOT_CYC};
+        static long values[EVENT_LEN];
+        extern long task_init_cyc, task_enqueue_cyc, task_dequeue_cyc, task_lock_cyc;
+        extern long task_cnt;
+        int error;
+        task_cnt++;
+        /* init task */
+        error = PAPI_start_counters(events, EVENT_LEN);
+        if(error != PAPI_OK){
+            printf("%s\n", PAPI_strerror(error));
+            fflush(stdout);
+        }
+
         MPIDI_PIP_task_t *task = (MPIDI_PIP_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Task_mem);
         MPIDI_PIP_init_memcpy_task(task, src_buf, dest_buf, data_sz);
+        
+        error = PAPI_stop_counters(values, EVENT_LEN);
+        if(error != PAPI_OK){
+            printf("%s\n", PAPI_strerror(error));
+            fflush(stdout);
+        }
+        task_init_cyc += values[0];
+
+        /* enqueue task */
+        error = PAPI_start_counters(events, EVENT_LEN);
+        if(error != PAPI_OK){
+            printf("%s\n", PAPI_strerror(error));
+            fflush(stdout);
+        }
+
         MPIDI_PIP_publish_task(MPIDI_PIP_global.task_queue, task, partner);
+
+        error = PAPI_stop_counters(values, EVENT_LEN);
+        if(error != PAPI_OK){
+            printf("%s\n", PAPI_strerror(error));
+            fflush(stdout);
+        }
+        task_enqueue_cyc += values[0];
+
+        /* execute task */
+        error = PAPI_start_counters(events, EVENT_LEN);
+        if(error != PAPI_OK){
+            printf("%s\n", PAPI_strerror(error));
+            fflush(stdout);
+        }
         do {
 #ifdef ENABLE_REVERSE_TASK_ENQUEUE
             if (task->cur_offset != 0)
@@ -532,8 +575,29 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_memcpy_task_enqueue(char *src_buf,
                 MPIDI_PIP_exec_self_task(MPIDI_PIP_global.task_queue);
 #endif
         } while (OPA_load_int(&task->done_data_sz) != task->orig_data_sz);
+        error = PAPI_stop_counters(values, EVENT_LEN);
+        if(error != PAPI_OK){
+            printf("%s\n", PAPI_strerror(error));
+            fflush(stdout);
+        }
+        task_lock_cyc += values[0];
+
+        /* dequeue task */
+        error = PAPI_start_counters(events, EVENT_LEN);
+        if(error != PAPI_OK){
+            printf("%s\n", PAPI_strerror(error));
+            fflush(stdout);
+        }
 
         MPIDI_PIP_cancel_task(MPIDI_PIP_global.task_queue);
+
+        error = PAPI_stop_counters(values, EVENT_LEN);
+        if(error != PAPI_OK){
+            printf("%s\n", PAPI_strerror(error));
+            fflush(stdout);
+        }
+        task_dequeue_cyc += values[0];
+
         MPIR_Handle_obj_free(&MPIDI_Task_mem, task);
     }
 #else

@@ -112,6 +112,8 @@ thread that initialized MPI with either 'MPI_Init' or 'MPI_Init_thread'.
 .N Errors
 .N MPI_SUCCESS
 @*/
+long task_init_cyc = 0, task_enqueue_cyc = 0, task_dequeue_cyc = 0, task_lock_cyc = 0;
+long task_cnt = 0;
 int MPI_Finalize(void)
 {
     int mpi_errno = MPI_SUCCESS;
@@ -124,7 +126,9 @@ int MPI_Finalize(void)
      * be called at most once in any program) */
     MPII_finalize_thread_and_enter_cs();
     MPIR_FUNC_TERSE_FINALIZE_ENTER(MPID_STATE_MPI_FINALIZE);
-
+    if(rank == 0 || rank == 1){
+        printf("rank %d task_init_cyc %ld task_enqueue_cyc %ld task_lock_cyc %ld task_dequeue_cyc %ld\n", rank, task_init_cyc, task_enqueue_cyc, task_lock_cyc, task_dequeue_cyc);
+    }
     /* ... body of routine ... */
 
     mpi_errno = MPII_finalize_async();
