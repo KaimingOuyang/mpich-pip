@@ -1153,12 +1153,12 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
         curp = curp->next;
     }
 #endif
-    if (MPIDI_PIP_global.local_try < CORES_PER_NUMA_NODE) {
-        ++MPIDI_PIP_global.local_try;
-        return;
-    } else {
-        MPIDI_PIP_global.local_try = 0;
-    }
+    // if (MPIDI_PIP_global.local_try < CORES_PER_NUMA_NODE) {
+    //     ++MPIDI_PIP_global.local_try;
+    //     return;
+    // } else {
+    //     MPIDI_PIP_global.local_try = 0;
+    // }
     /* check whether local tasks exists */
     // int i, j;
     // for (i = 0; i < numa_num_procs; ++i) {
@@ -1169,28 +1169,28 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
 
     /* remote stealing */
     // numa_id = MPIDI_PIP_global.partner_numa;
-    numa_id = rand() % MPIDI_PIP_global.num_numa_node;
-    numa_num_procs = MPIDI_PIP_global.numa_num_procs[numa_id];
-    if (numa_num_procs != 0 && numa_id != MPIDI_PIP_global.local_numa_id) {
-        if (OPA_cas_int(&MPIDI_PIP_global.bdw_checking_ptr[numa_id], 0, 1) == 0) {
-            victim = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][rand() % numa_num_procs];
-            MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
-            if (victim_queue->head) {
-                MPIDI_PIP_Task_remote_check_and_steal(victim_queue, numa_num_procs,
-                                                      MPIDI_PIP_global.pip_global_array[victim],
-                                                      numa_id);
-            }
-            OPA_store_int(&MPIDI_PIP_global.bdw_checking_ptr[numa_id], 0);
-        } else if (MPIDI_PIP_global.allow_rmt_stealing_ptr[numa_id]) {
-            victim = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][rand() % numa_num_procs];
-            MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
+    // numa_id = rand() % MPIDI_PIP_global.num_numa_node;
+    // numa_num_procs = MPIDI_PIP_global.numa_num_procs[numa_id];
+    // if (numa_num_procs != 0 && numa_id != MPIDI_PIP_global.local_numa_id) {
+    //     if (OPA_cas_int(&MPIDI_PIP_global.bdw_checking_ptr[numa_id], 0, 1) == 0) {
+    //         victim = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][rand() % numa_num_procs];
+    //         MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
+    //         if (victim_queue->head) {
+    //             MPIDI_PIP_Task_remote_check_and_steal(victim_queue, numa_num_procs,
+    //                                                   MPIDI_PIP_global.pip_global_array[victim],
+    //                                                   numa_id);
+    //         }
+    //         OPA_store_int(&MPIDI_PIP_global.bdw_checking_ptr[numa_id], 0);
+    //     } else if (MPIDI_PIP_global.allow_rmt_stealing_ptr[numa_id]) {
+    //         victim = MPIDI_PIP_global.numa_cores_to_ranks[numa_id][rand() % numa_num_procs];
+    //         MPIDI_PIP_task_queue_t *victim_queue = MPIDI_PIP_global.task_queue_array[victim];
 
-            if (victim_queue->head) {
-                MPIDI_PIP_exec_stolen_task(victim_queue, MPIDI_PIP_REMOTE_STEALING);
-                return;
-            }
-        }
-    }
+    //         if (victim_queue->head) {
+    //             MPIDI_PIP_exec_stolen_task(victim_queue, MPIDI_PIP_REMOTE_STEALING);
+    //             return;
+    //         }
+    //     }
+    // }
 #endif /* MPIDI_PIP_STEALING_ENABLE */
     return;
 }
