@@ -8,6 +8,8 @@
 #include "ipc_types.h"
 #include "ipc_recv.h"
 #include "ipc_control.h"
+#include "mpl_shm.h"
+#include "mpidu_shm_seg.h"
 
 int MPIDI_IPCI_send_contig_lmt_fin_cb(MPIDI_SHMI_ctrl_hdr_t * ctrl_hdr)
 {
@@ -18,6 +20,16 @@ int MPIDI_IPCI_send_contig_lmt_fin_cb(MPIDI_SHMI_ctrl_hdr_t * ctrl_hdr)
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_IPCI_SEND_CONTIG_LMT_FIN_CB);
 
     IPC_TRACE("send_contig_lmt_fin_cb: complete sreq %p\n", sreq);
+
+    if (MPIDIG_REQUEST(sreq, memory)) {
+        int mpl_err;
+        MPIDU_shm_seg_t *memory = (MPIDU_shm_seg_t *) MPIDIG_REQUEST(sreq, memory);
+        mpl_err = MPL_shm_seg_remove(memory->hnd);
+        MPIR_ERR_CHKANDJUMP(mpl_err, mpi_errno, MPI_ERR_OTHER, "**remove_shar_mem");
+
+        MPL_shm_hnd_finalize(&(memory->hnd));
+        MPL_free(memory);
+    }
 
     MPIR_Datatype_release_if_not_builtin(MPIDIG_REQUEST(sreq, datatype));
     MPID_Request_complete(sreq);
@@ -118,6 +130,47 @@ int MPIDI_IPCI_send_contig_lmt_rts_cb(MPIDI_SHMI_ctrl_hdr_t * ctrl_hdr)
 
   fn_exit:
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_IPCI_SEND_CONTIG_LMT_RTS_CB);
+    return mpi_errno;
+  fn_fail:
+    goto fn_exit;
+}
+
+int MPIDI_IPCI_send_lmt_ctrl_hdr_rts_cb(MPIDI_SHMI_ctrl_hdr_t * ctrl_hdr)
+{
+    int mpi_errno = MPI_SUCCESS, mpl_err;
+    MPIDI_IPC_ctrl_send_lmt_ctrl_hdr_rts_t *slmt_ctrl_hdr = &ctrl_hdr->ipc_slmt_hdr_rts;
+    MPIDU_shm_seg_t *memory = NULL;
+
+    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_IPCI_SEND_LMT_CTRL_HDR_RTS_CB);
+    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_IPCI_SEND_LMT_CTRL_HDR_RTS_CB);
+
+    memory = MPL_malloc(sizeof(MPIDU_shm_seg_t), MPL_MEM_OTHER);
+    MPIR_Assert(memory);
+
+    mpl_err = MPL_shm_hnd_init(&(memory->hnd));
+    MPIR_ERR_CHKANDJUMP(mpl_err, mpi_errno, MPI_ERR_OTHER, "**alloc_shar_mem");
+
+    memory->segment_len = slmt_ctrl_hdr->ctrl_hdr_size;
+    mpl_err =
+        MPL_shm_hnd_deserialize(memory->hnd, slmt_ctrl_hdr->serialized_hnd,
+                                strlen(slmt_ctrl_hdr->serialized_hnd));
+    MPIR_ERR_CHKANDJUMP(mpl_err, mpi_errno, MPI_ERR_OTHER, "**alloc_shar_mem");
+
+    mpl_err = MPL_shm_seg_attach(memory->hnd, memory->segment_len, (void **) &memory->base_addr, 0);
+    MPIR_ERR_CHKANDJUMP(mpl_err, mpi_errno, MPI_ERR_OTHER, "**attach_shar_mem");
+
+    mpi_errno =
+        MPIDI_global.shm.ctrl_cbs[slmt_ctrl_hdr->
+                                  ctrl_id] ((MPIDI_SHMI_ctrl_hdr_t *) memory->base_addr);
+    MPIR_ERR_CHECK(mpi_errno);
+
+    mpl_err = MPL_shm_seg_detach(memory->hnd, (void **) &(memory->base_addr), memory->segment_len);
+    MPIR_ERR_CHKANDJUMP(mpl_err, mpi_errno, MPI_ERR_OTHER, "**detach_shar_mem");
+
+  fn_exit:
+    MPL_shm_hnd_finalize(&(memory->hnd));
+    MPL_free(memory);
+    MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_IPCI_SEND_LMT_CTRL_HDR_RTS_CB);
     return mpi_errno;
   fn_fail:
     goto fn_exit;

@@ -45,4 +45,10 @@ typedef struct MPIDI_IPC_ctrl_send_contig_lmt_fin {
     MPIR_Request *req_ptr;
 } MPIDI_IPC_ctrl_send_contig_lmt_fin_t;
 
+typedef struct MPIDI_IPC_ctrl_send_lmt_ctrl_hdr_rts {
+    int ctrl_id;
+    uintptr_t ctrl_hdr_size;
+    char serialized_hnd[];
+} MPIDI_IPC_ctrl_send_lmt_ctrl_hdr_rts_t;
+
 #endif /* IPC_PRE_H_INCLUDED */

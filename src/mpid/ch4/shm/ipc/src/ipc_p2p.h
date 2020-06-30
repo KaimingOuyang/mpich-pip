@@ -33,11 +33,15 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_send_contig_lmt(const void *buf, MPI_Ain
 {
     int mpi_errno = MPI_SUCCESS;
     MPIR_Request *sreq = NULL;
-    MPIDI_SHMI_ctrl_hdr_t ctrl_hdr;
-    MPIDI_IPC_ctrl_send_contig_lmt_rts_t *slmt_req_hdr = &ctrl_hdr.ipc_contig_slmt_rts;
+    MPIDI_SHMI_ctrl_hdr_t *ctrl_hdr;
+    MPIDI_IPC_ctrl_send_contig_lmt_rts_t *slmt_req_hdr;
 
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_IPCI_SEND_CONTIG_LMT);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_IPCI_SEND_CONTIG_LMT);
+
+    ctrl_hdr = (MPIDI_SHMI_ctrl_hdr_t *) MPL_malloc(sizeof(MPIDI_SHMI_ctrl_hdr_t), MPL_MEM_OTHER);
+    MPIR_Assert(ctrl_hdr);
+    slmt_req_hdr = &ctrl_hdr->ipc_contig_slmt_rts;
 
     /* Create send request */
     MPIR_Datatype_add_ref_if_not_builtin(datatype);
@@ -49,6 +53,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_send_contig_lmt(const void *buf, MPI_Ain
     MPIDIG_REQUEST(sreq, rank) = rank;
     MPIDIG_REQUEST(sreq, count) = count;
     MPIDIG_REQUEST(sreq, context_id) = comm->context_id + context_offset;
+    MPIDIG_REQUEST(sreq, memory) = NULL;
 
     slmt_req_hdr->src_lrank = MPIR_Process.local_rank;
     slmt_req_hdr->data_sz = data_sz;
@@ -72,8 +77,12 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_send_contig_lmt(const void *buf, MPI_Ain
               slmt_req_hdr->src_lrank, rank, slmt_req_hdr->src_rank, slmt_req_hdr->tag,
               slmt_req_hdr->context_id);
 
-    mpi_errno = MPIDI_SHM_do_ctrl_send(rank, comm, MPIDI_IPC_SEND_CONTIG_LMT_RTS, &ctrl_hdr);
+    mpi_errno =
+        MPIDI_SHM_do_lmt_ctrl_send(rank, comm, MPIDI_IPC_SEND_CONTIG_LMT_RTS,
+                                   sizeof(MPIDI_SHMI_ctrl_hdr_t), ctrl_hdr, sreq);
     MPIR_ERR_CHECK(mpi_errno);
+
+    MPL_free(ctrl_hdr);
 
   fn_exit:
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_IPCI_SEND_CONTIG_LMT);
