@@ -6,6 +6,23 @@
 #ifndef IPC_P2P_H_INCLUDED
 #define IPC_P2P_H_INCLUDED
 
+/*
+=== BEGIN_MPI_T_CVAR_INFO_BLOCK ===
+cvars:
+    - name        : MPIR_CVAR_CH4_IPC_NON_CONTIG_CHUNK_SIZE
+      category    : CH4
+      type        : int
+      default     : 262144
+      class       : none
+      verbosity   : MPI_T_VERBOSITY_USER_BASIC
+      scope       : MPI_T_SCOPE_ALL_EQ
+      description : >-
+        this parameter sets the chunk size for the case where both source and
+        destination datatype are non-contiguous; it indicates the amount of data
+        to be copied each time
+=== END_MPI_T_CVAR_INFO_BLOCK ===
+*/
+
 #include "ch4_impl.h"
 #include "mpidimpl.h"
 #include "shm_control.h"
@@ -216,17 +233,30 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_handle_lmt_recv(MPIDI_IPCI_type_t ipc_ty
         MPIR_Assert(actual_unpack_bytes <= recv_data_sz);
     } else {
         /* both datatype are non-contiguous */
-        void *tmp_buf = MPL_malloc(recv_data_sz, MPL_MEM_OTHER);
-        mpi_errno = MPIR_Typerep_pack((const void *) copy_src_buf, src_count, src_datatype,
-                                      0, tmp_buf, recv_data_sz, &actual_pack_bytes);
-        MPIR_ERR_CHECK(mpi_errno);
-        MPIR_Assert(actual_pack_bytes <= recv_data_sz);
+        void *tmp_buf = MPL_malloc(MPIR_CVAR_CH4_IPC_NON_CONTIG_CHUNK_SIZE, MPL_MEM_OTHER);
+        MPI_Aint chunk_cnt = src_data_sz / MPIR_CVAR_CH4_IPC_NON_CONTIG_CHUNK_SIZE;
+        MPI_Aint offset = 0;
 
-        mpi_errno = MPIR_Typerep_unpack((const void *) tmp_buf, actual_pack_bytes,
-                                        MPIDIG_REQUEST(rreq, buffer), MPIDIG_REQUEST(rreq, count),
-                                        MPIDIG_REQUEST(rreq, datatype), 0, &actual_unpack_bytes);
-        MPIR_ERR_CHECK(mpi_errno);
-        MPIR_Assert(actual_unpack_bytes <= recv_data_sz);
+        if (src_data_sz % MPIR_CVAR_CH4_IPC_NON_CONTIG_CHUNK_SIZE)
+            chunk_cnt++;
+
+        for (int i = 0; i < chunk_cnt; ++i) {
+            mpi_errno = MPIR_Typerep_pack((const void *) copy_src_buf, src_count, src_datatype,
+                                          offset, tmp_buf, MPIR_CVAR_CH4_IPC_NON_CONTIG_CHUNK_SIZE,
+                                          &actual_pack_bytes);
+            MPIR_ERR_CHECK(mpi_errno);
+            MPIR_Assert(actual_pack_bytes <= MPIR_CVAR_CH4_IPC_NON_CONTIG_CHUNK_SIZE);
+
+            mpi_errno = MPIR_Typerep_unpack((const void *) tmp_buf, actual_pack_bytes,
+                                            MPIDIG_REQUEST(rreq, buffer), MPIDIG_REQUEST(rreq,
+                                                                                         count),
+                                            MPIDIG_REQUEST(rreq, datatype), offset,
+                                            &actual_unpack_bytes);
+            MPIR_ERR_CHECK(mpi_errno);
+            MPIR_Assert(actual_unpack_bytes <= MPIR_CVAR_CH4_IPC_NON_CONTIG_CHUNK_SIZE);
+
+            offset += MPIR_CVAR_CH4_IPC_NON_CONTIG_CHUNK_SIZE;
+        }
 
         MPL_free(tmp_buf);
     }
