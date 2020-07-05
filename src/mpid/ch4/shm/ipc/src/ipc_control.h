@@ -11,5 +11,6 @@
 int MPIDI_IPCI_send_contig_lmt_rts_cb(MPIDI_SHMI_ctrl_hdr_t * ctrl_hdr);
 int MPIDI_IPCI_send_contig_lmt_fin_cb(MPIDI_SHMI_ctrl_hdr_t * ctrl_hdr);
 int MPIDI_IPCI_send_lmt_ctrl_hdr_rts_cb(MPIDI_SHMI_ctrl_hdr_t * ctrl_hdr);
+int MPIDI_IPCI_send_lmt_cts_cb(MPIDI_SHMI_ctrl_hdr_t * ctrl_hdr);
 
 #endif /* IPC_CONTROL_H_INCLUDED */

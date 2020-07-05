@@ -27,7 +27,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_try_lmt_isend(const void *buf, MPI_Aint 
 
     MPI_Aint true_lb;
     uintptr_t data_sz;
-    MPIDI_Datatype_check_contig_size_lb(datatype, count, data_sz, true_lb);
+    MPIDI_Datatype_check_size_lb(datatype, count, data_sz, true_lb);
 
     void *vaddr = (char *) buf + true_lb;
     MPIDI_IPCI_ipc_attr_t ipc_attr;

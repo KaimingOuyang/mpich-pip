@@ -149,6 +149,32 @@ int MPIDI_IPCI_send_contig_lmt_rts_cb(MPIDI_SHMI_ctrl_hdr_t * ctrl_hdr)
     goto fn_exit;
 }
 
+int MPIDI_IPCI_send_lmt_cts_cb(MPIDI_SHMI_ctrl_hdr_t * ctrl_hdr)
+{
+    int mpi_errno = MPI_SUCCESS;
+    MPIDI_IPC_ctrl_send_contig_lmt_cts_t *ipc_slmt_cts = &ctrl_hdr->ipc_slmt_cts;
+    void *flattened_type;
+
+    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_IPCI_SEND_LMT_CTS_CB);
+    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_IPCI_SEND_LMT_CTS_CB);
+
+    if (ipc_slmt_cts->flattened_type_size)
+        flattened_type = ipc_slmt_cts->flattened_type;
+    else
+        flattened_type = NULL;
+
+    mpi_errno = MPIDI_IPCI_handle_lmt_cts_recv(ipc_slmt_cts->ipc_type, ipc_slmt_cts->ipc_handle,
+                                               ipc_slmt_cts->data_sz,
+                                               ipc_slmt_cts->rreq_ptr,
+                                               flattened_type, ipc_slmt_cts->sreq_ptr);
+
+  fn_exit:
+    MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_IPCI_SEND_LMT_CTS_CB);
+    return mpi_errno;
+  fn_fail:
+    goto fn_exit;
+}
+
 int MPIDI_IPCI_send_lmt_ctrl_hdr_rts_cb(MPIDI_SHMI_ctrl_hdr_t * ctrl_hdr)
 {
     int mpi_errno = MPI_SUCCESS, mpl_err;
@@ -173,6 +199,7 @@ int MPIDI_IPCI_send_lmt_ctrl_hdr_rts_cb(MPIDI_SHMI_ctrl_hdr_t * ctrl_hdr)
     mpl_err = MPL_shm_seg_attach(memory->hnd, memory->segment_len, (void **) &memory->base_addr, 0);
     MPIR_ERR_CHKANDJUMP(mpl_err, mpi_errno, MPI_ERR_OTHER, "**attach_shar_mem");
 
+    /* call actual call back */
     mpi_errno =
         MPIDI_global.shm.ctrl_cbs[slmt_ctrl_hdr->
                                   ctrl_id] ((MPIDI_SHMI_ctrl_hdr_t *) memory->base_addr);

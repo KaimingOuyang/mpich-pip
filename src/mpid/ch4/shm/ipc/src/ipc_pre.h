@@ -45,6 +45,19 @@ typedef struct MPIDI_IPC_ctrl_send_contig_lmt_rts {
     uint8_t flattened_type[];
 } MPIDI_IPC_ctrl_send_contig_lmt_rts_t;
 
+/* ctrl packet header types */
+typedef struct MPIDI_IPC_ctrl_send_contig_lmt_cts {
+    MPIDI_IPCI_type_t ipc_type;
+    MPIDI_IPCI_ipc_handle_t ipc_handle;
+    uint64_t data_sz;           /* data size in bytes */
+    MPIR_Request *sreq_ptr;     /* send request pointer */
+    MPIR_Request *rreq_ptr;     /* recv request pointer */
+
+    /* flatten type */
+    int flattened_type_size;
+    uint8_t flattened_type[];
+} MPIDI_IPC_ctrl_send_contig_lmt_cts_t;
+
 typedef struct MPIDI_IPC_ctrl_send_contig_lmt_fin {
     MPIDI_IPCI_type_t ipc_type;
     MPIR_Request *req_ptr;
