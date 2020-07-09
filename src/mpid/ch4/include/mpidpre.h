@@ -208,6 +208,7 @@ typedef struct MPIDIG_req_t {
     int tag;
     MPIR_Context_id_t context_id;
     MPI_Datatype datatype;
+    void *memory;
 } MPIDIG_req_t;
 
 /* Structure to capture arguments for pt2pt persistent communications */

@@ -11,12 +11,14 @@
 typedef enum {
     MPIDI_IPC_SEND_LMT_RTS,     /* issued by sender to initialize IPC with contig sbuf */
     MPIDI_IPC_SEND_LMT_FIN,     /* issued by receiver to notify completion of sender-initialized contig IPC */
+    MPIDI_IPC_SEND_LMT_HDR_PKT, /* issued by sender to send large ctrl header */
     MPIDI_SHMI_CTRL_IDS_MAX
 } MPIDI_SHMI_ctrl_id_t;
 
 typedef union {
     MPIDI_IPC_ctrl_send_lmt_rts_t ipc_slmt_rts;
     MPIDI_IPC_ctrl_send_lmt_fin_t ipc_slmt_fin;
+    MPIDI_IPC_ctrl_send_lmt_hdr_pkt_t ipc_slmt_hdr_pkt;
 } MPIDI_SHMI_ctrl_hdr_t;
 
 typedef int (*MPIDI_SHMI_ctrl_cb) (MPIDI_SHMI_ctrl_hdr_t * ctrl_hdr);
