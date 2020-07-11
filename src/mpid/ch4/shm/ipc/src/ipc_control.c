@@ -31,6 +31,9 @@ int MPIDI_IPCI_send_contig_lmt_fin_cb(MPIDI_SHMI_ctrl_hdr_t * ctrl_hdr)
         MPL_free(memory);
     }
 
+    if (MPIDIG_REQUEST(sreq, cnt_ptr))
+        MPL_free(MPIDIG_REQUEST(sreq, cnt_ptr));
+
     MPIR_Datatype_release_if_not_builtin(MPIDIG_REQUEST(sreq, datatype));
     MPID_Request_complete(sreq);
 
@@ -162,11 +165,11 @@ int MPIDI_IPCI_send_lmt_cts_cb(MPIDI_SHMI_ctrl_hdr_t * ctrl_hdr)
         flattened_type = ipc_slmt_cts->flattened_type;
     else
         flattened_type = NULL;
-
     mpi_errno = MPIDI_IPCI_handle_lmt_cts_recv(ipc_slmt_cts->ipc_type, ipc_slmt_cts->ipc_handle,
                                                ipc_slmt_cts->data_sz,
                                                ipc_slmt_cts->rreq_ptr,
-                                               flattened_type, ipc_slmt_cts->sreq_ptr);
+                                               flattened_type, ipc_slmt_cts->cnt_handle,
+                                               ipc_slmt_cts->sreq_ptr);
 
   fn_exit:
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_IPCI_SEND_LMT_CTS_CB);

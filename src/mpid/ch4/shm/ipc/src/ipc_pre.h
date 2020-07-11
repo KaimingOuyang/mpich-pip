@@ -52,6 +52,7 @@ typedef struct MPIDI_IPC_ctrl_send_contig_lmt_cts {
     uint64_t data_sz;           /* data size in bytes */
     MPIR_Request *sreq_ptr;     /* send request pointer */
     MPIR_Request *rreq_ptr;     /* recv request pointer */
+    MPIDI_XPMEM_ipc_handle_t cnt_handle;
 
     /* flatten type */
     int flattened_type_size;

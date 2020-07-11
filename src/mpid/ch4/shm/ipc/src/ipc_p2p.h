@@ -87,6 +87,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_send_contig_lmt(const void *buf, MPI_Ain
     MPIDIG_REQUEST(sreq, count) = count;
     MPIDIG_REQUEST(sreq, context_id) = comm->context_id + context_offset;
     MPIDIG_REQUEST(sreq, memory) = NULL;
+    MPIDIG_REQUEST(sreq, cnt_ptr) = NULL;
 
     slmt_req_hdr->src_lrank = MPIR_Process.local_rank;
     slmt_req_hdr->data_sz = data_sz;
@@ -146,6 +147,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_handle_lmt_recv(MPIDI_IPCI_type_t ipc_ty
     MPIR_Datatype *src_datatype_ptr;
     int src_dt_contig, dest_dt_contig, src_true_lb, dest_true_lb;
     uintptr_t src_dt_size, src_count;
+    MPL_atomic_int_t *cnt_ptr;
 
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_IPCI_HANDLE_LMT_RECV);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_IPCI_HANDLE_LMT_RECV);
@@ -203,6 +205,14 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_handle_lmt_recv(MPIDI_IPCI_type_t ipc_ty
 
     slmt_cts = &ctrl_hdr->ipc_slmt_cts;
     slmt_cts->flattened_type_size = flattened_type_size;
+    cnt_ptr = (MPL_atomic_int_t *) MPL_malloc(sizeof(MPL_atomic_int_t), MPL_MEM_OTHER);
+    MPIR_Assert(cnt_ptr);
+    MPIDIG_REQUEST(rreq, cnt_ptr) = cnt_ptr;
+    MPL_atomic_store_int(cnt_ptr, 0);
+    slmt_cts->cnt_handle.src_offset = (uintptr_t) cnt_ptr;
+    slmt_cts->cnt_handle.src_lrank = MPIR_Process.local_rank;
+    slmt_cts->cnt_handle.data_sz = sizeof(MPL_atomic_int_t);
+
     if (flattened_type_size)
         memcpy(slmt_cts->flattened_type, flattened_type_ptr, flattened_type_size);
 
@@ -234,7 +244,6 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_handle_lmt_recv(MPIDI_IPCI_type_t ipc_ty
     slmt_cts->rreq_ptr = rreq;
     slmt_cts->ipc_type = ipc_attr.ipc_type;
     slmt_cts->ipc_handle = ipc_attr.ipc_handle;
-
     mpi_errno =
         MPIDI_SHM_do_lmt_ctrl_send(MPIDIG_REQUEST(rreq, rank), comm,
                                    MPIDI_IPC_SEND_LMT_CTS, ctrl_hdr_size, ctrl_hdr, rreq);
@@ -271,45 +280,59 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_handle_lmt_recv(MPIDI_IPCI_type_t ipc_ty
     /* Copy data to receive buffer */
     MPI_Aint actual_unpack_bytes;
     MPI_Aint actual_pack_bytes;
-    MPI_Aint offset, copy_data_sz;
+
+    int chunk_cnt;
+    uintptr_t chunk_size, copy_sz;
+    chunk_size = MPL_MIN(MPIR_CVAR_CH4_IPC_NON_CONTIG_CHUNK_SIZE, recv_data_sz);
+    chunk_cnt = recv_data_sz / chunk_size;
+    if (recv_data_sz % chunk_size != 0)
+        chunk_cnt++;
 
     copy_src_buf = (void *) ((uintptr_t) src_buf - src_true_lb);
-    offset = 0;
-    copy_data_sz = recv_data_sz >> 1;
+    do {
+        uintptr_t offset;
+        int chunk_id = MPL_atomic_fetch_add_int(cnt_ptr, 1);
+        if (chunk_id >= chunk_cnt)
+            break;
 
-    if (!src_dt_contig && dest_dt_contig) {
-        /* source datatype is non-contiguous and destination datatype is contiguous */
-        mpi_errno = MPIR_Typerep_pack((const void *) copy_src_buf, src_count, src_datatype,
-                                      offset, vaddr, copy_data_sz, &actual_pack_bytes);
-        MPIR_ERR_CHECK(mpi_errno);
-        MPIR_Assert(actual_pack_bytes <= recv_data_sz);
-    } else if (src_dt_contig) {
-        /* source datatype is contiguous */
-        mpi_errno =
-            MPIR_Typerep_unpack((const void *) ((char *) copy_src_buf + src_true_lb),
-                                copy_data_sz, MPIDIG_REQUEST(rreq, buffer), MPIDIG_REQUEST(rreq,
-                                                                                           count),
-                                MPIDIG_REQUEST(rreq, datatype), offset, &actual_unpack_bytes);
-        MPIR_ERR_CHECK(mpi_errno);
-        MPIR_Assert(actual_unpack_bytes <= recv_data_sz);
-    } else {
-        /* both datatype are non-contiguous */
-        void *tmp_buf = MPL_malloc(copy_data_sz, MPL_MEM_OTHER);
-        mpi_errno = MPIR_Typerep_pack((const void *) copy_src_buf, src_count, src_datatype,
-                                      offset, tmp_buf, copy_data_sz, &actual_pack_bytes);
-        MPIR_ERR_CHECK(mpi_errno);
-        MPIR_Assert(actual_pack_bytes <= copy_data_sz);
+        offset = chunk_id * chunk_size;
+        copy_sz = MPL_MIN(chunk_size, recv_data_sz - offset);
+        if (!src_dt_contig && dest_dt_contig) {
+            /* source datatype is non-contiguous and destination datatype is contiguous */
+            mpi_errno = MPIR_Typerep_pack((const void *) copy_src_buf, src_count, src_datatype,
+                                          offset, (void *) ((char *) vaddr + offset), copy_sz,
+                                          &actual_pack_bytes);
+            MPIR_ERR_CHECK(mpi_errno);
+            MPIR_Assert(actual_pack_bytes <= recv_data_sz);
+        } else if (src_dt_contig) {
+            /* source datatype is contiguous */
+            mpi_errno =
+                MPIR_Typerep_unpack((const void *) ((char *) copy_src_buf + src_true_lb + offset),
+                                    copy_sz, MPIDIG_REQUEST(rreq, buffer), MPIDIG_REQUEST(rreq,
+                                                                                          count),
+                                    MPIDIG_REQUEST(rreq, datatype), offset, &actual_unpack_bytes);
+            MPIR_ERR_CHECK(mpi_errno);
+            MPIR_Assert(actual_unpack_bytes <= recv_data_sz);
+        } else {
+            /* both datatype are non-contiguous */
+            void *tmp_buf = MPL_malloc(copy_sz, MPL_MEM_OTHER);
+            mpi_errno = MPIR_Typerep_pack((const void *) copy_src_buf, src_count, src_datatype,
+                                          offset, tmp_buf, copy_sz, &actual_pack_bytes);
+            MPIR_ERR_CHECK(mpi_errno);
+            MPIR_Assert(actual_pack_bytes <= copy_sz);
 
-        mpi_errno = MPIR_Typerep_unpack((const void *) tmp_buf, actual_pack_bytes,
-                                        MPIDIG_REQUEST(rreq, buffer), MPIDIG_REQUEST(rreq,
-                                                                                     count),
-                                        MPIDIG_REQUEST(rreq, datatype), offset,
-                                        &actual_unpack_bytes);
-        MPIR_ERR_CHECK(mpi_errno);
-        MPIR_Assert(actual_unpack_bytes <= copy_data_sz);
+            mpi_errno = MPIR_Typerep_unpack((const void *) tmp_buf, actual_pack_bytes,
+                                            MPIDIG_REQUEST(rreq, buffer), MPIDIG_REQUEST(rreq,
+                                                                                         count),
+                                            MPIDIG_REQUEST(rreq, datatype), offset,
+                                            &actual_unpack_bytes);
+            MPIR_ERR_CHECK(mpi_errno);
+            MPIR_Assert(actual_unpack_bytes <= actual_pack_bytes);
 
-        MPL_free(tmp_buf);
-    }
+            MPL_free(tmp_buf);
+        }
+    } while (1);
+
 
     mpi_errno = MPIDI_IPCI_handle_unmap(ipc_type, src_buf, ipc_handle);
     MPIR_ERR_CHECK(mpi_errno);
@@ -337,6 +360,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_handle_lmt_cts_recv(MPIDI_IPCI_type_t ip
                                                             size_t dest_data_sz,
                                                             MPIR_Request * rreq_ptr,
                                                             void *flattened_type,
+                                                            MPIDI_XPMEM_ipc_handle_t cnt_handle,
                                                             MPIR_Request * sreq)
 {
     int mpi_errno = MPI_SUCCESS;
@@ -406,49 +430,65 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_handle_lmt_cts_recv(MPIDI_IPCI_type_t ip
     /* Copy data to receive buffer */
     MPI_Aint actual_unpack_bytes;
     MPI_Aint actual_pack_bytes;
-    MPI_Aint offset, copy_data_sz;
     void *copy_dest_buf;
+    MPL_atomic_int_t *att_cnt_ptr;
+
+    mpi_errno = MPIDI_XPMEM_ipc_handle_map(cnt_handle, (void **) &att_cnt_ptr);
+    MPIR_Assert(mpi_errno == MPI_SUCCESS);
+
+    int chunk_cnt;
+    uintptr_t chunk_size, copy_sz;
+    chunk_size = MPL_MIN(MPIR_CVAR_CH4_IPC_NON_CONTIG_CHUNK_SIZE, dest_data_sz);
+    chunk_cnt = dest_data_sz / chunk_size;
+    if (dest_data_sz % chunk_size != 0)
+        chunk_cnt++;
 
     copy_dest_buf = (void *) ((uintptr_t) dest_buf - dest_true_lb);
+    do {
+        uintptr_t offset;
+        int chunk_id = MPL_atomic_fetch_add_int(att_cnt_ptr, 1);
+        if (chunk_id >= chunk_cnt)
+            break;
 
-    offset = dest_data_sz >> 1;
-    copy_data_sz = dest_data_sz - offset;
+        offset = chunk_id * chunk_size;
+        copy_sz = MPL_MIN(chunk_size, dest_data_sz - offset);
+        if (!src_dt_contig && dest_dt_contig) {
+            /* source datatype is non-contiguous and destination datatype is contiguous */
+            mpi_errno =
+                MPIR_Typerep_pack(MPIDIG_REQUEST(sreq, buffer), MPIDIG_REQUEST(sreq, count),
+                                  MPIDIG_REQUEST(sreq, datatype), offset,
+                                  (void *) ((uintptr_t) copy_dest_buf + dest_true_lb + offset),
+                                  copy_sz, &actual_pack_bytes);
+            MPIR_ERR_CHECK(mpi_errno);
+            MPIR_Assert(actual_pack_bytes <= copy_sz);
+        } else if (src_dt_contig) {
+            /* source datatype is contiguous */
+            mpi_errno =
+                MPIR_Typerep_unpack((void *) ((char *) MPIDIG_REQUEST(sreq, buffer) + src_true_lb +
+                                              offset), copy_sz, copy_dest_buf, dest_count,
+                                    dest_datatype, offset, &actual_unpack_bytes);
+            MPIR_ERR_CHECK(mpi_errno);
+            MPIR_Assert(actual_unpack_bytes <= copy_sz);
+        } else {
+            /* both datatype are non-contiguous */
+            void *tmp_buf = MPL_malloc(copy_sz, MPL_MEM_OTHER);
+            mpi_errno =
+                MPIR_Typerep_pack(MPIDIG_REQUEST(sreq, buffer), MPIDIG_REQUEST(sreq, count),
+                                  MPIDIG_REQUEST(sreq, datatype), offset, tmp_buf, copy_sz,
+                                  &actual_pack_bytes);
+            MPIR_ERR_CHECK(mpi_errno);
+            MPIR_Assert(actual_pack_bytes <= copy_sz);
 
-    if (!src_dt_contig && dest_dt_contig) {
-        /* source datatype is non-contiguous and destination datatype is contiguous */
-        mpi_errno =
-            MPIR_Typerep_pack(MPIDIG_REQUEST(sreq, buffer), MPIDIG_REQUEST(sreq, count),
-                              MPIDIG_REQUEST(sreq, datatype), offset,
-                              (void *) ((uintptr_t) copy_dest_buf + dest_true_lb + offset),
-                              copy_data_sz, &actual_pack_bytes);
-        MPIR_ERR_CHECK(mpi_errno);
-        MPIR_Assert(actual_pack_bytes <= dest_data_sz);
-    } else if (src_dt_contig) {
-        /* source datatype is contiguous */
-        mpi_errno =
-            MPIR_Typerep_unpack((void *) ((char *) MPIDIG_REQUEST(sreq, buffer) + src_true_lb +
-                                          offset), copy_data_sz, copy_dest_buf, dest_count,
-                                dest_datatype, offset, &actual_unpack_bytes);
-        MPIR_ERR_CHECK(mpi_errno);
-        MPIR_Assert(actual_unpack_bytes <= dest_data_sz);
-    } else {
-        /* both datatype are non-contiguous */
-        void *tmp_buf = MPL_malloc(copy_data_sz, MPL_MEM_OTHER);
-        mpi_errno =
-            MPIR_Typerep_pack(MPIDIG_REQUEST(sreq, buffer), MPIDIG_REQUEST(sreq, count),
-                              MPIDIG_REQUEST(sreq, datatype), offset, tmp_buf, copy_data_sz,
-                              &actual_pack_bytes);
-        MPIR_ERR_CHECK(mpi_errno);
-        MPIR_Assert(actual_pack_bytes <= copy_data_sz);
+            mpi_errno = MPIR_Typerep_unpack((const void *) tmp_buf, actual_pack_bytes,
+                                            copy_dest_buf, dest_count, dest_datatype, offset,
+                                            &actual_unpack_bytes);
+            MPIR_ERR_CHECK(mpi_errno);
+            MPIR_Assert(actual_unpack_bytes <= actual_pack_bytes);
 
-        mpi_errno = MPIR_Typerep_unpack((const void *) tmp_buf, actual_pack_bytes,
-                                        copy_dest_buf, dest_count, dest_datatype, offset,
-                                        &actual_unpack_bytes);
-        MPIR_ERR_CHECK(mpi_errno);
-        MPIR_Assert(actual_unpack_bytes <= copy_data_sz);
+            MPL_free(tmp_buf);
+        }
+    } while (1);
 
-        MPL_free(tmp_buf);
-    }
 
     mpi_errno = MPIDI_IPCI_handle_unmap(ipc_type, dest_buf, ipc_handle);
     MPIR_ERR_CHECK(mpi_errno);

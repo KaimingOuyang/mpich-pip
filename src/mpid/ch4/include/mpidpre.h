@@ -23,6 +23,7 @@
 #include "uthash.h"
 #include "ch4_csel_container.h"
 #include "ch4i_workq_types.h"
+#include "mpl.h"
 
 /* Currently, workq is a configure-time only option and guarded by macro
  * MPIDI_CH4_USE_WORK_QUEUES. If we want to enable runtime option, we will
@@ -209,6 +210,7 @@ typedef struct MPIDIG_req_t {
     MPIR_Context_id_t context_id;
     MPI_Datatype datatype;
     void *memory;
+    MPL_atomic_int_t *cnt_ptr;
 } MPIDIG_req_t;
 
 /* Structure to capture arguments for pt2pt persistent communications */
