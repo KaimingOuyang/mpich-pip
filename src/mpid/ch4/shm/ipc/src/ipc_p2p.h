@@ -12,7 +12,7 @@ cvars:
     - name        : MPIR_CVAR_CH4_IPC_NON_CONTIG_CHUNK_SIZE
       category    : CH4
       type        : int
-      default     : 262144
+      default     : 32768
       class       : none
       verbosity   : MPI_T_VERBOSITY_USER_BASIC
       scope       : MPI_T_SCOPE_ALL_EQ
