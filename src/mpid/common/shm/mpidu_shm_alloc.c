@@ -475,6 +475,9 @@ static int shm_alloc(MPIR_Comm * shm_comm_ptr, MPIDU_shm_seg_t * shm_seg, bool *
         } else
             mapped_flag = true;
 
+        /* allocate physical memory */
+        memset(shm_seg->base_addr, 0, shm_seg->segment_len);
+
         mpl_err = MPL_shm_hnd_get_serialized_by_ref(shm_seg->hnd, &serialized_hnd);
         if (mpl_err != MPL_SUCCESS)
             shm_fail_flag = true;

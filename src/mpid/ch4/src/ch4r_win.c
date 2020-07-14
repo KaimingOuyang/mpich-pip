@@ -529,6 +529,9 @@ static int win_shm_alloc_impl(MPI_Aint size, int disp_unit, MPIR_Comm * comm_ptr
             if (mpi_errno != MPI_SUCCESS)
                 goto fn_fail;
 
+            /* instantiate PTE */
+            memset(MPIDIG_WIN(win, mmap_addr), 0, mapsize);
+
             if (shm_mapfail_flag) {
                 MPIDIG_WIN(win, mmap_sz) = 0;
                 MPIDIG_WIN(win, mmap_addr) = NULL;
