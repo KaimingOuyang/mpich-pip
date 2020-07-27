@@ -214,6 +214,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_handle_lmt_recv(MPIDI_IPCI_type_t ipc_ty
     MPI_Aint actual_unpack_bytes;
     MPI_Aint actual_pack_bytes;
 
+    MPIDI_IPCI_global.total_intra_data += recv_data_sz;
+
     copy_src_buf = (void *) ((uintptr_t) src_buf - src_true_lb);
     if (!src_dt_contig && dest_dt_contig) {
         /* source datatype is non-contiguous and destination datatype is contiguous */

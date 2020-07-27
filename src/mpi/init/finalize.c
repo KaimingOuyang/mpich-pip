@@ -112,10 +112,71 @@ thread that initialized MPI with either 'MPI_Init' or 'MPI_Init_thread'.
 .N Errors
 .N MPI_SUCCESS
 @*/
+
+extern MPIDI_IPCI_global_t MPIDI_IPCI_global;
 int MPI_Finalize(void)
 {
     int mpi_errno = MPI_SUCCESS;
     int rank = MPIR_Process.comm_world->rank;
+
+    char *filename = getenv("XPMEM_INTRA_AMOUNT_FILE");
+    FILE *fp = fopen(filename, "a");
+    int dummy;
+    MPIR_Request *request_ptr = NULL;
+    if (rank == 0) {
+        fprintf(fp, "%d %ld\n", rank, MPIDI_IPCI_global.total_intra_data);
+        fclose(fp);
+        mpi_errno = MPID_Send(&dummy, 1, MPI_INT, rank + 1, 0, MPIR_Process.comm_world,
+                              MPIR_CONTEXT_INTRA_PT2PT, &request_ptr);
+        if (mpi_errno != MPI_SUCCESS)
+            goto fn_fail;
+
+        if (request_ptr != NULL) {
+            mpi_errno = MPID_Wait(request_ptr, MPI_STATUS_IGNORE);
+            MPIR_ERR_CHECK(mpi_errno);
+            MPIR_Request_free(request_ptr);
+
+            if (mpi_errno != MPI_SUCCESS)
+                goto fn_fail;
+        }
+
+    } else {
+        mpi_errno = MPID_Recv(&dummy, 1, MPI_INT, rank - 1, 0, MPIR_Process.comm_world,
+                              MPIR_CONTEXT_INTRA_PT2PT, MPI_STATUS_IGNORE, &request_ptr);
+        if (mpi_errno != MPI_SUCCESS)
+            goto fn_fail;
+
+        if (request_ptr != NULL) {
+            mpi_errno = MPID_Wait(request_ptr, MPI_STATUS_IGNORE);
+            MPIR_ERR_CHECK(mpi_errno);
+            MPIR_Request_free(request_ptr);
+
+            if (mpi_errno != MPI_SUCCESS)
+                goto fn_fail;
+        }
+
+        fprintf(fp, "%d %ld\n", rank, MPIDI_IPCI_global.total_intra_data);
+        fclose(fp);
+
+        if (rank != MPIR_Process.size - 1) {
+            request_ptr = NULL;
+            mpi_errno = MPID_Send(&dummy, 1, MPI_INT, rank + 1, 0, MPIR_Process.comm_world,
+                                  MPIR_CONTEXT_INTRA_PT2PT, &request_ptr);
+            if (mpi_errno != MPI_SUCCESS)
+                goto fn_fail;
+
+            if (request_ptr != NULL) {
+                mpi_errno = MPID_Wait(request_ptr, MPI_STATUS_IGNORE);
+                MPIR_ERR_CHECK(mpi_errno);
+                MPIR_Request_free(request_ptr);
+
+                if (mpi_errno != MPI_SUCCESS)
+                    goto fn_fail;
+            }
+        }
+    }
+    MPIR_Errflag_t errflag = MPIR_ERR_NONE;
+    MPIR_Barrier(MPIR_Process.comm_world, &errflag);
     MPIR_FUNC_TERSE_FINALIZE_STATE_DECL(MPID_STATE_MPI_FINALIZE);
 
     MPIR_ERRTEST_INITIALIZED_ORDIE();
