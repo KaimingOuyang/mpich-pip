@@ -297,6 +297,9 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_handle_lmt_recv(MPIDI_IPCI_type_t ipc_ty
 
         offset = chunk_id * chunk_size;
         copy_sz = MPL_MIN(chunk_size, recv_data_sz - offset);
+
+        MPIDI_IPCI_global.total_intra_data += copy_sz;
+
         if (!src_dt_contig && dest_dt_contig) {
             /* source datatype is non-contiguous and destination datatype is contiguous */
             mpi_errno = MPIR_Typerep_pack((const void *) copy_src_buf, src_count, src_datatype,
@@ -452,6 +455,9 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_handle_lmt_cts_recv(MPIDI_IPCI_type_t ip
 
         offset = chunk_id * chunk_size;
         copy_sz = MPL_MIN(chunk_size, dest_data_sz - offset);
+
+        MPIDI_IPCI_global.total_intra_data += copy_sz;
+
         if (!src_dt_contig && dest_dt_contig) {
             /* source datatype is non-contiguous and destination datatype is contiguous */
             mpi_errno =

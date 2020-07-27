@@ -16,6 +16,7 @@ typedef enum MPIDI_IPCI_type {
 
 typedef struct {
     MPIR_Group *node_group_ptr; /* cache node group, used at win_create. */
+    uintptr_t total_intra_data;
 } MPIDI_IPCI_global_t;
 
 /* memory handle definition

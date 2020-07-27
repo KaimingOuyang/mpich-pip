@@ -8,11 +8,13 @@
 #include "mpidu_init_shm.h"
 #include "xpmem_seg.h"
 #include "shm_control.h"
-
+extern MPIDI_IPCI_global_t MPIDI_IPCI_global;
 int MPIDI_XPMEM_mpi_init_hook(int rank, int size, int *tag_bits)
 {
     int mpi_errno = MPI_SUCCESS;
     int i;
+
+    MPIDI_IPCI_global.total_intra_data = 0;
 
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_XPMEM_MPI_INIT_HOOK);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_XPMEM_MPI_INIT_HOOK);
