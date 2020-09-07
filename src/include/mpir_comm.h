@@ -171,6 +171,8 @@ struct MPIR_Comm {
                                  * has been revoked */
     MPIR_Info *info;            /* Hints to the communicator */
 
+    int is_nproc_equal;
+
     struct {
         int pof2;               /* Nearest (smaller than or equal to) power of 2
                                  * to the number of ranks in the communicator.

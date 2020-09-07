@@ -9,5 +9,6 @@
 
 int MPIDI_PIP_mpi_init_hook(int rank, int size);
 int MPIDI_PIP_mpi_finalize_hook(void);
+int MPIDI_PIP_mpi_comm_create_hook(MPIR_Comm * comm);
 
 #endif /* PIP_NOINLINE_H_INCLUDED */

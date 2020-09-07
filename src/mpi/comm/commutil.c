@@ -96,6 +96,8 @@ int MPII_Comm_init(MPIR_Comm * comm_p)
     comm_p->intranode_table = NULL;
     comm_p->internode_table = NULL;
 
+    comm_p->is_nproc_equal = 0;
+
     /* abstractions bleed a bit here... :(*/
     comm_p->next_sched_tag = MPIR_FIRST_NBC_TAG;
 

@@ -12,6 +12,10 @@
 #include "../xpmem/xpmem_noinline.h"
 #endif
 
+#ifdef MPIDI_CH4_SHM_ENABLE_PIP
+#include "../pip/pip_noinline.h"
+#endif
+
 int MPIDI_SHMI_mpi_comm_create_hook(MPIR_Comm * comm)
 {
     int ret;
@@ -20,9 +24,18 @@ int MPIDI_SHMI_mpi_comm_create_hook(MPIR_Comm * comm)
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_SHMI_MPI_COMM_CREATE_HOOK);
 
     ret = MPIDI_POSIX_mpi_comm_create_hook(comm);
+    MPIR_ERR_CHECK(ret);
 
+#ifdef MPIDI_CH4_SHM_ENABLE_PIP
+    ret = MPIDI_PIP_mpi_comm_create_hook(comm);
+    MPIR_ERR_CHECK(ret);
+#endif
+
+  fn_exit:
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_SHMI_MPI_COMM_CREATE_HOOK);
     return ret;
+  fn_fail:
+    goto fn_exit;
 }
 
 int MPIDI_SHMI_mpi_comm_free_hook(MPIR_Comm * comm)

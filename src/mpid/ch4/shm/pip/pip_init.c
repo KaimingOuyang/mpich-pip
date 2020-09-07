@@ -249,4 +249,34 @@ int MPIDI_PIP_mpi_finalize_hook(void)
     goto fn_exit;
 }
 
+int MPIDI_PIP_mpi_comm_create_hook(MPIR_Comm * comm)
+{
+    int max_nodes = MPIR_Process.num_nodes;
+    int node_id;
+    int mpi_errno = MPI_SUCCESS;
+    int *nprocs_node = MPL_malloc(max_nodes * sizeof(int), MPL_MEM_OTHER);
+    memset(nprocs_node, 0, max_nodes * sizeof(int));
+    for (int i = 0; i < MPIR_Process.size; ++i) {
+        mpi_errno = MPID_Get_node_id(comm, i, &node_id);
+        MPIR_ERR_CHECK(mpi_errno);
+        nprocs_node[node_id] += 1;
+    }
+
+    int cur_procs = nprocs_node[0];
+    int is_equal_flag = 1;
+    for (int i = 0; i < max_nodes; ++i) {
+        if (cur_procs != nprocs_node[i]) {
+            is_equal_flag = 0;
+            break;
+        }
+    }
+
+    comm->is_nproc_equal = is_equal_flag;
+
+  fn_exit:
+    return mpi_errno;
+  fn_fail:
+    goto fn_exit;
+}
+
 #endif
