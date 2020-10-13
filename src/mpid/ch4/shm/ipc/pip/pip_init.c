@@ -7,6 +7,7 @@
 #include "mpiimpl.h"
 #include "mpidu_init_shm.h"
 #include "pip_pre.h"
+#include "mpl.h"
 
 #ifdef MPIDI_CH4_SHM_ENABLE_PIP
 
@@ -114,7 +115,7 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     int local_root = MPIDI_PIP_global.numa_root_rank;
     if (local_root == local_rank) {
         /* root process in eahc NUMA node */
-        OPA_store_int(&MPIDI_PIP_global.rmt_steal_procs, 0);
+        MPL_atomic_relaxed_store_uint32(&MPIDI_PIP_global.rmt_steal_procs, 0);
         for (i = 0; i < MPIDI_STEALING_CASE; ++i) {
             MPIDI_PIP_global.local_copy_state[i] =
                 (int *) MPL_malloc(sizeof(int) * MPIDI_PIP_global.numa_num_procs[local_numa_id],
@@ -191,7 +192,7 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     MPIDU_Init_shm_barrier();
 
     /* one-time barrier */
-    OPA_store_int(&MPIDI_PIP_global.fin_procs, 0);
+    MPL_atomic_release_store_uint32(&MPIDI_PIP_global.fin_procs, 0);
     MPIDU_Init_shm_barrier();
     MPIDI_PIP_global.fin_procs_ptr = &MPIDI_PIP_global.pip_global_array[0]->fin_procs;
 
@@ -213,8 +214,9 @@ int MPIDI_PIP_mpi_finalize_hook(void)
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_XPMEM_FINALIZE_HOOK);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_XPMEM_FINALIZE_HOOK);
 
-    OPA_add_int(MPIDI_PIP_global.fin_procs_ptr, 1);
-    while (OPA_load_int(MPIDI_PIP_global.fin_procs_ptr) != MPIDI_PIP_global.num_local);
+    MPL_atomic_fetch_add_uint32(MPIDI_PIP_global.fin_procs_ptr, 1);
+    while (MPL_atomic_acquire_load_uint32(MPIDI_PIP_global.fin_procs_ptr) !=
+           MPIDI_PIP_global.num_local);
     // printf("rank %d - finalize pip\n", MPIDI_PIP_global.local_rank);
     // fflush(stdout);
     MPIR_Assert(MPIDI_PIP_global.task_queue->task_num == 0);

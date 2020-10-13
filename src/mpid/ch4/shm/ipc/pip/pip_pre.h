@@ -116,12 +116,12 @@ typedef struct MPIDI_PIP_global {
     int numa_local_rank;
 
     /* finalized procs cnt */
-    OPA_int_t fin_procs;
-    OPA_int_t *fin_procs_ptr;
+    MPL_atomic_uint32_t fin_procs;
+    MPL_atomic_uint32_t *fin_procs_ptr;
 
     /* current #remote stealing processes */
-    OPA_int_t rmt_steal_procs;  /* #remote stealing processes, valid only in root process */
-    OPA_int_t *rmt_steal_procs_ptr;
+    MPL_atomic_uint32_t rmt_steal_procs;        /* #remote stealing processes, valid only in root process */
+    MPL_atomic_uint32_t *rmt_steal_procs_ptr;
 
     /* copy state */
     int *local_copy_state[MPIDI_STEALING_CASE]; /* copy state of processes in eahc NUMA node */
