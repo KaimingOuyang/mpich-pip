@@ -89,15 +89,6 @@ int MPI_Init(int *argc, char ***argv)
     int mpi_errno = MPI_SUCCESS;
     MPIR_FUNC_TERSE_INIT_STATE_DECL(MPID_STATE_MPI_INIT);
 
-#ifdef HAVE_PIP
-    {
-        int pipid = -10;
-        pip_get_pipid(&pipid);
-        fprintf(stdout, "%s: my pipid=%d\n", __FUNCTION__, pipid);
-        fflush(stdout);
-    }
-#endif
-
     MPIR_FUNC_TERSE_INIT_ENTER(MPID_STATE_MPI_INIT);
 #ifdef HAVE_ERROR_CHECKING
     {
