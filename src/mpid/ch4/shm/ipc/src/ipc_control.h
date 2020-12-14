@@ -10,5 +10,6 @@
 
 int MPIDI_IPCI_send_contig_lmt_rts_cb(MPIDI_SHMI_ctrl_hdr_t * ctrl_hdr);
 int MPIDI_IPCI_send_contig_lmt_fin_cb(MPIDI_SHMI_ctrl_hdr_t * ctrl_hdr);
+void MPIDI_IPC_do_stealing();
 
 #endif /* IPC_CONTROL_H_INCLUDED */

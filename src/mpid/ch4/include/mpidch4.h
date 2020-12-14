@@ -16,6 +16,7 @@ int MPID_Init(int, int *);
 int MPID_Init_local(int requested, int *provided);
 int MPID_Init_world(void);
 int MPID_InitCompleted(void);
+int MPID_Init_progress_stealing();
 MPL_STATIC_INLINE_PREFIX int MPID_Cancel_recv(MPIR_Request *) MPL_STATIC_INLINE_SUFFIX;
 MPL_STATIC_INLINE_PREFIX int MPID_Cancel_send(MPIR_Request *) MPL_STATIC_INLINE_SUFFIX;
 int MPID_Comm_disconnect(MPIR_Comm *);
@@ -29,6 +30,7 @@ MPL_STATIC_INLINE_PREFIX int MPID_Comm_AS_enabled(MPIR_Comm *) MPL_STATIC_INLINE
 int MPID_Comm_get_lpid(MPIR_Comm *, int, int *, bool);
 int MPID_CS_finalize(void);
 int MPID_Finalize(void);
+int MPID_Finalize_progress_stealing();
 int MPID_Get_universe_size(int *);
 int MPID_Get_processor_name(char *, int, int *);
 MPL_STATIC_INLINE_PREFIX int MPID_Iprobe(int, int, MPIR_Comm *, int, int *,

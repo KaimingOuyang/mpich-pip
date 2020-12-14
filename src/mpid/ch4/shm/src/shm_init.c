@@ -48,6 +48,19 @@ int MPIDI_SHM_mpi_init_hook(int rank, int size, int *tag_bits)
     goto fn_exit;
 }
 
+extern int MPIDI_PIP_init_numa_info();
+extern int MPIDI_PIP_mpi_stealing_shutdown();
+extern int MPIDI_PIP_finalize_numa_info();
+
+int MPIDI_SHM_mpi_stealing_shutdown(void)
+{
+    int ret;
+
+    ret = MPIDI_PIP_mpi_stealing_shutdown();
+    return ret;
+
+}
+
 int MPIDI_SHM_mpi_finalize_hook(void)
 {
     int ret;

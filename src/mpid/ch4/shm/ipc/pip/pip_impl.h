@@ -12,6 +12,7 @@
 #ifndef PIP_IMPL_H_INCLUDED
 #define PIP_IMPL_H_INCLUDED
 
+#include "ch4_types.h"
 #include "pip_pre.h"
 
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_Task_safe_enqueue(MPIDI_PIP_task_queue_t * task_queue,
@@ -123,10 +124,42 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_fflush_task()
     return;
 }
 
-/* Stealing procedure */
-MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
+
+MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_progress_stealing()
 {
-#ifdef MPIDI_PIP_STEALING_ENABLE
+    int victim = rand() % MPIDI_PIP_global.num_local;
+
+    if (victim != MPIDI_PIP_global.local_rank && MPIDI_PIP_global.pm_array[victim]->enable &&
+        !MPIDI_PIP_global.pm_array[victim]->in_progress) {
+        int vci_id = rand() % MPIDI_global.n_vcis;
+        int ret;
+        MPIDI_PIP_progress_t *victim_pm = MPIDI_PIP_global.pm_array[victim];
+        MPIDI_vci_t *vci_array = (MPIDI_vci_t *) victim_pm->vci;
+        MPL_thread_mutex_trylock(&vci_array[vci_id].vci.lock.mutex, &ret);
+        if (ret == 0) {
+            MPIR_Assert(vci_array[vci_id].vci.lock.count == 0);
+            MPL_thread_self(&vci_array[vci_id].vci.lock.owner);
+            int prog_cnt = victim_pm->ch4_progress_counts[vci_id];
+
+            /* netmod progress stealing */
+            victim_pm->netmod_progress(vci_id, 0);
+
+            if (prog_cnt == victim_pm->ch4_progress_counts[vci_id]) {
+                victim_pm->shmmod_progress(vci_id, 0);
+            }
+
+            vci_array[vci_id].vci.lock.owner = 0;
+            MPL_thread_mutex_unlock(&vci_array[vci_id].vci.lock.mutex, &ret);
+            if (ret != 0) {
+                printf("MPIDI_PIP_progress_stealing::MPL_thread_mutex_unlock fails, ret = %d\n",
+                       ret);
+            }
+        }
+    }
+}
+
+MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_task_stealing()
+{
     int victim = rand() % MPIDI_PIP_global.num_local;
     MPIDI_PIP_task_t *task = NULL;
 
@@ -141,7 +174,24 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_steal_task()
             }
         }
     }
-#endif /* MPIDI_PIP_STEALING_ENABLE */
+}
+
+/* Stealing procedure */
+MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_do_stealing()
+{
+    int equal;
+    MPL_thread_id_t self;
+    MPL_thread_self(&self);
+    MPL_thread_same(&self, &MPIDI_PIP_global.self, &equal);
+    if (equal) {
+#ifdef PIP_PROGRESS_STEALING_ENABLE
+        MPIDI_PIP_progress_stealing();
+#endif
+
+#ifdef PIP_TASK_STEALING_ENABLE
+        MPIDI_PIP_task_stealing();
+#endif
+    }
     return;
 }
 

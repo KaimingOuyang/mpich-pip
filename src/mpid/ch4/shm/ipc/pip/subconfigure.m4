@@ -8,6 +8,7 @@ AC_DEFUN([PAC_SUBCFG_PREREQ_]PAC_SUBCFG_AUTO_SUFFIX,[
         done
     ])dnl end AM_COND_IF(BUILD_CH4,...)
 
+    AC_MSG_NOTICE([ch4_shm equals to "$ch4_shm", build_ch4_shm_pip is "$build_ch4_shm_pip"])
     AM_CONDITIONAL([BUILD_SHM_PIP],[test "X$build_ch4_shm_pip" = "Xyes"])
 ])dnl end _PREREQ
 

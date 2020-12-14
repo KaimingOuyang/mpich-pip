@@ -27,6 +27,47 @@ int MPIDI_PIP_mpi_init_task_queue(MPIDI_PIP_task_queue_t * task_queue)
     return mpi_errno;
 }
 
+void MPIDI_PIP_init_progress_funcs()
+{
+    int num_local = MPIR_Process.local_size;
+
+    MPL_thread_self(&MPIDI_PIP_global.self);
+
+    MPIDI_PIP_global.pm = MPL_malloc(sizeof(MPIDI_PIP_progress_t), MPL_MEM_OTHER);
+
+    MPIDI_PIP_global.pm->ch4_progress_counts = MPIDI_global.progress_counts;
+    MPIDI_PIP_global.pm->in_progress = 0;
+    MPIDI_global.in_progress = &MPIDI_PIP_global.pm->in_progress;
+
+    /* here I assume we use global progress */
+    MPIDI_PIP_global.pm->vci = MPIDI_global.vci;
+    MPIDI_PIP_global.pm->enable = 0;
+    MPIDI_global.pm_enable = &MPIDI_PIP_global.pm->enable;
+
+    MPIDI_PIP_global.pm->netmod_progress = MPIDI_NM_progress;
+    MPIDI_PIP_global.pm->shmmod_progress = MPIDI_SHM_progress;
+
+    MPIDI_PIP_global.pm_array =
+        (MPIDI_PIP_progress_t **) MPL_malloc(sizeof(MPIDI_PIP_progress_t *) * num_local,
+                                             MPL_MEM_OTHER);
+
+    MPIDU_Init_shm_put(&MPIDI_PIP_global.pm, sizeof(MPIDI_PIP_progress_t *));
+    MPIDU_Init_shm_barrier();
+
+    for (int i = 0; i < num_local; i++)
+        MPIDU_Init_shm_get(i, sizeof(MPIDI_PIP_progress_t *), &MPIDI_PIP_global.pm_array[i]);
+    MPIDU_Init_shm_barrier();
+
+    return;
+}
+
+void MPIDI_PIP_finalize_progress_funcs()
+{
+    MPL_free(MPIDI_PIP_global.pm_array);
+    MPL_free(MPIDI_PIP_global.pm);
+    return;
+}
+
 int MPIDI_PIP_mpi_init_hook(int rank, int size)
 {
     int mpi_errno = MPI_SUCCESS;
@@ -89,6 +130,12 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     /* For stealing rand seeds */
     srand(time(NULL) + MPIDI_PIP_global.local_rank * MPIDI_PIP_global.local_rank);
 
+#ifdef PIP_PROGRESS_STEALING_ENABLE
+    MPIDI_PIP_init_progress_funcs();
+#endif
+    /* Disable XPMEM module */
+    MPIR_CVAR_CH4_XPMEM_ENABLE = 0;
+
   fn_exit:
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_PIP_INIT_HOOK);
     return mpi_errno;
@@ -101,8 +148,8 @@ int MPIDI_PIP_mpi_finalize_hook(void)
 {
     int mpi_errno = MPI_SUCCESS;
     int i, ret = 0;
-    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_XPMEM_FINALIZE_HOOK);
-    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_XPMEM_FINALIZE_HOOK);
+    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_PIP_FINALIZE_HOOK);
+    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_PIP_FINALIZE_HOOK);
 
 
     MPIR_Assert(MPIDI_PIP_global.task_queue->task_num == 0);
@@ -114,11 +161,27 @@ int MPIDI_PIP_mpi_finalize_hook(void)
     MPL_free(MPIDI_PIP_global.task_queue_array);
     MPL_free(MPIDI_PIP_global.pip_global_array);
 
+#ifdef PIP_PROGRESS_STEALING_ENABLE
+    MPIDI_PIP_finalize_progress_funcs();
+#endif
+
   fn_exit:
-    MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_XPMEM_FINALIZE_HOOK);
+    MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_PIP_FINALIZE_HOOK);
     return mpi_errno;
   fn_fail:
     goto fn_exit;
+}
+
+/* does not allow progress stealing at finalize */
+int MPIDI_PIP_mpi_stealing_shutdown()
+{
+    int mpi_errno = MPI_SUCCESS;
+    MPIR_Errflag_t errflag = MPIR_ERR_NONE;
+
+    MPIDI_PIP_global.pm->enable = 0;
+    if (MPIR_Process.comm_world->node_comm != NULL)
+        mpi_errno = MPIR_Barrier(MPIR_Process.comm_world->node_comm, &errflag);
+    return mpi_errno;
 }
 
 #endif

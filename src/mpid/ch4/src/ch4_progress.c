@@ -96,11 +96,19 @@ static int progress_test(MPID_Progress_state * state, int wait)
             if (wait) {
                 check_progress_made_vci(state, vci);
             }
+#if defined MPIDI_CH4_SHM_ENABLE_PIP && defined PIP_PROGRESS_STEALING_ENABLE
+            extern int MPIDI_SHM_stealing(void);
+            if (wait && !state->progress_made) {
+                MPIDI_SHM_stealing();
+            }
+#endif
             MPID_THREAD_CS_EXIT(VCI, MPIDI_VCI(vci).lock);
             MPIR_ERR_CHECK(mpi_errno);
+
             if (wait && state->progress_made) {
                 break;
             }
+
         }
     } else {
         for (int i = 0; i < state->vci_count; i++) {
@@ -224,6 +232,9 @@ int MPID_Progress_wait(MPID_Progress_state * state)
 
 #else
     state->progress_made = 0;
+#if defined PIP_PROGRESS_STEALING_ENABLE
+    *MPIDI_global.in_progress = 1;
+#endif
     while (1) {
         mpi_errno = progress_test(state, 1);
         MPIR_ERR_CHECK(mpi_errno);
@@ -232,6 +243,9 @@ int MPID_Progress_wait(MPID_Progress_state * state)
         }
         MPIDI_PROGRESS_YIELD();
     }
+#if defined PIP_PROGRESS_STEALING_ENABLE
+    *MPIDI_global.in_progress = 0;
+#endif
 
 #endif
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPID_PROGRESS_WAIT);

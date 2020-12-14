@@ -8,6 +8,12 @@
 #include "ipc_types.h"
 #include "ipc_recv.h"
 #include "ipc_control.h"
+#include "../pip/pip_impl.h"
+
+void MPIDI_IPC_do_stealing()
+{
+    MPIDI_PIP_do_stealing();
+}
 
 int MPIDI_IPCI_send_contig_lmt_fin_cb(MPIDI_SHMI_ctrl_hdr_t * ctrl_hdr)
 {

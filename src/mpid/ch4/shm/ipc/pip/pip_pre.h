@@ -42,12 +42,23 @@ typedef struct MPIDI_PIP_task_queue {
     int task_num;
 } MPIDI_PIP_task_queue_t;
 
+typedef struct MPIDI_PIP_progress {
+    void *vci;
+    int enable;
+    int in_progress;            /* if the process is in progress */
+    int *ch4_progress_counts;
+    int (*netmod_progress) (int, int);
+    int (*shmmod_progress) (int, int);
+
+} MPIDI_PIP_progress_t;
+
 typedef struct MPIDI_PIP_global {
     uint32_t num_local;
     uint32_t local_rank;
     uint32_t rank;
     uint32_t num_numa_node;
     uint32_t local_numa_id;
+    MPL_thread_id_t self;
 
     MPIDI_PIP_task_queue_t *task_queue;
     MPIDI_PIP_task_queue_t **task_queue_array;
@@ -55,6 +66,10 @@ typedef struct MPIDI_PIP_global {
 
     /* Info structures */
     struct MPIDI_PIP_global **pip_global_array;
+
+    /* progress manager */
+    MPIDI_PIP_progress_t *pm;
+    MPIDI_PIP_progress_t **pm_array;
 } MPIDI_PIP_global_t;
 
 typedef struct {

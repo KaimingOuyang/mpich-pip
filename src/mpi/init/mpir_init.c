@@ -246,11 +246,14 @@ int MPII_Init_thread(int *argc, char ***argv, int user_required, int *provided,
     if (provided)
         *provided = MPIR_ThreadInfo.thread_provided;
 
+    mpi_errno = MPID_Init_progress_stealing();
+
   fn_exit:
     if (is_world_model) {
         MPII_world_set_initilized();
     }
     MPL_initlock_unlock(&init_lock);
+    
     return mpi_errno;
 
   fn_fail:
@@ -269,6 +272,11 @@ int MPII_Finalize(MPIR_Session * session_ptr)
     int mpi_errno = MPI_SUCCESS;
     int rank = MPIR_Process.comm_world->rank;
     bool is_world_model = (session_ptr == NULL);
+
+#ifdef PIP_PROGRESS_STEALING_ENABLE
+    mpi_errno = MPID_Finalize_progress_stealing();
+    MPIR_ERR_CHECK(mpi_errno);
+#endif
 
     MPL_initlock_lock(&init_lock);
 

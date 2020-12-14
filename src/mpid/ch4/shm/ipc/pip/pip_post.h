@@ -66,6 +66,7 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_PIP_get_ipc_attr(const void *vaddr, uintptr_t
 
 int MPIDI_PIP_mpi_init_hook(int rank, int size);
 int MPIDI_PIP_mpi_finalize_hook(void);
+int MPIDI_PIP_mpi_stealing_shutdown(void);
 int MPIDI_PIP_ipc_handle_map(MPIDI_PIP_ipc_handle_t mem_handle, void **vaddr);
 
 #endif /* PIP_POST_H_INCLUDED */

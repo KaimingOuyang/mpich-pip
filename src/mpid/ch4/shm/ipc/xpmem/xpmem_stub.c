@@ -8,6 +8,8 @@
 
 int MPIDI_XPMEM_mpi_init_hook(int rank, int size, int *tag_bits)
 {
+    MPIR_CVAR_CH4_PIP_ENABLE = 0;
+    MPIR_CVAR_CH4_XPMEM_ENABLE = 0;
     return MPI_SUCCESS;
 }
 

@@ -75,7 +75,7 @@ int MPIDI_IPC_mpi_win_create_hook(MPIR_Win * win)
 
     /* Skip IPC initialization if no local process or all submodules
      * are disabled. */
-    if (!shm_comm_ptr || !MPIR_CVAR_CH4_XPMEM_ENABLE)
+    if (!shm_comm_ptr || (!MPIR_CVAR_CH4_XPMEM_ENABLE && !MPIR_CVAR_CH4_PIP_ENABLE))
         goto fn_exit;
 
     /* Determine IPC type based on buffer type and submodule availability.

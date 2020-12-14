@@ -690,6 +690,51 @@ int MPID_Init_world(void)
     goto fn_exit;
 }
 
+int MPID_Init_progress_stealing()
+{
+    int mpi_errno = MPI_SUCCESS;
+#ifdef PIP_PROGRESS_STEALING_ENABLE
+    /* need to connect ep for each pair of processes to avoid stealing process
+     * calling psm2_ep_connect */
+    int dummy;
+    MPI_Request *sendrecv_reqs = malloc(sizeof(MPI_Request) * MPIR_Process.size * 2);
+    for (int i = 0; i < MPIR_Process.size; ++i) {
+        MPIR_Request *req = NULL;
+        mpi_errno =
+            MPID_Isend(&dummy, 1, MPI_INT, i, 0, MPIR_Process.comm_world, MPIR_CONTEXT_INTRA_PT2PT,
+                       &req);
+        MPIR_ERR_CHECK(mpi_errno);
+
+        sendrecv_reqs[i] = req->handle;
+        req = NULL;
+        mpi_errno =
+            MPID_Irecv(&dummy, 1, MPI_INT, i, 0, MPIR_Process.comm_world, MPIR_CONTEXT_INTRA_PT2PT,
+                       &req);
+        MPIR_ERR_CHECK(mpi_errno);
+
+        sendrecv_reqs[i + MPIR_Process.size] = req->handle;
+    }
+
+    mpi_errno = MPIR_Waitall(MPIR_Process.size * 2, sendrecv_reqs, MPI_STATUSES_IGNORE);
+    MPIR_ERR_CHECK(mpi_errno);
+
+    free(sendrecv_reqs);
+
+    if (MPIR_Process.comm_world->node_comm) {
+        MPIR_Errflag_t errflag = MPIR_ERR_NONE;
+        mpi_errno = MPIR_Barrier(MPIR_Process.comm_world->node_comm, &errflag);
+        MPIR_ERR_CHECK(mpi_errno);
+    }
+
+    /* netmod init is done, enable progress stealing */
+    *MPIDI_global.pm_enable = 1;
+#endif
+  fn_exit:
+    return mpi_errno;
+  fn_fail:
+    goto fn_exit;
+}
+
 int MPID_InitCompleted(void)
 {
     int mpi_errno = MPI_SUCCESS;
@@ -747,6 +792,13 @@ static void generic_finalize(void)
 {
     MPIDIG_am_finalize();
     MPIDI_global.is_ch4u_initialized = 0;
+}
+
+int MPID_Finalize_progress_stealing()
+{
+    int mpi_errno;
+    mpi_errno = MPIDI_SHM_mpi_stealing_shutdown();
+    return mpi_errno;
 }
 
 int MPID_Finalize(void)

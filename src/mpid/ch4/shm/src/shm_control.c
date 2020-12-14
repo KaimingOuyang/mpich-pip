@@ -31,3 +31,10 @@ int MPIDI_SHMI_ctrl_dispatch(int ctrl_id, void *ctrl_hdr)
 
     return mpi_errno;
 }
+
+extern void MPIDI_IPC_do_stealing();
+
+void MPIDI_SHM_stealing(void)
+{
+    return MPIDI_IPC_do_stealing();
+}
