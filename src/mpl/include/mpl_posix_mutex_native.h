@@ -65,6 +65,13 @@ int pthread_mutexattr_settype(pthread_mutexattr_t * attr, int kind);
         *(int *)(err_ptr_) = err__;                                     \
     } while (0)
 
+#define MPL_thread_mutex_trylock(mutex_ptr_, err_ptr_)                  \
+    do {                                                                \
+        int err__;                                                      \
+        err__ = pthread_mutex_trylock(mutex_ptr_);                      \
+        *(int *)(err_ptr_) = err__;                                     \
+    } while (0)
+
 
 #define MPL_thread_mutex_lock(mutex_ptr_, err_ptr_, prio_)              \
     do {                                                                \
