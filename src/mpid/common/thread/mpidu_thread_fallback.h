@@ -154,7 +154,7 @@ M*/
                 MPL_thread_self(&mutex.owner);                          \
             } else {                                                    \
                 /* assert all recursive usage */                        \
-                MPIR_Assert(0);                                         \
+                MPIR_Assert(1);                                         \
             }                                                           \
             mutex.count++;                                              \
         }                                                               \
