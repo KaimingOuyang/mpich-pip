@@ -681,6 +681,9 @@ int MPID_Init_world(void)
     mpi_errno = init_builtin_comms();
     MPIR_ERR_CHECK(mpi_errno);
 
+    mpi_errno = MPIDI_SHM_mpi_stealing_init();
+    MPIR_ERR_CHECK(mpi_errno);
+
     MPIDI_global.is_initialized = 0;
 
   fn_exit:

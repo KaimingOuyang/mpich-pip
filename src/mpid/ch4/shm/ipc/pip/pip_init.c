@@ -68,6 +68,80 @@ void MPIDI_PIP_finalize_progress_funcs()
     return;
 }
 
+int MPIDI_PIP_init_numa_info()
+{
+    int mpi_errno = MPI_SUCCESS;
+    int cpu = sched_getcpu();
+    int local_numa_id = numa_node_of_cpu(cpu);
+    int num_numa_node = numa_num_task_nodes();
+    MPIDI_PIP_global.max_numa_node = num_numa_node;
+    MPIDI_PIP_global.local_numa_id = local_numa_id;
+
+    if (MPIR_Process.comm_world->node_comm) {
+        mpi_errno =
+            MPIR_Comm_split_impl(MPIR_Process.comm_world->node_comm, local_numa_id,
+                                 MPIR_Process.local_rank, &MPIDI_PIP_global.numa_comm);
+        MPIR_ERR_CHECK(mpi_errno);
+    } else {
+        MPIDI_PIP_global.numa_comm = NULL;
+    }
+
+    int numa_nprocs, max_numa_nprocs;
+    if (MPIDI_PIP_global.numa_comm) {
+        numa_nprocs = MPIDI_PIP_global.numa_comm->local_size;
+        MPIR_Errflag_t errflag = MPIR_ERR_NONE;
+        mpi_errno =
+            MPIR_Allreduce(&numa_nprocs, &max_numa_nprocs, 1, MPI_INT, MPI_MAX,
+                           MPIR_Process.comm_world->node_comm, &errflag);
+        MPIR_ERR_CHECK(mpi_errno);
+    } else {
+        numa_nprocs = max_numa_nprocs = 1;
+    }
+
+    int *numa_cur_ranks;
+    MPIDI_PIP_global.numa_map = MPL_malloc(num_numa_node * sizeof(int *), MPL_MEM_OTHER);
+    MPIR_Assert(MPIDI_PIP_global.numa_map);
+
+    numa_cur_ranks = MPL_malloc(num_numa_node * sizeof(int), MPL_MEM_OTHER);
+    MPIR_Assert(numa_cur_ranks);
+    memset(numa_cur_ranks, 0, sizeof(int) * num_numa_node);
+
+    for (int i = 0; i < num_numa_node; ++i) {
+        MPIDI_PIP_global.numa_map[i] = MPL_malloc(max_numa_nprocs * sizeof(int), MPL_MEM_OTHER);
+        MPIR_Assert(MPIDI_PIP_global.numa_map);
+    }
+
+    MPIDU_Init_shm_put(&local_numa_id, sizeof(int));
+    MPIDU_Init_shm_barrier();
+    for (int i = 0; i < MPIR_Process.local_size; i++) {
+        int numa_id;
+        MPIDU_Init_shm_get(i, sizeof(int), &numa_id);
+        MPIDI_PIP_global.numa_map[numa_id][numa_cur_ranks[numa_id]++] = i;
+    }
+    MPIDU_Init_shm_barrier();
+
+    MPIDI_PIP_global.numa_local_size = numa_cur_ranks;
+    MPIDI_PIP_global.stealing_initialized = 1;
+
+  fn_exit:
+    return mpi_errno;
+  fn_fail:
+    goto fn_exit;
+}
+
+void MPIDI_PIP_finalize_numa_info()
+{
+    MPIDI_PIP_global.stealing_initialized = 0;
+    if (MPIDI_PIP_global.numa_comm) {
+        MPL_free(MPIDI_PIP_global.numa_local_size);
+        for (int i = 0; i < MPIDI_PIP_global.max_numa_node; ++i)
+            MPL_free(MPIDI_PIP_global.numa_map[i]);
+        MPL_free(MPIDI_PIP_global.numa_map);
+        MPIR_Comm_free_impl(MPIDI_PIP_global.numa_comm);
+    }
+    return;
+}
+
 int MPIDI_PIP_mpi_init_hook(int rank, int size)
 {
     int mpi_errno = MPI_SUCCESS;
@@ -86,13 +160,16 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     MPIDI_PIP_global.num_local = num_local;
     MPIDI_PIP_global.local_rank = MPIR_Process.local_rank;
     MPIDI_PIP_global.rank = rank;
+    MPIDI_PIP_global.stealing_initialized = 0;
 
-    /* NUMA info */
-    int cpu = sched_getcpu();
-    int local_numa_id = numa_node_of_cpu(cpu);
-    int num_numa_node = numa_num_task_nodes();
-    MPIDI_PIP_global.num_numa_node = num_numa_node;
-    MPIDI_PIP_global.local_numa_id = local_numa_id;
+    /* bind local rank to core id */
+    cpu_set_t set;
+    CPU_ZERO(&set);
+    CPU_SET(MPIR_Process.local_rank, &set);
+    if (sched_setaffinity(getpid(), sizeof(set), &set) == -1) {
+        printf("set affinity fails\n");
+        exit(1);
+    }
 
     /* Allocate task queue */
     MPIR_CHKPMEM_MALLOC(MPIDI_PIP_global.task_queue, MPIDI_PIP_task_queue_t *,
@@ -150,7 +227,6 @@ int MPIDI_PIP_mpi_finalize_hook(void)
     int i, ret = 0;
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_PIP_FINALIZE_HOOK);
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_PIP_FINALIZE_HOOK);
-
 
     MPIR_Assert(MPIDI_PIP_global.task_queue->task_num == 0);
     MPL_free(MPIDI_PIP_global.task_queue);

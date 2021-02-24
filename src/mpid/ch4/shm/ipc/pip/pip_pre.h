@@ -56,8 +56,9 @@ typedef struct MPIDI_PIP_global {
     uint32_t num_local;
     uint32_t local_rank;
     uint32_t rank;
-    uint32_t num_numa_node;
+    uint32_t max_numa_node;
     uint32_t local_numa_id;
+    int stealing_initialized;
     MPL_thread_id_t self;
 
     MPIDI_PIP_task_queue_t *task_queue;
@@ -70,6 +71,12 @@ typedef struct MPIDI_PIP_global {
     /* progress manager */
     MPIDI_PIP_progress_t *pm;
     MPIDI_PIP_progress_t **pm_array;
+
+    /* numa info */
+    MPIR_Comm *numa_comm;
+    int **numa_map;             /* local numa rank to local node rank translation */
+    int *numa_local_size;       /* rank size of each numa node */
+
 } MPIDI_PIP_global_t;
 
 typedef struct {
