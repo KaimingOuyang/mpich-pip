@@ -7,16 +7,16 @@
 #define OFI_WIN_H_INCLUDED
 
 #include "ofi_impl.h"
-
+#include "../../shm/ipc/pip/pip_impl.h"
 /*
  * Blocking progress function to complete outstanding RMA operations on the input window.
  */
 MPL_STATIC_INLINE_PREFIX int MPIDI_OFI_win_do_progress(MPIR_Win * win)
 {
     int mpi_errno = MPI_SUCCESS;
-    int itercount = 0;
+    // int itercount = 0;
     int ret;
-    uint64_t tcount, donecount;
+    uint64_t tcount, donecount, prev_donecount = -1;
     MPIDI_OFI_win_request_t *r;
 
     MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPIDI_OFI_WIN_DO_PROGRESS);
@@ -35,17 +35,23 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_OFI_win_do_progress(MPIR_Win * win)
              * arrive and trigger RDMA calls, so we need to update it after progress call */
             tcount = *MPIDI_OFI_WIN(win).issued_cntr;
             donecount = fi_cntr_read(MPIDI_OFI_WIN(win).cmpl_cntr);
-            itercount++;
+            // itercount++;
 
-            if (itercount == 1000) {
-                ret = fi_cntr_wait(MPIDI_OFI_WIN(win).cmpl_cntr, tcount, 0);
-                MPIDI_OFI_ERR(ret < 0 && ret != -FI_ETIMEDOUT,
-                              mpi_errno,
-                              MPI_ERR_RMA_RANGE,
-                              "**ofid_cntr_wait",
-                              "**ofid_cntr_wait %s %d %s %s",
-                              __SHORT_FILE__, __LINE__, __func__, fi_strerror(-ret));
-                itercount = 0;
+            // if (itercount == 1000) {
+            //     ret = fi_cntr_wait(MPIDI_OFI_WIN(win).cmpl_cntr, tcount, 0);
+            //     MPIDI_OFI_ERR(ret < 0 && ret != -FI_ETIMEDOUT,
+            //                   mpi_errno,
+            //                   MPI_ERR_RMA_RANGE,
+            //                   "**ofid_cntr_wait",
+            //                   "**ofid_cntr_wait %s %d %s %s",
+            //                   __SHORT_FILE__, __LINE__, __func__, fi_strerror(-ret));
+            //     itercount = 0;
+            // }
+
+            if (donecount == prev_donecount) {
+                MPIDI_PIP_do_stealing();
+            } else {
+                prev_donecount = donecount;
             }
         }
 
