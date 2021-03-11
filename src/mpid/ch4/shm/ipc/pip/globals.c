@@ -21,6 +21,6 @@ MPIDI_PIP_global_t MPIDI_PIP_global;
 MPIDI_PIP_task_t MPIDI_Task_direct[MPIDI_TASK_PREALLOC] = { 0 };
 
 MPIR_Object_alloc_t MPIDI_Task_mem = {
-    0, 0, 0, 0, MPIR_INTERNAL, sizeof(MPIDI_PIP_task_t), MPIDI_Task_direct,
-    MPIDI_TASK_PREALLOC
+    0, 0, 0, 0, 0, 0, MPIR_INTERNAL, sizeof(MPIDI_PIP_task_t), MPIDI_Task_direct,
+    MPIDI_TASK_PREALLOC, NULL
 };

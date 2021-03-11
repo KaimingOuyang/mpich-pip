@@ -12,6 +12,9 @@
 #include <signal.h>
 #endif
 
+int MPIDI_SHM_mpi_stealing_init(void);
+int MPIDI_SHM_mpi_stealing_shutdown(void);
+
 /*
 === BEGIN_MPI_T_CVAR_INFO_BLOCK ===
 
