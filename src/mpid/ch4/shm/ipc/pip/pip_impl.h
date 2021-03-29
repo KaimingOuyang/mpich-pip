@@ -124,24 +124,27 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_fflush_task()
     return;
 }
 
+#define LOCAL_STEALING 0
+#define REMOTE_STEALING 1
+#define STEALING_LOCAL_TRY_MAX 64
 
 MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_progress_stealing()
 {
     static int stealing_try = 0;
-    int victim;
+    int victim, type, status = 0;
 
     if (MPIDI_PIP_global.stealing_initialized) {
-        if (stealing_try < MPIDI_PIP_global.num_local) {
+        if (stealing_try < STEALING_LOCAL_TRY_MAX) {
             /* local stealing */
             if (MPIDI_PIP_global.numa_comm) {
                 /* there are victims to steal */
                 int numa_id = MPIDI_PIP_global.local_numa_id;
                 int local_size = MPIDI_PIP_global.numa_local_size[numa_id];
                 victim = MPIDI_PIP_global.numa_map[numa_id][rand() % local_size];
+                type = LOCAL_STEALING;
             } else {
                 victim = -1;
             }
-            ++stealing_try;
         } else {
             /* remote stealing */
             int numa_id, local_size;
@@ -152,10 +155,10 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_progress_stealing()
             local_size = MPIDI_PIP_global.numa_local_size[numa_id];
             if (local_size > 0) {
                 victim = MPIDI_PIP_global.numa_map[numa_id][rand() % local_size];
+                type = REMOTE_STEALING;
             } else {
                 victim = -1;
             }
-            stealing_try = 0;
         }
 
         if (victim != -1 && victim != MPIDI_PIP_global.local_rank &&
@@ -169,24 +172,40 @@ MPL_STATIC_INLINE_PREFIX void MPIDI_PIP_progress_stealing()
             if (ret == 0) {
                 MPIR_Assert(vci_array[vci_id].vci.lock.count == 0);
                 MPL_thread_self(&vci_array[vci_id].vci.lock.owner);
-                int prog_cnt = victim_pm->ch4_progress_counts[vci_id];
+                int net_prog_cnt = victim_pm->ch4_progress_counts[vci_id];
+                int shm_prog_cnt = *victim_pm->shmmod_progress_cnt;
 
-                stealing_try = 0;
                 /* netmod progress stealing */
-                victim_pm->netmod_progress(vci_id, 0);
+                if (victim_pm->netmod_avail)
+                    victim_pm->netmod_progress(vci_id, 0);
 
                 /* shm progress stealing */
-                if (prog_cnt == victim_pm->ch4_progress_counts[vci_id]) {
+                if (victim_pm->shmmod_avail &&
+                    net_prog_cnt == victim_pm->ch4_progress_counts[vci_id]) {
                     victim_pm->shmmod_progress(vci_id, 0);
                 }
 
+                status = (net_prog_cnt != victim_pm->ch4_progress_counts[vci_id]) ||
+                    (shm_prog_cnt != *victim_pm->shmmod_progress_cnt);
+
                 vci_array[vci_id].vci.lock.owner = 0;
                 MPL_thread_mutex_unlock(&vci_array[vci_id].vci.lock.mutex, &ret);
+
                 if (ret != 0) {
                     printf("MPIDI_PIP_progress_stealing::MPL_thread_mutex_unlock fails, ret = %d\n",
                            ret);
                 }
             }
+        }
+
+        if (type == LOCAL_STEALING) {
+            if (status) {
+                stealing_try >>= 1;
+            } else {
+                stealing_try++;
+            }
+        } else {
+            stealing_try = 0;
         }
     }
 

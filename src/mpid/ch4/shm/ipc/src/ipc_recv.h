@@ -135,6 +135,10 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPC_mpi_irecv(void *buf, MPI_Aint count, MPI_
 
         *request = rreq;
         MPIDI_POSIX_recv_posted_hook(*request, rank, comm);
+#ifdef  PIP_PROGRESS_STEALING_ENABLE
+        rreq->shmmod_avail = MPIDI_global.shmmod_avail;
+        *MPIDI_global.shmmod_avail += 1;
+#endif
     }
 
   fn_exit:

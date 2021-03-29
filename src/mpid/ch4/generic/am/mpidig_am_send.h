@@ -95,6 +95,10 @@ MPL_STATIC_INLINE_PREFIX int MPIDIG_isend_impl(const void *buf, MPI_Aint count,
 #ifndef MPIDI_CH4_DIRECT_NETMOD
         if (is_local) {
             mpi_errno = MPIDI_SHM_am_send_hdr(rank, comm, MPIDIG_SEND, &am_hdr, sizeof(am_hdr));
+#ifdef  PIP_PROGRESS_STEALING_ENABLE
+            sreq->shmmod_avail = MPIDI_global.shmmod_avail;
+            *MPIDI_global.shmmod_avail += 1;
+#endif
         } else
 #endif
         {

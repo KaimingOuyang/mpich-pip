@@ -26,6 +26,7 @@ static int progress_recv(int blocking);
 static int progress_send(int blocking);
 
 static int empty_recv_queue = 0;
+extern int shmmod_progress_cnt;
 
 static int progress_recv(int blocking)
 {
@@ -49,7 +50,7 @@ static int progress_recv(int blocking)
         empty_recv_queue = 1;
         goto fn_exit;
     } else {
-        empty_recv_queue = 0;
+        shmmod_progress_cnt++;
     }
 
     /* Process the eager message */
@@ -130,6 +131,7 @@ static int progress_send(int blocking)
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_PROGRESS_SEND);
 
     if (MPIDI_POSIX_global.postponed_queue) {
+        shmmod_progress_cnt++;
         /* Drain postponed queue */
         curr_sreq_hdr = MPIDI_POSIX_global.postponed_queue;
 

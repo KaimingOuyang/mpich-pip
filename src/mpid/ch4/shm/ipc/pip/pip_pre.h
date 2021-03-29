@@ -46,7 +46,10 @@ typedef struct MPIDI_PIP_progress {
     void *vci;
     int enable;
     int in_progress;            /* if the process is in progress */
+    int netmod_avail;           /* if the netmod is allowed to progress */
+    int shmmod_avail;           /* if the shmmod is allowed to progress */
     int *ch4_progress_counts;
+    int *shmmod_progress_cnt;
     int (*netmod_progress) (int, int);
     int (*shmmod_progress) (int, int);
 

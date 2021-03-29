@@ -328,6 +328,9 @@ static int win_init(MPI_Aint length, int disp_unit, MPIR_Win ** win_ptr, MPIR_In
     MPIR_ERR_CHKANDJUMP(errflag, mpi_errno, MPI_ERR_OTHER, "**coll_fail");
     if (all_no_local)
         MPIDI_WIN(win, winattr) |= MPIDI_WINATTR_ACCU_NO_SHM;
+#ifdef  PIP_PROGRESS_STEALING_ENABLE
+    *MPIDI_global.netmod_avail += 1;
+#endif
 
   fn_exit:
     MPIR_FUNC_VERBOSE_RMA_EXIT(MPID_STATE_MPIDIG_WIN_INIT);
@@ -397,6 +400,9 @@ static int win_finalize(MPIR_Win ** win_ptr)
 
     MPIR_Comm_release(win->comm_ptr);
     MPIR_Handle_obj_free(&MPIR_Win_mem, win);
+#ifdef  PIP_PROGRESS_STEALING_ENABLE
+    *MPIDI_global.netmod_avail -= 1;
+#endif
 
   fn_exit:
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_WIN_FINALIZE);
@@ -553,15 +559,14 @@ static int win_shm_alloc_impl(MPI_Aint size, int disp_unit, MPIR_Comm * comm_ptr
     if (shm_comm_ptr != NULL && MPIDIG_WIN(win, mmap_addr)) {
         char *cur_base = (char *) MPIDIG_WIN(win, mmap_addr);
         for (i = 0; i < shm_comm_ptr->local_size; i++) {
-            if (shared_table[i].size){
+            if (shared_table[i].size) {
                 shared_table[i].shm_base_addr = cur_base;
 
                 /* PIP - pin the memory on local NUMA */
-                if(i == MPIR_Process.local_rank){
+                if (i == MPIR_Process.local_rank) {
                     memset(shared_table[i].shm_base_addr, 0, shared_table[i].size);
                 }
-            }
-            else{
+            } else {
                 shared_table[i].shm_base_addr = NULL;
             }
 

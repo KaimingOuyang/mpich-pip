@@ -13,6 +13,8 @@
 #include <numa.h>
 #include <sched.h>
 
+extern int shmmod_progress_cnt;
+
 int MPIDI_PIP_mpi_init_task_queue(MPIDI_PIP_task_queue_t * task_queue)
 {
     int err;
@@ -36,8 +38,14 @@ void MPIDI_PIP_init_progress_funcs()
     MPIDI_PIP_global.pm = MPL_malloc(sizeof(MPIDI_PIP_progress_t), MPL_MEM_OTHER);
 
     MPIDI_PIP_global.pm->ch4_progress_counts = MPIDI_global.progress_counts;
+    shmmod_progress_cnt = 0;
+    MPIDI_PIP_global.pm->shmmod_progress_cnt = &shmmod_progress_cnt;
     MPIDI_PIP_global.pm->in_progress = 0;
+    MPIDI_PIP_global.pm->netmod_avail = 0;
+    MPIDI_PIP_global.pm->shmmod_avail = 0;
     MPIDI_global.in_progress = &MPIDI_PIP_global.pm->in_progress;
+    MPIDI_global.netmod_avail = &MPIDI_PIP_global.pm->netmod_avail;
+    MPIDI_global.shmmod_avail = &MPIDI_PIP_global.pm->shmmod_avail;
 
     /* here I assume we use global progress */
     MPIDI_PIP_global.pm->vci = MPIDI_global.vci;

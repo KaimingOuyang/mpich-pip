@@ -280,6 +280,8 @@ typedef struct MPIDI_CH4_Global_t {
     /* progress stealing related */
     int *pm_enable;
     int *in_progress;
+    int *netmod_avail;
+    int *shmmod_avail;
 } MPIDI_CH4_Global_t;
 extern MPIDI_CH4_Global_t MPIDI_global;
 extern char MPIDI_coll_generic_json[];
