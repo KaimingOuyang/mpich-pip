@@ -150,6 +150,54 @@ void MPIDI_PIP_finalize_numa_info()
     return;
 }
 
+void bind_and_map_procs()
+{
+    int mpi_errno;
+    /* bind local rank to core id */
+    char *bind_env = getenv("PIP_SOCKET_EVEN_BIND");
+    if (bind_env) {
+        int max_num_node = numa_max_node() + 1;
+        int local_size = MPIR_Process.local_size;
+        int num_procs_numa = local_size / max_num_node;
+        int numa_id = MPIR_Process.local_rank / num_procs_numa;
+        int numa_local_rank = MPIR_Process.local_rank % num_procs_numa;
+        int total_cpu = numa_num_configured_cpus();
+        int num_cpu_numa = total_cpu / max_num_node;
+
+        /* force local_size to be dividable */
+        if (local_size % max_num_node != 0) {
+            printf("Please allocate #processes that is multiple of #nume node\n");
+            exit(1);
+        }
+        // if (MPIR_Process.comm_world->node_comm) {
+        //     mpi_errno =
+        //         MPIR_Comm_split_impl(MPIR_Process.comm_world->node_comm, numa_id,
+        //                              MPIR_Process.local_rank, &bind_numa_comm);
+        //     MPIR_Assert(mpi_errno == MPI_SUCCESS);
+        // }
+
+
+
+        /* we assume cpu id is arragned in order with numa id */
+        int actual_bind_id = numa_id * num_cpu_numa + numa_local_rank;
+        cpu_set_t set;
+        CPU_ZERO(&set);
+        CPU_SET(actual_bind_id, &set);
+        if (sched_setaffinity(getpid(), sizeof(set), &set) == -1) {
+            printf("set affinity fails\n");
+            exit(1);
+        }
+    } else {
+        cpu_set_t set;
+        CPU_ZERO(&set);
+        CPU_SET(MPIR_Process.local_rank, &set);
+        if (sched_setaffinity(getpid(), sizeof(set), &set) == -1) {
+            printf("set affinity fails\n");
+            exit(1);
+        }
+    }
+}
+
 int MPIDI_PIP_mpi_init_hook(int rank, int size)
 {
     int mpi_errno = MPI_SUCCESS;
@@ -172,14 +220,7 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     MPIDI_PIP_global.rank = rank;
     MPIDI_PIP_global.stealing_initialized = 0;
 
-    /* bind local rank to core id */
-    cpu_set_t set;
-    CPU_ZERO(&set);
-    CPU_SET(MPIR_Process.local_rank, &set);
-    if (sched_setaffinity(getpid(), sizeof(set), &set) == -1) {
-        printf("set affinity fails\n");
-        exit(1);
-    }
+    bind_and_map_procs();
 
     /* Allocate task queue */
     MPIR_CHKPMEM_MALLOC(MPIDI_PIP_global.task_queue, MPIDI_PIP_task_queue_t *,

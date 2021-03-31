@@ -2,9 +2,10 @@
  * Copyright (C) by Argonne National Laboratory
  *     See COPYRIGHT in top-level directory
  */
-
+#define _GNU_SOURCE
 #include "mpiimpl.h"
 #include "mpi_init.h"
+#include <numa.h>
 
 /*
 === BEGIN_MPI_T_CVAR_INFO_BLOCK ===
@@ -52,6 +53,24 @@ static void progress_fn(void *data)
     MPIR_Request *request_ptr = NULL;
     MPI_Request request;
     MPI_Status status;
+
+    char *bind_env = getenv("PIP_SOCKET_EVEN_BIND");
+    if (bind_env) {
+        int max_num_node = numa_max_node() + 1;
+        int total_cpu = numa_num_configured_cpus();
+        int num_cpu_numa = total_cpu / max_num_node;
+        int occupy_cpu = MPIR_Process.local_size / max_num_node;
+        int num_free_core = num_cpu_numa - occupy_cpu;
+        int numa_local_rank = MPIR_Process.local_rank % occupy_cpu;
+
+        MPIR_Assert(num_free_core >= 0);
+        int bind_id = occupy_cpu + numa_local_rank % num_free_core;
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(bind_id, &cpuset);
+
+        MPIR_Assert(pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset) == 0);
+    }
 
     /* Explicitly add CS_ENTER/EXIT since this thread is created from
      * within an internal function and will call NMPI functions
