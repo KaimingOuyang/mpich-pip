@@ -792,7 +792,9 @@ MPL_STATIC_INLINE_PREFIX int MPIDIG_mpi_win_flush_all(MPIR_Win * win)
      * user flushes per target, but this should be optimized. */
     int poll_once = MPIDIG_rma_need_poll_am()? 1 : 0;
 
+    *MPIDI_global.in_progress = 1;
     MPIDIU_PROGRESS_WHILE(!MPIDIG_win_check_all_targets_remote_completed(win) || poll_once-- > 0);
+    *MPIDI_global.in_progress = 0;
 
   fn_exit:
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDIG_MPI_WIN_FLUSH_ALL);

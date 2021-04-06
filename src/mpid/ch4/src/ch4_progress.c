@@ -98,7 +98,7 @@ static int progress_test(MPID_Progress_state * state, int wait)
             }
 #if defined MPIDI_CH4_SHM_ENABLE_PIP && defined PIP_PROGRESS_STEALING_ENABLE
             extern int MPIDI_SHM_stealing(void);
-            if (wait && !state->progress_made) {
+            if ((wait || *MPIDI_global.in_progress) && !state->progress_made) {
                 MPIDI_SHM_stealing();
             }
 #endif
