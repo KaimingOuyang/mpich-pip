@@ -215,6 +215,7 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     /* For stealing rand seeds */
     srand(time(NULL) + MPIDI_PIP_global.local_rank * MPIDI_PIP_global.local_rank);
 
+    MPIDI_global.in_progress = NULL;
 #ifdef PIP_PROGRESS_STEALING_ENABLE
     MPIDI_PIP_init_progress_funcs();
 #endif

@@ -459,7 +459,9 @@ MPL_STATIC_INLINE_PREFIX int MPIDIU_valid_group_rank(MPIR_Comm * comm, int rank,
 /* FIXME: use inline function rather macros for cleaner semantics */
 
 #define MPIDIU_PROGRESS_WHILE(cond)         \
-    do {                                        \
+    do {                                    \
+        if (MPIDI_global.in_progress)        \
+            *MPIDI_global.in_progress = 1; \
         MPID_THREAD_CS_EXIT(VCI, MPIDI_VCI(0).lock); \
         while (cond) {                          \
             mpi_errno = MPID_Progress_test(NULL);   \
@@ -468,6 +470,8 @@ MPL_STATIC_INLINE_PREFIX int MPIDIU_valid_group_rank(MPIR_Comm * comm, int rank,
         } \
         MPID_THREAD_CS_ENTER(VCI, MPIDI_VCI(0).lock); \
         MPIR_ERR_CHECK(mpi_errno);              \
+        if (MPIDI_global.in_progress)        \
+            *MPIDI_global.in_progress = 0; \
     } while (0)
 
 /* This macro is refactored for original code that progress in a do-while loop
