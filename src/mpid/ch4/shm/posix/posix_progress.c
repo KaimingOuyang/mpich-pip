@@ -72,6 +72,12 @@ static int progress_recv(int blocking)
         /* TODO: internal control can use the generic am interface,
          *       just need register callbacks */
         if (msg_hdr->kind == MPIDI_POSIX_AM_HDR_SHM) {
+            int cur_pid = getpid();
+            extern int owner_pid;
+            if(cur_pid != owner_pid){
+                printf("pid %d steals owner rank %d - handler %d\n", cur_pid, MPIR_Process.rank, msg_hdr->handler_id);
+                fflush(stdout);
+            }
             mpi_errno = MPIDI_SHMI_ctrl_dispatch(msg_hdr->handler_id, am_hdr);
 
             /* TODO: discard payload for now as we only handle header in

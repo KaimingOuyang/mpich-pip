@@ -22,6 +22,8 @@ int shmmod_progress_cnt;
 
 MPIDI_PIP_task_t MPIDI_Task_direct[MPIDI_TASK_PREALLOC] = { 0 };
 
+int owner_pid;
+
 MPIR_Object_alloc_t MPIDI_Task_mem = {
     0, 0, 0, 0, 0, 0, MPIR_INTERNAL, sizeof(MPIDI_PIP_task_t), MPIDI_Task_direct,
     MPIDI_TASK_PREALLOC, NULL

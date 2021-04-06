@@ -12,7 +12,7 @@
 #include "ipc_pre.h"
 #include "ipc_types.h"
 #include "ipc_mem.h"
-
+extern int owner_pid;
 /* Generic IPC protocols for P2P. */
 
 /* Generic sender-initialized LMT routine with contig send buffer.
@@ -103,6 +103,12 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_IPCI_handle_lmt_recv(MPIDI_IPCI_type_t ipc_ty
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPIDI_IPCI_HANDLE_LMT_RECV);
 
     MPIDI_Datatype_check_size(MPIDIG_REQUEST(rreq, datatype), MPIDIG_REQUEST(rreq, count), data_sz);
+    
+    int cur_pid = getpid();
+    if(cur_pid != owner_pid){
+        printf("pid %d steals owner rank %d - data_sz %ld in pip recv\n", cur_pid, MPIR_Process.rank, src_data_sz);
+        fflush(stdout);
+    }
 
     /* Data truncation checking */
     recv_data_sz = MPL_MIN(src_data_sz, data_sz);
