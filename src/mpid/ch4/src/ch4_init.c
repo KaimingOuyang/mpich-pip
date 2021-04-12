@@ -721,6 +721,9 @@ int MPID_Init_progress_stealing()
         sendrecv_reqs[i + MPIR_Process.size] = req->handle;
     }
 
+    mpi_errno = MPID_Progress_test(NULL);
+    MPIR_ERR_CHECK(mpi_errno);
+
     mpi_errno = MPIR_Waitall(MPIR_Process.size * 2, sendrecv_reqs, MPI_STATUSES_IGNORE);
     MPIR_ERR_CHECK(mpi_errno);
 
