@@ -208,6 +208,7 @@ struct MPIR_Request {
     } u;
 
     int *shmmod_avail;
+    int *netmod_avail;
     /* Other, device-specific information */
 #ifdef MPID_DEV_REQUEST_DECL
      MPID_DEV_REQUEST_DECL
@@ -359,6 +360,7 @@ static inline MPIR_Request *MPIR_Request_create_from_pool(MPIR_Request_kind_t ki
         req->cc_ptr = &req->cc;
 
         req->shmmod_avail = NULL;
+        req->netmod_avail = NULL;
         req->completion_notification = NULL;
 
         req->status.MPI_ERROR = MPI_SUCCESS;
@@ -449,6 +451,8 @@ static inline void MPIR_Request_free_with_safety(MPIR_Request * req, int need_sa
 #ifdef  PIP_PROGRESS_STEALING_ENABLE
         if (req->shmmod_avail)
             *req->shmmod_avail -= 1;
+        if (req->netmod_avail)
+            *req->netmod_avail -= 1;
 #endif
         MPL_DBG_MSG_P(MPIR_DBG_REQUEST, VERBOSE, "freeing request, handle=0x%08x", req->handle);
 

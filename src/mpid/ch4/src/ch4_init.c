@@ -721,6 +721,7 @@ int MPID_Init_progress_stealing()
         sendrecv_reqs[i + MPIR_Process.size] = req->handle;
     }
 
+    /* load progress engine code page */
     mpi_errno = MPID_Progress_test(NULL);
     MPIR_ERR_CHECK(mpi_errno);
 
@@ -728,6 +729,37 @@ int MPID_Init_progress_stealing()
     MPIR_ERR_CHECK(mpi_errno);
 
     free(sendrecv_reqs);
+
+    /* load all rma related code pages */
+    MPIR_Win *win_ptr = NULL;
+    void *baseptr;
+    int tmp = 0, dummy, cmp = 1;
+    mpi_errno =
+        MPID_Win_allocate(4, 1, NULL, MPIR_Process->comm_world, (void *) &baseptr, &win_ptr);
+    MPIR_ERR_CHECK(mpi_errno);
+
+    MPID_Win_fence(0, win_ptr);
+
+    for (int i = 0; i < MPIR_Process.size; ++i) {
+        mpi_errno = MPID_Get(&tmp, 1, MPI_INT, i, 0, 1, MPI_INT, win_ptr);
+        MPIR_ERR_CHECK(mpi_errno);
+        mpi_errno = MPID_Put(&tmp, 1, MPI_INT, i, 0, 1, MPI_INT, win_ptr);
+        MPIR_ERR_CHECK(mpi_errno);
+
+        mpi_errno = MPID_Accumulate(&tmp, 1, MPI_INT, i, 0, 1, MPI_INT, MPI_SUM, win_ptr);
+        MPIR_ERR_CHECK(mpi_errno);
+        mpi_errno = MPID_Fetch_and_op(&tmp, &dummy, MPI_INT, i, 0, MPI_SUM, win_ptr);
+        MPIR_ERR_CHECK(mpi_errno);
+
+        mpi_errno =
+            MPID_Get_accumulate(&tmp, 1, MPI_INT, &dummy, 1, MPI_INT, i, 0, 1, MPI_INT, MPI_SUM,
+                                win_ptr);
+        MPIR_ERR_CHECK(mpi_errno);
+        mpi_errno = MPID_Compare_and_swap(&tmp, &cmp, &dummy, MPI_INT, i, 0, win_ptr);
+        MPIR_ERR_CHECK(mpi_errno);
+    }
+
+    MPID_Win_fence(0, win_ptr);
 
     if (MPIR_Process.comm_world->node_comm) {
         MPIR_Errflag_t errflag = MPIR_ERR_NONE;

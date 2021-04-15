@@ -238,6 +238,12 @@ MPL_STATIC_INLINE_PREFIX int MPIDI_OFI_do_irecv(void *buf,
                              trecv, FALSE);
     }
 
+#ifdef PIP_PROGRESS_STEALING_ENABLE
+    if (MPIDI_OFI_REQUEST(rreq, event_id) == MPIDI_OFI_EVENT_RECV_PACK) {
+        rreq->netmod_avail = MPIDI_global.netmod_avail;
+        *MPIDI_global.netmod_avail += 1;
+    }
+#endif
   fn_exit:
     MPIR_FUNC_VERBOSE_EXIT(MPID_STATE_MPIDI_OFI_DO_IRECV);
     return mpi_errno;
