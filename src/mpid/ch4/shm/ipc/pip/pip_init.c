@@ -188,9 +188,20 @@ void bind_and_map_procs()
             exit(1);
         }
     } else {
+        int max_num_node = numa_max_node() + 1;
+        int cpu = sched_getcpu();
+        int local_numa_id = numa_node_of_cpu(cpu);
+        int total_cpu = numa_num_configured_cpus();
+        int num_cpu_numa = total_cpu / max_num_node;
         cpu_set_t set;
         CPU_ZERO(&set);
-        CPU_SET(MPIR_Process.local_rank, &set);
+
+        int cpuid_start = local_numa_id * num_cpu_numa;
+        int cpuid_end = (local_numa_id + 1) * num_cpu_numa;
+        for (int i = cpuid_start; i < cpuid_end; ++i) {
+            CPU_SET(i, &set);
+        }
+
         if (sched_setaffinity(getpid(), sizeof(set), &set) == -1) {
             printf("set affinity fails\n");
             exit(1);
