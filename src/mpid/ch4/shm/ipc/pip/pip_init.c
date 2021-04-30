@@ -164,6 +164,8 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     MPIDI_CH4_SHM_PIP_GENERAL = MPL_dbg_class_alloc("SHM_PIP", "shm_pip");
 #endif /* MPL_USE_DBG_LOGGING */
 
+    owner_pid = getpid();
+
     int num_local = MPIR_Process.local_size;
     MPIDI_PIP_global.num_local = num_local;
     MPIDI_PIP_global.local_rank = MPIR_Process.local_rank;
