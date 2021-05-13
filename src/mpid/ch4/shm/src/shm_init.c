@@ -47,7 +47,7 @@ int MPIDI_SHM_mpi_init_hook(int rank, int size, int *tag_bits)
   fn_fail:
     goto fn_exit;
 }
-
+#ifdef MPIDI_CH4_SHM_ENABLE_PIP
 extern int MPIDI_PIP_init_numa_info();
 extern int MPIDI_PIP_mpi_stealing_shutdown();
 extern int MPIDI_PIP_finalize_numa_info();
@@ -68,7 +68,7 @@ int MPIDI_SHM_mpi_stealing_shutdown(void)
     return ret;
 
 }
-
+#endif
 int MPIDI_SHM_mpi_finalize_hook(void)
 {
     int ret;
