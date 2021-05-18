@@ -765,6 +765,10 @@ int MPID_Init_progress_stealing()
         MPIR_ERR_CHECK(mpi_errno);
     }
 
+    mpi_errno = MPID_Win_free(&win_ptr);
+    if (mpi_errno)
+        goto fn_fail;
+
     /* netmod init is done, enable progress stealing */
     *MPIDI_global.pm_enable = 1;
 #endif
