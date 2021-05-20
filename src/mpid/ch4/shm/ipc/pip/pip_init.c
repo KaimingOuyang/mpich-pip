@@ -155,7 +155,7 @@ void bind_and_map_procs()
     int mpi_errno;
     /* bind local rank to core id */
     char *bind_env = getenv("PIP_SOCKET_EVEN_BIND");
-    if (bind_env) {
+    if (strcmp(bind_env, "spare") == 0) {
         int max_num_node = numa_max_node() + 1;
         int local_size = MPIR_Process.local_size;
         int num_procs_numa = local_size / max_num_node;
@@ -183,6 +183,14 @@ void bind_and_map_procs()
         cpu_set_t set;
         CPU_ZERO(&set);
         CPU_SET(actual_bind_id, &set);
+        if (sched_setaffinity(getpid(), sizeof(set), &set) == -1) {
+            printf("set affinity fails\n");
+            exit(1);
+        }
+    } else if(strcmp(bind_env, "oversub") == 0) {
+        cpu_set_t set;
+        CPU_ZERO(&set);
+        CPU_SET(MPIR_Process.local_rank, &set);
         if (sched_setaffinity(getpid(), sizeof(set), &set) == -1) {
             printf("set affinity fails\n");
             exit(1);

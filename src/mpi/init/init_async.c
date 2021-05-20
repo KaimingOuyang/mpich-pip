@@ -55,7 +55,7 @@ static void progress_fn(void *data)
     MPI_Status status;
 
     char *bind_env = getenv("PIP_SOCKET_EVEN_BIND");
-    if (bind_env) {
+    if (strcmp(bind_env, "spare") == 0) {
         int max_num_node = numa_max_node() + 1;
         int total_cpu = numa_num_configured_cpus();
         int num_cpu_numa = total_cpu / max_num_node;
