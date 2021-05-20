@@ -704,8 +704,18 @@ int MPID_Init_progress_stealing()
     MPIR_Win *win_ptr = NULL;
     void *baseptr;
     int tmp = 0, dummy, cmp = 1;
-    mpi_errno = MPID_Win_allocate(4, 1, NULL, MPIR_Process.comm_world, (void *) &baseptr, &win_ptr);
+
+    char *UCX_AM_BUF_SIZE = getenv("UCX_AM_BUF_SIZE");
+    int am_buf_size = 33554432; // 32 MB by default
+    if(UCX_AM_BUF_SIZE) {
+        am_buf_size = atoi(UCX_AM_BUF_SIZE);
+    }
+
+    mpi_errno = MPID_Win_allocate(am_buf_size, 1, NULL, MPIR_Process.comm_world, (void *) &baseptr, &win_ptr);
     MPIR_ERR_CHECK(mpi_errno);
+
+    memset(win_ptr->base, 0, am_buf_size);
+    MPIDI_UCX_stealing_init(win_ptr->base, am_buf_size, win_ptr);
 
     MPID_Win_fence(0, win_ptr);
 
@@ -765,9 +775,9 @@ int MPID_Init_progress_stealing()
         MPIR_ERR_CHECK(mpi_errno);
     }
 
-    mpi_errno = MPID_Win_free(&win_ptr);
-    if (mpi_errno)
-        goto fn_fail;
+    // mpi_errno = MPID_Win_free(&win_ptr);
+    // if (mpi_errno)
+    //     goto fn_fail;
 
     /* netmod init is done, enable progress stealing */
     *MPIDI_global.pm_enable = 1;

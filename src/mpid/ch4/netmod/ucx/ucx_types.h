@@ -32,6 +32,10 @@ typedef struct {
     ucp_context_h context;
     MPIDI_UCX_context_t ctx[MPIDI_CH4_MAX_VCIS];
     int num_vnis;
+    void *am_buf; // pre-registered am buffer for stealing
+    size_t am_buf_sz;
+    ucp_mem_h mem_h;
+    MPIR_Win *win_ptr;
 } MPIDI_UCX_global_t;
 
 #define MPIDI_UCX_AV(av)     ((av)->netmod.ucx)

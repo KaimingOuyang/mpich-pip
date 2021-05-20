@@ -144,6 +144,13 @@ static int initial_address_exchange(MPIR_Comm * init_comm)
     goto fn_exit;
 }
 
+void MPIDI_UCX_stealing_init(void *am_buf, int am_buf_sz, MPIR_Win *win_ptr) {
+    MPIDI_UCX_global.am_buf = am_buf;
+    MPIDI_UCX_global.am_buf_sz = am_buf_sz;
+    MPIDI_UCX_global.mem_h = MPIDI_UCX_WIN(win_ptr).mem_h;
+    MPIDI_UCX_global.win_ptr = win_ptr;
+}
+
 static int all_vnis_address_exchange(void)
 {
     int mpi_errno = MPI_SUCCESS;
@@ -293,6 +300,10 @@ int MPIDI_UCX_mpi_finalize_hook(void)
     MPIR_Comm *comm;
     ucs_status_ptr_t ucp_request;
     ucs_status_ptr_t *pending;
+
+    mpi_errno = MPID_Win_free(&MPIDI_UCX_global.win_ptr);
+    if (mpi_errno)
+        goto fn_fail;
 
     comm = MPIR_Process.comm_world;
     int n = MPIDI_UCX_global.num_vnis;

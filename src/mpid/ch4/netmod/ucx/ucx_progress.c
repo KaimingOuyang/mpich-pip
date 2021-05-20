@@ -24,6 +24,11 @@ static void am_handler(void *request, ucs_status_t status, ucp_tag_recv_info_t *
 
 }
 
+// typedef struct mh_entry {
+//     ucp_tag_message_h mh;
+
+// } mh_entry_t;
+
 int MPIDI_UCX_progress(int vci, int blocking)
 {
     int mpi_errno = MPI_SUCCESS;
@@ -47,7 +52,20 @@ int MPIDI_UCX_progress(int vci, int blocking)
                 break;
 
             /* message is available. allocate a buffer and start receiving it */
-            MPL_gpu_malloc_host(&am_buf, info.length);
+#ifdef PIP_PROGRESS_STEALING_ENABLE
+            extern int owner_pid;
+            int mypid = getpid();
+            if(info.length <= MPIDI_UCX_global.am_buf_sz && mypid != owner_pid){
+                am_buf = MPIDI_UCX_global.am_buf;
+                memcpy(am_buf, MPIDI_UCX_global.mem_h, sizeof(ucp_mem_h));
+            }
+            else if(mypid != owner_pid){
+                /* this is wrong implementation right now, need to deal with message_handle */
+                MPIR_Assert(0);
+                return mpi_errno;
+            } else
+#endif
+                MPL_gpu_malloc_host(&am_buf, info.length);
             ucp_request =
                 (MPIDI_UCX_ucp_request_t *) ucp_tag_msg_recv_nb(MPIDI_UCX_global.ctx[0].worker,
                                                                 am_buf, info.length,
@@ -61,6 +79,9 @@ int MPIDI_UCX_progress(int vci, int blocking)
 
             /* free resources for handled message */
             ucp_request_release(ucp_request);
+#ifdef PIP_PROGRESS_STEALING_ENABLE
+            if(info.length > MPIDI_UCX_global.am_buf_sz || mypid == owner_pid)
+#endif
             MPL_gpu_free_host(am_buf);
         }
     }
