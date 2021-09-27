@@ -156,9 +156,6 @@ static int progress_send(int blocking)
                 MPIR_Assert(0);
         }
 
-    } else if(empty_recv_queue){
-        /* I am idle, need to perform stealing */
-        MPIDI_PIP_steal_task();
     }
 
   fn_exit:
