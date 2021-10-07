@@ -2,8 +2,8 @@
  * Copyright (C) by Argonne National Laboratory
  *     See COPYRIGHT in top-level directory
  */
-#ifndef XPMEM_POST_H_INCLUDED
-#define XPMEM_POST_H_INCLUDED
+#ifndef PIP_POST_H_INCLUDED
+#define PIP_POST_H_INCLUDED
 
 #include "ch4_impl.h"
 #include "ipc_types.h"

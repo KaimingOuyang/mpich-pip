@@ -17,7 +17,7 @@ extern MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
     MPL_DBG_MSG_FMT(MPIDI_CH4_SHM_PIP_GENERAL,VERBOSE,(MPL_DBG_FDEST, "PIP "__VA_ARGS__))
 
 #define MPIDI_TASK_PREALLOC 64
-#define MPIDI_COLL_TASK_PREALLOC 8
+#define MPIDI_COLL_TASK_PREALLOC 64
 #define MPIDI_MAX_TASK_THRESHOLD 60
 #define MPIDI_PIP_SEC_LAST_PKT_THRESHOLD (MPIDI_PIP_PKT_SIZE << 1)      /* 64KB * 2 */
 #define MPIDI_PIP_LAST_PKT_THRESHOLD MPIDI_PIP_PKT_SIZE /* 64KB */
@@ -77,6 +77,8 @@ typedef struct MPIDI_PIP_ipc_handle {
 
 extern MPIDI_PIP_global_t MPIDI_PIP_global;
 extern MPIR_Object_alloc_t MPIDI_Task_mem;
+extern MPIR_Object_alloc_t MPIDI_Coll_task_mem;
+extern int owner_pid;
 
 #define MPIDI_PIP_REQUEST(req, field)      ((req)->dev.ch4.am.shm_am.pip.field)
 

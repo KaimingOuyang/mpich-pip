@@ -220,6 +220,7 @@ int MPII_Comm_init(MPIR_Comm * comm_p)
     comm_p->hierarchy_kind = MPIR_COMM_HIERARCHY_KIND__FLAT;
     comm_p->node_comm = NULL;
     comm_p->node_roots_comm = NULL;
+    comm_p->pip_roots_comm = NULL;
     comm_p->intranode_table = NULL;
     comm_p->internode_table = NULL;
 
@@ -445,11 +446,13 @@ static int get_node_count(MPIR_Comm * comm, int *node_count)
     } else if (comm->hierarchy_kind == MPIR_COMM_HIERARCHY_KIND__NODE) {
         *node_count = 1;
         goto fn_exit;
-    } else if (comm->hierarchy_kind == MPIR_COMM_HIERARCHY_KIND__NODE_ROOTS) {
+    }
+#ifndef MPIDI_CH4_SHM_ENABLE_PIP
+    else if (comm->hierarchy_kind == MPIR_COMM_HIERARCHY_KIND__NODE_ROOTS) {
         *node_count = comm->local_size;
         goto fn_exit;
     }
-
+#endif
     /* go through the list of ranks and add the unique ones to the
      * node_list array */
     for (int i = 0; i < comm->local_size; i++) {
@@ -509,11 +512,15 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
     int mpi_errno = MPI_SUCCESS;
     int num_local = -1, num_external = -1;
     int local_rank = -1, external_rank = -1;
-    int *local_procs = NULL, *external_procs = NULL;
+    int *local_procs = NULL, *external_procs = NULL, *roots_map = NULL;
+    int root_rank;
+    int leader_num;
+    MPIDI_PIP_Coll_task_t ***tcoll_queue;
 
     MPIR_FUNC_TERSE_STATE_DECL(MPID_STATE_MPIR_COMM_CREATE_SUBCOMMS);
     MPIR_FUNC_TERSE_ENTER(MPID_STATE_MPIR_COMM_CREATE_SUBCOMMS);
 
+    MPIR_CHKPMEM_DECL(4);
     MPIR_Assert(comm->node_comm == NULL);
     MPIR_Assert(comm->node_roots_comm == NULL);
 
@@ -533,6 +540,34 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
         goto fn_exit;
     }
     /* --END ERROR HANDLING-- */
+
+    /* init shared queue */
+    comm->round = comm->sindex = comm->eindex = 0;
+    comm->tcoll_queue = (MPIDI_PIP_Coll_task_t ***) calloc(2, sizeof(MPIDI_PIP_Coll_task_t **));
+    comm->tcoll_queue[0] =
+        (MPIDI_PIP_Coll_task_t **) calloc(MPIDI_COLL_TASK_PREALLOC,
+                                          sizeof(MPIDI_PIP_Coll_task_t *));
+    comm->tcoll_queue[1] =
+        (MPIDI_PIP_Coll_task_t **) calloc(MPIDI_COLL_TASK_PREALLOC,
+                                          sizeof(MPIDI_PIP_Coll_task_t *));
+    tcoll_queue = comm->tcoll_queue;
+    MPIDU_Init_shm_put(&tcoll_queue, sizeof(MPIDI_PIP_Coll_task_t ***));
+    MPIDU_Init_shm_barrier();
+    MPIR_CHKPMEM_MALLOC(comm->tcoll_queue_array, MPIDI_PIP_Coll_task_t * volatile ***,
+                        sizeof(MPIDI_PIP_Coll_task_t ***) * num_local,
+                        mpi_errno, "pip task queue array", MPL_MEM_SHM);
+    for (int i = 0; i < num_local; i++)
+        MPIDU_Init_shm_get(i, sizeof(MPIDI_PIP_Coll_task_t ***), &comm->tcoll_queue_array[i]);
+    MPIDU_Init_shm_barrier();
+
+    MPIDU_Init_shm_put(&comm, sizeof(struct MPIR_Comm *));
+    MPIDU_Init_shm_barrier();
+    MPIR_CHKPMEM_MALLOC(comm->comms_array, struct MPIR_Comm **,
+                        sizeof(struct MPIR_Comm *) * num_local,
+                        mpi_errno, "pip task queue array", MPL_MEM_SHM);
+    for (int i = 0; i < num_local; i++)
+        MPIDU_Init_shm_get(i, sizeof(struct MPIR_Comm *), &comm->comms_array[i]);
+    MPIDU_Init_shm_barrier();
 
     mpi_errno = MPIR_Find_external(comm, &num_external, &external_rank, &external_procs,
                                    &comm->internode_table);
@@ -556,15 +591,39 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
     MPIR_Assert(num_local > 1 || external_rank >= 0);
     MPIR_Assert(external_rank < 0 || external_procs != NULL);
 
+#ifndef MPIDI_CH4_SHM_ENABLE_PIP
     /* if the node_roots_comm and comm would be the same size, then creating
      * the second communicator is useless and wasteful. */
     if (num_external == comm->remote_size) {
         MPIR_Assert(num_local == 1);
         goto fn_exit;
     }
+#else
+    if (comm->local_size == 1) {
+        comm->node_procs_min = 1;
+        MPIR_Assert(num_local == 1);
+        goto fn_exit;
+    }
+#endif
 
-    /* we don't need a local comm if this process is the only one on this node */
-    if (num_local > 1) {
+    mpi_errno =
+        MPIR_Find_node_procs_sum_min(comm, num_external, &comm->node_id, &root_rank,
+                                     &comm->node_procs_min, &comm->node_procs_sum, &roots_map);
+    if (mpi_errno) {
+        if (MPIR_Err_is_fatal(mpi_errno))
+            MPIR_ERR_POP(mpi_errno);
+
+        /* Non-fatal errors simply mean that this communicator will not have
+         * any node awareness.  Node-aware collectives are an optimization. */
+        MPL_DBG_MSG_P(MPIR_DBG_COMM, VERBOSE, "MPIR_Find_node_procs_sum_min failed for comm_ptr=%p",
+                      comm);
+        MPL_free(comm->internode_table);
+
+        mpi_errno = MPI_SUCCESS;
+        goto fn_exit;
+    }
+
+    if (num_local > 0) {
         mpi_errno = MPIR_Comm_create(&comm->node_comm);
         MPIR_ERR_CHECK(mpi_errno);
 
@@ -578,6 +637,15 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
 
         comm->node_comm->local_size = num_local;
         comm->node_comm->remote_size = num_local;
+        comm->node_comm->node_procs_min = leader_num;
+        comm->node_comm->node_procs_sum = NULL;
+        comm->node_comm->tcoll_queue = comm->tcoll_queue;
+        comm->node_comm->tcoll_queue_array = comm->tcoll_queue_array;
+        comm->node_comm->comms_array = comm->comms_array;
+        comm->node_comm->round_ptr = &comm->round;
+        comm->node_comm->sindex_ptr = &comm->sindex;
+        comm->node_comm->eindex_ptr = &comm->eindex;
+        comm->node_comm->max_depth = 0;
 
         MPIR_Comm_map_irregular(comm->node_comm, comm, local_procs, num_local,
                                 MPIR_COMM_MAP_DIR__L2L, NULL);
@@ -585,7 +653,6 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
         MPIR_ERR_CHECK(mpi_errno);
     }
 
-    /* this process may not be a member of the node_roots_comm */
     if (local_rank == 0) {
         mpi_errno = MPIR_Comm_create(&comm->node_roots_comm);
         MPIR_ERR_CHECK(mpi_errno);
@@ -607,9 +674,45 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
         MPIR_ERR_CHECK(mpi_errno);
     }
 
+    leader_num = comm->node_procs_min;
+    /* this process may not be a member of the node_roots_comm */
+    if (local_rank < leader_num && num_external > 1) {
+        mpi_errno = MPIR_Comm_create(&comm->pip_roots_comm);
+        MPIR_ERR_CHECK(mpi_errno);
+
+        comm->pip_roots_comm->context_id =
+            comm->context_id + MPIR_CONTEXT_INTERNODE_OFFSET + MPIR_CONTEXT_INTRANODE_OFFSET;
+        comm->pip_roots_comm->recvcontext_id = comm->pip_roots_comm->context_id;
+        comm->pip_roots_comm->rank = root_rank;
+        comm->pip_roots_comm->comm_kind = MPIR_COMM_KIND__INTRACOMM;
+        comm->pip_roots_comm->hierarchy_kind = MPIR_COMM_HIERARCHY_KIND__NODE_ROOTS;
+        comm->pip_roots_comm->local_comm = NULL;
+        MPL_DBG_MSG_D(MPIR_DBG_COMM, VERBOSE, "Create pip_roots_comm=%p\n", comm->pip_roots_comm);
+
+        comm->pip_roots_comm->local_size = num_external * leader_num;
+        comm->pip_roots_comm->remote_size = num_external * leader_num;
+        comm->pip_roots_comm->node_procs_min = leader_num;
+        comm->pip_roots_comm->node_procs_sum = comm->node_procs_sum;
+        comm->pip_roots_comm->node_id = comm->node_id;
+        comm->pip_roots_comm->node_count = comm->node_count;
+
+        comm->pip_roots_comm->tcoll_queue = comm->tcoll_queue;
+        comm->pip_roots_comm->tcoll_queue_array = comm->tcoll_queue_array;
+        comm->pip_roots_comm->comms_array = comm->comms_array;
+        comm->pip_roots_comm->round_ptr = &comm->round;
+        comm->pip_roots_comm->sindex_ptr = &comm->sindex;
+        comm->pip_roots_comm->eindex_ptr = &comm->eindex;
+
+        MPIR_Comm_map_irregular(comm->pip_roots_comm, comm, roots_map, num_external * leader_num,
+                                MPIR_COMM_MAP_DIR__L2L, NULL);
+        mpi_errno = MPIR_Comm_commit_internal(comm->pip_roots_comm);
+        MPIR_ERR_CHECK(mpi_errno);
+    }
+
     comm->hierarchy_kind = MPIR_COMM_HIERARCHY_KIND__PARENT;
 
   fn_exit:
+    MPL_free(roots_map);
     MPL_free(local_procs);
     MPL_free(external_procs);
     MPIR_FUNC_TERSE_EXIT(MPID_STATE_MPIR_COMM_CREATE_SUBCOMMS);
@@ -652,6 +755,10 @@ static int init_comm_seq(MPIR_Comm * comm)
         comm->node_roots_comm->seq = comm->seq;
     }
 
+    if (comm->pip_roots_comm) {
+        comm->pip_roots_comm->seq = comm->seq;
+    }
+
   fn_exit:
     return mpi_errno;
   fn_fail:
@@ -666,6 +773,7 @@ static int init_comm_seq(MPIR_Comm * comm)
 int MPIR_Comm_commit(MPIR_Comm * comm)
 {
     int mpi_errno = MPI_SUCCESS;
+    int depth = 0, tmp_cnt;
     MPIR_FUNC_TERSE_STATE_DECL(MPID_STATE_MPIR_COMM_COMMIT);
 
     MPIR_FUNC_TERSE_ENTER(MPID_STATE_MPIR_COMM_COMMIT);
@@ -699,6 +807,11 @@ int MPIR_Comm_commit(MPIR_Comm * comm)
         MPIR_ERR_CHECK(mpi_errno);
     }
 
+    if (comm->pip_roots_comm) {
+        mpi_errno = MPIR_Coll_comm_init(comm->pip_roots_comm);
+        MPIR_ERR_CHECK(mpi_errno);
+    }
+
     /* call post commit hooks */
     mpi_errno = MPID_Comm_commit_post_hook(comm);
     MPIR_ERR_CHECK(mpi_errno);
@@ -713,9 +826,29 @@ int MPIR_Comm_commit(MPIR_Comm * comm)
         MPIR_ERR_CHECK(mpi_errno);
     }
 
+    if (comm->pip_roots_comm) {
+        mpi_errno = MPID_Comm_commit_post_hook(comm->pip_roots_comm);
+        MPIR_ERR_CHECK(mpi_errno);
+    }
+
     if (comm->comm_kind == MPIR_COMM_KIND__INTRACOMM && !comm->tainted) {
         mpi_errno = init_comm_seq(comm);
         MPIR_ERR_CHECK(mpi_errno);
+    }
+
+    tmp_cnt = comm->node_count;
+    while (tmp_cnt > 0) {
+        depth++;
+        tmp_cnt /= (comm->node_procs_min + 1);
+    }
+
+    comm->max_depth = depth;
+    if (comm->node_comm) {
+        comm->node_comm->max_depth = depth;
+    }
+
+    if (comm->pip_roots_comm) {
+        comm->pip_roots_comm->max_depth = depth;
     }
 
   fn_exit:
@@ -1011,10 +1144,19 @@ int MPIR_Comm_delete_internal(MPIR_Comm * comm_ptr)
             MPIR_Group_release(comm_ptr->remote_group);
 
         /* free the intra/inter-node communicators, if they exist */
-        if (comm_ptr->node_comm)
+        if (comm_ptr->node_comm) {
             MPIR_Comm_release(comm_ptr->node_comm);
+            MPL_free(comm_ptr->node_procs_sum);
+            MPL_free(comm_ptr->tcoll_queue_array);
+            MPL_free(comm_ptr->tcoll_queue[0]);
+            MPL_free(comm_ptr->tcoll_queue[1]);
+            MPL_free(comm_ptr->tcoll_queue);
+            MPL_free(comm_ptr->comms_array);
+        }
         if (comm_ptr->node_roots_comm)
             MPIR_Comm_release(comm_ptr->node_roots_comm);
+        if (comm_ptr->pip_roots_comm)
+            MPIR_Comm_release(comm_ptr->pip_roots_comm);
         MPL_free(comm_ptr->intranode_table);
         MPL_free(comm_ptr->internode_table);
 

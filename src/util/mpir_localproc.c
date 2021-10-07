@@ -15,6 +15,23 @@
 #include <errno.h>
 #endif
 
+/*
+=== BEGIN_MPI_T_CVAR_INFO_BLOCK ===
+
+cvars:
+    - name        : MPIR_CVAR_COMM_LEADER_NUM
+      category    : CH4
+      type        : int
+      default     : 0x7fffffff
+      class       : none
+      verbosity   : MPI_T_VERBOSITY_USER_BASIC
+      scope       : MPI_T_SCOPE_ALL_EQ
+      description : >-
+        number of leader processes in a communicator
+
+=== END_MPI_T_CVAR_INFO_BLOCK ===
+*/
+
 /* MPIR_Find_local  -- from the list of processes in comm,
  * builds a list of local processes, i.e., processes on this same node.
  *
@@ -107,6 +124,71 @@ int MPIR_Find_local(MPIR_Comm * comm, int *local_size_p, int *local_rank_p,
         *intranode_table_p = intranode_table;   /* no need to realloc */
     else
         MPL_free(intranode_table);      /* free internally if caller passes NULL */
+
+  fn_exit:
+    return mpi_errno;
+  fn_fail:
+    MPIR_CHKPMEM_REAP();
+    goto fn_exit;
+}
+
+int MPIR_Find_node_procs_sum_min(MPIR_Comm * comm, int node_num, int *node_id, int *root_rank,
+                                 int *node_procs_min, int **node_procs_sum, int **roots_map)
+{
+    int mpi_errno = MPI_SUCCESS, i;
+    int *procs_cnt = (int *) calloc(node_num, sizeof(int));
+    int *lnode_procs_sum = NULL;
+    int *lroots_map = NULL;
+    int lnode_procs_min = MPIR_CVAR_COMM_LEADER_NUM;
+    int lnode_id, tmp_node_id;
+    int *node_roots_num;
+    int roots_num = 0;
+
+    MPIR_CHKPMEM_DECL(2);
+    MPIR_CHKPMEM_CALLOC(lnode_procs_sum, int *, sizeof(int) * (node_num + 1), mpi_errno,
+                        "lnode_procs_sum", MPL_MEM_COMM);
+    MPIR_CHKPMEM_CALLOC(lroots_map, int *, sizeof(int) * comm->local_size, mpi_errno,
+                        "intranode_table", MPL_MEM_COMM);
+
+    for (i = 0; i < comm->local_size; ++i) {
+        mpi_errno = MPID_Get_node_id(comm, i, &tmp_node_id);
+        MPIR_ERR_CHECK(mpi_errno);
+        MPIR_ERR_CHKANDJUMP(tmp_node_id < 0, mpi_errno, MPI_ERR_OTHER, "**dynamic_node_ids");
+        /* record #processes on each node */
+        if (i == comm->rank)
+            lnode_id = tmp_node_id;
+        procs_cnt[tmp_node_id] += 1;
+    }
+
+    lnode_procs_sum[0] = 0;
+    for (i = 0; i < node_num; ++i) {
+        lnode_procs_min = lnode_procs_min < procs_cnt[i] ? lnode_procs_min : procs_cnt[i];
+        if (i != 0) {
+            lnode_procs_sum[i] = procs_cnt[i - 1] + lnode_procs_sum[i - 1];
+        }
+    }
+    lnode_procs_sum[node_num] = procs_cnt[node_num - 1] + lnode_procs_sum[node_num - 1];
+
+    *node_procs_sum = lnode_procs_sum;
+    *node_procs_min = lnode_procs_min;
+    *node_id = lnode_id;
+    node_roots_num = (int *) calloc(node_num, sizeof(int));
+    for (i = 0; i < comm->local_size; ++i) {
+        mpi_errno = MPID_Get_node_id(comm, i, &tmp_node_id);
+        MPIR_ERR_CHECK(mpi_errno);
+        if (node_roots_num[tmp_node_id] < lnode_procs_min) {
+            lroots_map[roots_num] = i;
+            if (i == comm->rank)
+                *root_rank = roots_num;
+            roots_num++;
+        }
+        node_roots_num[tmp_node_id] += 1;
+    }
+
+    *roots_map = lroots_map;
+
+    free(procs_cnt);
+    free(node_roots_num);
 
   fn_exit:
     return mpi_errno;

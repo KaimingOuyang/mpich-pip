@@ -19,14 +19,14 @@ MPL_dbg_class MPIDI_CH4_SHM_PIP_GENERAL;
 MPIDI_PIP_global_t MPIDI_PIP_global;
 
 MPIDI_PIP_task_t MPIDI_Task_direct[MPIDI_TASK_PREALLOC] = { 0 };
-// MPIDI_PIP_Coll_task_t MPIDI_Coll_task_direct[MPIDI_COLL_TASK_PREALLOC] = { 0 };
+MPIDI_PIP_Coll_task_t MPIDI_Coll_task_direct[MPIDI_COLL_TASK_PREALLOC + 1] = { 0 };     /* +1 to avoid dynamic allocation */
 
 MPIR_Object_alloc_t MPIDI_Task_mem = {
     0, 0, 0, 0, 0, 0, MPIR_INTERNAL, sizeof(MPIDI_PIP_task_t), MPIDI_Task_direct,
     MPIDI_TASK_PREALLOC
 };
 
-// MPIR_Object_alloc_t MPIDI_Coll_task_mem = {
-//     0, 0, 0, 0, 0, 0, MPIR_INTERNAL, sizeof(MPIDI_PIP_Coll_task_t), MPIDI_Coll_task_direct,
-//     MPIDI_COLL_TASK_PREALLOC, NULL
-// };
+MPIR_Object_alloc_t MPIDI_Coll_task_mem = {
+    0, 0, 0, 0, 0, 0, MPIR_INTERNAL, sizeof(MPIDI_PIP_Coll_task_t), MPIDI_Coll_task_direct,
+    MPIDI_COLL_TASK_PREALLOC, NULL
+};

@@ -147,6 +147,25 @@ enum MPIR_COMM_HINT_PREDEFINED_t {
   health?  For example, ok, failure detected, all (live) members of failed
   communicator have acked.
   S*/
+typedef enum MPIDI_PIP_Coll_task_type {
+    TMPI_Scatter = 0,
+    TMPI_Allgather,
+    TMPI_Gather,
+    TMPI_Bcast,
+    TMPI_Allreduce,
+    TMPI_Reduce,
+} MPIDI_PIP_Coll_task_type_t;
+
+typedef struct MPIDI_PIP_Coll_task {
+    MPIR_OBJECT_HEADER;
+    void *volatile addr;
+    size_t data_sz;
+    int count;
+    volatile int cnt;
+    int free;
+    MPIDI_PIP_Coll_task_type_t type;
+} MPIDI_PIP_Coll_task_t;
+
 struct MPIR_Comm {
     MPIR_OBJECT_HEADER;         /* adds handle and ref_count fields */
     MPID_Thread_mutex_t mutex;
@@ -169,6 +188,16 @@ struct MPIR_Comm {
     struct MPIR_Comm *node_comm;        /* Comm of processes in this comm that are on
                                          * the same node as this process. */
     struct MPIR_Comm *node_roots_comm;  /* Comm of root processes for other nodes. */
+    struct MPIR_Comm *pip_roots_comm;   /* Comm of root processes for other nodes. */
+    int *node_procs_sum;
+    int node_procs_min, node_id;
+    MPIDI_PIP_Coll_task_t ***tcoll_queue;
+    MPIDI_PIP_Coll_task_t *volatile ***tcoll_queue_array;
+    struct MPIR_Comm **comms_array;
+    int round, sindex, eindex;
+    int *round_ptr, *sindex_ptr, *eindex_ptr;
+    int max_depth;
+
     int *intranode_table;       /* intranode_table[i] gives the rank in
                                  * node_comm of rank i in this comm or -1 if i
                                  * is not in this process' node_comm.

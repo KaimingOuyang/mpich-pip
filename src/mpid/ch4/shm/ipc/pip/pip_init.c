@@ -54,27 +54,9 @@ int MPIDI_PIP_mpi_init_hook(int rank, int size)
     MPIDI_PIP_global.local_numa_id = local_numa_id;
 
     /* Allocate task queue */
-    // MPIR_CHKPMEM_MALLOC(MPIDI_PIP_global.task_queue, MPIDI_PIP_task_queue_t *,
-    //                     sizeof(MPIDI_PIP_task_queue_t), mpi_errno, "pip task queue", MPL_MEM_SHM);
+    // MPIR_CHKPMEM_MALLOC(MPIDI_PIP_global.tcoll_queue, MPIDI_PIP_Coll_task_t *,
+    //                     sizeof(MPIDI_PIP_Coll_task_t), mpi_errno, "pip task queue", MPL_MEM_SHM);
     // mpi_errno = MPIDI_PIP_mpi_init_task_queue(MPIDI_PIP_global.task_queue);
-    // MPIR_ERR_CHECK(mpi_errno);
-
-    /* Init local completion queue */
-    // MPIR_CHKPMEM_MALLOC(MPIDI_PIP_global.compl_queue, MPIDI_PIP_task_queue_t *,
-    //                     sizeof(MPIDI_PIP_task_queue_t), mpi_errno, "pip compl queue", MPL_MEM_SHM);
-    // mpi_errno = MPIDI_PIP_mpi_init_task_queue(MPIDI_PIP_global.compl_queue);
-    // MPIR_ERR_CHECK(mpi_errno);
-
-    /* Get task queue array */
-    // MPIDU_Init_shm_put(&MPIDI_PIP_global.task_queue, sizeof(MPIDI_PIP_task_queue_t *));
-    // MPIDU_Init_shm_barrier();
-    // MPIR_CHKPMEM_MALLOC(MPIDI_PIP_global.task_queue_array, MPIDI_PIP_task_queue_t **,
-    //                     sizeof(MPIDI_PIP_task_queue_t *) * num_local,
-    //                     mpi_errno, "pip task queue array", MPL_MEM_SHM);
-    // for (i = 0; i < num_local; i++)
-    //     MPIDU_Init_shm_get(i, sizeof(MPIDI_PIP_task_queue_t *),
-    //                        &MPIDI_PIP_global.task_queue_array[i]);
-    // MPIDU_Init_shm_barrier();
 
     /* Share MPIDI_PIP_global for future information inquiry purpose */
     MPIDU_Init_shm_put(&MPIDI_PIP_global, sizeof(MPIDI_PIP_global_t *));
@@ -112,7 +94,7 @@ int MPIDI_PIP_mpi_finalize_hook(void)
     // MPL_free(MPIDI_PIP_global.compl_queue);
 
     // MPL_free(MPIDI_PIP_global.task_queue_array);
-    // MPL_free(MPIDI_PIP_global.tcoll_queue_array);
+    //MPL_free(MPIDI_PIP_global.tcoll_queue_array);
     MPL_free(MPIDI_PIP_global.pip_global_array);
 
   fn_exit:

@@ -7,7 +7,7 @@
 #define CH4_COLL_IMPL_H_INCLUDED
 
 #include "ch4_csel_container.h"
-
+#include "../shm/ipc/pip/pip_coll.h"
 MPL_STATIC_INLINE_PREFIX int MPIDI_Barrier_intra_composition_alpha(MPIR_Comm * comm,
                                                                    MPIR_Errflag_t * errflag)
 {

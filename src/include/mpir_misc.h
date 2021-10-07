@@ -80,6 +80,8 @@ int MPIR_Find_local(struct MPIR_Comm *comm, int *local_size_p, int *local_rank_p
                     int **local_ranks_p, int **intranode_table);
 int MPIR_Find_external(struct MPIR_Comm *comm, int *external_size_p, int *external_rank_p,
                        int **external_ranks_p, int **internode_table_p);
+int MPIR_Find_node_procs_sum_min(MPIR_Comm * comm, int node_num, int *node_id, int *root_rank,
+                                 int *node_procs_min, int **node_procs_sum, int **roots_map);
 int MPIR_Get_internode_rank(MPIR_Comm * comm_ptr, int r);
 int MPIR_Get_intranode_rank(MPIR_Comm * comm_ptr, int r);
 
