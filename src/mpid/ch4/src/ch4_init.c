@@ -491,32 +491,32 @@ int MPID_Init_local(int requested, int *provided)
 
     MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPID_INIT_LOCAL);
 
-    // switch (requested) {
-    //     case MPI_THREAD_SINGLE:
-    //     case MPI_THREAD_SERIALIZED:
-    //     case MPI_THREAD_FUNNELED:
-    //         *provided = requested;
-    //         break;
-    //     case MPI_THREAD_MULTIPLE:
-    //         *provided = MAX_THREAD_MODE;
-    //         break;
-    // }
+    switch (requested) {
+        case MPI_THREAD_SINGLE:
+        case MPI_THREAD_SERIALIZED:
+        case MPI_THREAD_FUNNELED:
+            *provided = requested;
+            break;
+        case MPI_THREAD_MULTIPLE:
+            *provided = MAX_THREAD_MODE;
+            break;
+    }
 
     /* Force provided to preset thread level */
-    if (MPICH_THREAD_LEVEL >= requested)
-        *provided = MPICH_THREAD_LEVEL;
-    else {
-        switch (requested) {
-            case MPI_THREAD_SINGLE:
-            case MPI_THREAD_SERIALIZED:
-            case MPI_THREAD_FUNNELED:
-                *provided = requested;
-                break;
-            case MPI_THREAD_MULTIPLE:
-                *provided = MAX_THREAD_MODE;
-                break;
-        }
-    }
+    // if (MPICH_THREAD_LEVEL >= requested)
+    //     *provided = MPICH_THREAD_LEVEL;
+    // else {
+    //     switch (requested) {
+    //         case MPI_THREAD_SINGLE:
+    //         case MPI_THREAD_SERIALIZED:
+    //         case MPI_THREAD_FUNNELED:
+    //             *provided = requested;
+    //             break;
+    //         case MPI_THREAD_MULTIPLE:
+    //             *provided = MAX_THREAD_MODE;
+    //             break;
+    //     }
+    // }
 
 #ifdef MPL_USE_DBG_LOGGING
     MPIDI_CH4_DBG_GENERAL = MPL_dbg_class_alloc("CH4", "ch4");
