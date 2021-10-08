@@ -112,7 +112,7 @@ int MPIDI_PIP_mpi_finalize_hook(void)
     // MPL_free(MPIDI_PIP_global.compl_queue);
 
     // MPL_free(MPIDI_PIP_global.task_queue_array);
-    MPL_free(MPIDI_PIP_global.tcoll_queue_array);
+    // MPL_free(MPIDI_PIP_global.tcoll_queue_array);
     MPL_free(MPIDI_PIP_global.pip_global_array);
 
   fn_exit:
