@@ -1,10 +1,6 @@
-/*
- * Copyright (C) by Argonne National Laboratory
- *     See COPYRIGHT in top-level directory
- */
-
 #include "mpiimpl.h"
 #include "pip_pre.h"
+#include "pip_coll.h"
 #include <math.h>
 
 int MPIDI_PIP_Scatter_nway_tree_internode(const void **sendbuf, int sendcount,
