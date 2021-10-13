@@ -152,8 +152,9 @@ typedef enum MPIDI_PIP_Coll_task_type {
     TMPI_Allgather,
     TMPI_Gather,
     TMPI_Bcast,
+    TMPI_Bcast_End,
     TMPI_Allreduce,
-    TMPI_Reduce,
+    TMPI_Reduce
 } MPIDI_PIP_Coll_task_type_t;
 
 typedef struct MPIDI_PIP_Coll_task {
@@ -163,8 +164,15 @@ typedef struct MPIDI_PIP_Coll_task {
     int count;
     volatile int cnt;
     int free;
+    uintptr_t offset;
     MPIDI_PIP_Coll_task_type_t type;
 } MPIDI_PIP_Coll_task_t;
+
+typedef struct MPIDI_Comm_shm_barrier {
+    MPL_atomic_int_t val;
+    MPL_atomic_int_t wait;
+} MPIDI_Comm_shm_barrier_t;
+
 
 struct MPIR_Comm {
     MPIR_OBJECT_HEADER;         /* adds handle and ref_count fields */
@@ -193,9 +201,16 @@ struct MPIR_Comm {
     int node_procs_min, node_id;
     MPIDI_PIP_Coll_task_t ***tcoll_queue;
     MPIDI_PIP_Coll_task_t *volatile ***tcoll_queue_array;
-    struct MPIR_Comm **comms_array;
+    volatile struct MPIR_Comm **comms_array;
     int round, sindex, eindex;
     int *round_ptr, *sindex_ptr, *eindex_ptr;
+    MPIDI_PIP_Coll_task_t **shared_addr;
+    int shared_round;
+    int *shared_round_ptr;
+    int intranode_size;         /* for pip_roots_comm */
+    // pthread_barrier_t *node_barrier;
+    // pthread_barrier_t *pip_roots_barrier;
+    MPIDI_Comm_shm_barrier_t *barrier;
     int max_depth;
 
     int *intranode_table;       /* intranode_table[i] gives the rank in
@@ -306,6 +321,7 @@ int MPIR_Comm_create_inter(MPIR_Comm * comm_ptr, MPIR_Group * group_ptr, MPIR_Co
 
 
 int MPIR_Comm_create_subcomms(MPIR_Comm * comm);
+int MPIR_PIP_Comm_barrier(MPIR_Comm * comm);
 int MPIR_Comm_commit(MPIR_Comm *);
 
 int MPIR_Comm_is_parent_comm(MPIR_Comm *);

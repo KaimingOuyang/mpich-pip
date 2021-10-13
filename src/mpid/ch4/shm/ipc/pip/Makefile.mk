@@ -19,6 +19,9 @@ noinst_HEADERS += src/mpid/ch4/shm/ipc/pip/pip_pre.h   \
 
 mpi_core_sources += src/mpid/ch4/shm/ipc/pip/globals.c \
 					src/mpid/ch4/shm/ipc/pip/pip_mem.c \
+					src/mpid/ch4/shm/ipc/pip/pip_allgather.c \
+					src/mpid/ch4/shm/ipc/pip/pip_bcast.c \
+					src/mpid/ch4/shm/ipc/pip/pip_gather.c \
 					src/mpid/ch4/shm/ipc/pip/pip_scatter.c \
 					src/mpid/ch4/shm/ipc/pip/pip_init.c 
 endif
