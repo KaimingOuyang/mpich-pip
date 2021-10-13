@@ -167,6 +167,11 @@ MPL_STATIC_INLINE_PREFIX int MPID_Allgather(const void *sendbuf, int sendcount,
                                             MPIR_Errflag_t * errflag)
 {
     int mpi_errno = MPI_SUCCESS;
+#ifdef MPIDI_CH4_SHM_ENABLE_PIP
+    mpi_errno =
+        MPIDI_PIP_Allgather_impl(sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype, comm,
+                                 errflag);
+#else
     const MPIDI_Csel_container_s *cnt = NULL;
 
     MPIR_Csel_coll_sig_s coll_sig = {
@@ -204,7 +209,7 @@ MPL_STATIC_INLINE_PREFIX int MPID_Allgather(const void *sendbuf, int sendcount,
         default:
             MPIR_Assert(0);
     }
-
+#endif
     MPIR_ERR_CHECK(mpi_errno);
 
   fn_exit:
