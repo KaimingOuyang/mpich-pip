@@ -23,5 +23,7 @@ mpi_core_sources += src/mpid/ch4/shm/ipc/pip/globals.c \
 					src/mpid/ch4/shm/ipc/pip/pip_bcast.c \
 					src/mpid/ch4/shm/ipc/pip/pip_gather.c \
 					src/mpid/ch4/shm/ipc/pip/pip_scatter.c \
+					src/mpid/ch4/shm/ipc/pip/pip_allreduce.c \
+					src/mpid/ch4/shm/ipc/pip/pip_reduce.c \
 					src/mpid/ch4/shm/ipc/pip/pip_init.c 
 endif

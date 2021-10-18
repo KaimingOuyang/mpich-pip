@@ -108,6 +108,9 @@ MPL_STATIC_INLINE_PREFIX int MPID_Allreduce(const void *sendbuf, void *recvbuf, 
                                             MPIR_Errflag_t * errflag)
 {
     int mpi_errno = MPI_SUCCESS;
+#ifdef MPIDI_CH4_SHM_ENABLE_PIP
+    mpi_errno = MPIDI_PIP_Allreduce_impl(sendbuf, recvbuf, count, datatype, op, comm, errflag);
+#else
     const MPIDI_Csel_container_s *cnt = NULL;
 
     MPIR_Csel_coll_sig_s coll_sig = {
@@ -151,7 +154,7 @@ MPL_STATIC_INLINE_PREFIX int MPID_Allreduce(const void *sendbuf, void *recvbuf, 
         default:
             MPIR_Assert(0);
     }
-
+#endif
     MPIR_ERR_CHECK(mpi_errno);
 
   fn_exit:

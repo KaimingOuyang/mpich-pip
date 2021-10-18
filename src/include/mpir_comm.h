@@ -207,6 +207,14 @@ struct MPIR_Comm {
     MPIDI_PIP_Coll_task_t **shared_addr;
     int shared_round;
     int *shared_round_ptr;
+    MPIDI_PIP_Coll_task_t **reduce_addr;
+    MPIDI_PIP_Coll_task_t *volatile **reduce_addr_array;
+    MPIDI_PIP_Coll_task_t **rem_addr;
+    MPIDI_PIP_Coll_task_t *volatile **rem_addr_array;
+    int reduce_round;
+    int rem_round;
+    int *reduce_round_ptr;
+    int *rem_round_ptr;
     int intranode_size;         /* for pip_roots_comm */
     // pthread_barrier_t *node_barrier;
     // pthread_barrier_t *pip_roots_barrier;
