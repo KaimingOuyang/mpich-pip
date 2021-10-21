@@ -34,7 +34,7 @@ cpi_DEPENDENCIES =
 # the make-time instances of libpmpi.la and libmpi.la live here
 AM_LDFLAGS += -L../lib
 # the make-time instances of libmpl.la and libopa.la live here
-AM_LDFLAGS += @mpllibdir@ @opalibdir@
+AM_LDFLAGS += @mpllibdir@
 
 # Wrapper LDFLAGS need to be added at the end to make sure we link
 # with the libraries we just built, and not any previously installed
