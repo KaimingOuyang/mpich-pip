@@ -284,23 +284,23 @@ int MPIDI_PIP_Allgather_ring_internode(const void *sendbuf, int sendcount,
         }
 
         /* intranode copy */
-        if (local_rank != 0) {
-            if (((eindex + 1) % MPIDI_COLL_TASK_PREALLOC) == sindex) {
-                sindex = (sindex + 1) % MPIDI_COLL_TASK_PREALLOC;
-            }
+        // if (local_rank != 0) {
+        //     if (((eindex + 1) % MPIDI_COLL_TASK_PREALLOC) == sindex) {
+        //         sindex = (sindex + 1) % MPIDI_COLL_TASK_PREALLOC;
+        //     }
 
-            while (tcoll_queue_array[0][round][eindex] == NULL)
-                MPL_sched_yield();
-            local_task = tcoll_queue_array[0][round][eindex];
+        //     while (tcoll_queue_array[0][round][eindex] == NULL)
+        //         MPL_sched_yield();
+        //     local_task = tcoll_queue_array[0][round][eindex];
 
-            mpi_errno =
-                MPIR_Localcopy(local_task->addr, recvcount, recvtype,
-                               (char *) recvbuf + local_task->offset, recvcount, recvtype);
-            MPIR_ERR_CHECK(mpi_errno);
+        //     mpi_errno =
+        //         MPIR_Localcopy(local_task->addr, recvcount, recvtype,
+        //                        (char *) recvbuf + local_task->offset, recvcount, recvtype);
+        //     MPIR_ERR_CHECK(mpi_errno);
 
-            __sync_fetch_and_add(&local_task->cnt, 1);
-            eindex = (eindex + 1) % MPIDI_COLL_TASK_PREALLOC;
-        }
+        //     __sync_fetch_and_add(&local_task->cnt, 1);
+        //     eindex = (eindex + 1) % MPIDI_COLL_TASK_PREALLOC;
+        // }
 
         mpi_errno = MPIC_Waitall(2, reqs, MPI_STATUSES_IGNORE, errflag);
         j_node = jnext_node;
@@ -335,23 +335,24 @@ int MPIDI_PIP_Allgather_ring_internode(const void *sendbuf, int sendcount,
         __sync_synchronize();
         comm->tcoll_queue[round][eindex] = (MPIDI_PIP_Coll_task_t *) local_task;
         eindex = (eindex + 1) % MPIDI_COLL_TASK_PREALLOC;
-    } else {
-        if (((eindex + 1) % MPIDI_COLL_TASK_PREALLOC) == sindex) {
-            sindex = (sindex + 1) % MPIDI_COLL_TASK_PREALLOC;
-        }
+    } 
+    // else {
+    //     if (((eindex + 1) % MPIDI_COLL_TASK_PREALLOC) == sindex) {
+    //         sindex = (sindex + 1) % MPIDI_COLL_TASK_PREALLOC;
+    //     }
 
-        while (tcoll_queue_array[0][round][eindex] == NULL)
-            MPL_sched_yield();
-        local_task = tcoll_queue_array[0][round][eindex];
+    //     while (tcoll_queue_array[0][round][eindex] == NULL)
+    //         MPL_sched_yield();
+    //     local_task = tcoll_queue_array[0][round][eindex];
 
-        mpi_errno =
-            MPIR_Localcopy(local_task->addr, recvcount, recvtype,
-                           (char *) recvbuf + local_task->offset, recvcount, recvtype);
-        MPIR_ERR_CHECK(mpi_errno);
+    //     mpi_errno =
+    //         MPIR_Localcopy(local_task->addr, recvcount, recvtype,
+    //                        (char *) recvbuf + local_task->offset, recvcount, recvtype);
+    //     MPIR_ERR_CHECK(mpi_errno);
 
-        __sync_fetch_and_add(&local_task->cnt, 1);
-        eindex = (eindex + 1) % MPIDI_COLL_TASK_PREALLOC;
-    }
+    //     __sync_fetch_and_add(&local_task->cnt, 1);
+    //     eindex = (eindex + 1) % MPIDI_COLL_TASK_PREALLOC;
+    // }
 
     __sync_fetch_and_add(&shared_addr->cnt, 1);
     if (local_rank == 0) {
@@ -501,24 +502,24 @@ int MPIDI_PIP_Allgatherv_ring_internode(const void *sendbuf, int sendcount, MPI_
         }
 
         /* intranode copy */
-        if (local_rank != 0) {
-            if (((eindex + 1) % MPIDI_COLL_TASK_PREALLOC) == sindex) {
-                sindex = (sindex + 1) % MPIDI_COLL_TASK_PREALLOC;
-            }
+        // if (local_rank != 0) {
+        //     if (((eindex + 1) % MPIDI_COLL_TASK_PREALLOC) == sindex) {
+        //         sindex = (sindex + 1) % MPIDI_COLL_TASK_PREALLOC;
+        //     }
 
-            while (tcoll_queue_array[0][round][eindex] == NULL)
-                MPL_sched_yield();
-            local_task = tcoll_queue_array[0][round][eindex];
+        //     while (tcoll_queue_array[0][round][eindex] == NULL)
+        //         MPL_sched_yield();
+        //     local_task = tcoll_queue_array[0][round][eindex];
 
-            MPIR_Assert(local_task->count <= recvcounts[j_node]);
-            mpi_errno =
-                MPIR_Localcopy(local_task->addr, local_task->count, recvtype,
-                               (char *) recvbuf + local_task->offset, local_task->count, recvtype);
-            MPIR_ERR_CHECK(mpi_errno);
+        //     MPIR_Assert(local_task->count <= recvcounts[j_node]);
+        //     mpi_errno =
+        //         MPIR_Localcopy(local_task->addr, local_task->count, recvtype,
+        //                        (char *) recvbuf + local_task->offset, local_task->count, recvtype);
+        //     MPIR_ERR_CHECK(mpi_errno);
 
-            __sync_fetch_and_add(&local_task->cnt, 1);
-            eindex = (eindex + 1) % MPIDI_COLL_TASK_PREALLOC;
-        }
+        //     __sync_fetch_and_add(&local_task->cnt, 1);
+        //     eindex = (eindex + 1) % MPIDI_COLL_TASK_PREALLOC;
+        // }
 
         mpi_errno = MPIC_Waitall(2, reqs, MPI_STATUSES_IGNORE, errflag);
         j_node = jnext_node;
@@ -552,23 +553,24 @@ int MPIDI_PIP_Allgatherv_ring_internode(const void *sendbuf, int sendcount, MPI_
         __sync_synchronize();
         comm->tcoll_queue[round][eindex] = (MPIDI_PIP_Coll_task_t *) local_task;
         eindex = (eindex + 1) % MPIDI_COLL_TASK_PREALLOC;
-    } else {
-        if (((eindex + 1) % MPIDI_COLL_TASK_PREALLOC) == sindex) {
-            sindex = (sindex + 1) % MPIDI_COLL_TASK_PREALLOC;
-        }
-
-        while (tcoll_queue_array[0][round][eindex] == NULL)
-            MPL_sched_yield();
-        local_task = tcoll_queue_array[0][round][eindex];
-
-        mpi_errno =
-            MPIR_Localcopy(local_task->addr, local_task->count, recvtype,
-                           (char *) recvbuf + local_task->offset, local_task->count, recvtype);
-        MPIR_ERR_CHECK(mpi_errno);
-
-        __sync_fetch_and_add(&local_task->cnt, 1);
-        eindex = (eindex + 1) % MPIDI_COLL_TASK_PREALLOC;
     }
+    // else {
+    //     if (((eindex + 1) % MPIDI_COLL_TASK_PREALLOC) == sindex) {
+    //         sindex = (sindex + 1) % MPIDI_COLL_TASK_PREALLOC;
+    //     }
+
+    //     while (tcoll_queue_array[0][round][eindex] == NULL)
+    //         MPL_sched_yield();
+    //     local_task = tcoll_queue_array[0][round][eindex];
+
+    //     mpi_errno =
+    //         MPIR_Localcopy(local_task->addr, local_task->count, recvtype,
+    //                        (char *) recvbuf + local_task->offset, local_task->count, recvtype);
+    //     MPIR_ERR_CHECK(mpi_errno);
+
+    //     __sync_fetch_and_add(&local_task->cnt, 1);
+    //     eindex = (eindex + 1) % MPIDI_COLL_TASK_PREALLOC;
+    // }
 
     __sync_fetch_and_add(&shared_addr->cnt, 1);
     if (local_rank == 0) {
