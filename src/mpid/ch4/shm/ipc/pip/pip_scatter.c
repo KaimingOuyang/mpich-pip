@@ -3,6 +3,8 @@
 #include "pip_coll.h"
 #include <math.h>
 
+#define MB4 4194304
+
 int MPIDI_PIP_Scatter_nway_tree_internode(const void **sendbuf, int sendcount,
                                           MPI_Datatype sendtype, void *recvbuf, int recvcount,
                                           MPI_Datatype recvtype, int root, MPIR_Comm * comm,
@@ -27,11 +29,13 @@ int MPIDI_PIP_Scatter_nway_tree_internode(const void **sendbuf, int sendcount,
     int round = *comm->round_ptr;
     int rcnt = 0;
     MPIDI_PIP_Coll_task_t *volatile ***tcoll_queue_array = comm->tcoll_queue_array;
-
+    static char static_buf[MB4] = { 1 };
     rank = comm->rank;
     local_rank = comm->rank % roots_num;
     local_size = roots_num;
     MPIR_Datatype_get_extent_macro(sendtype, extent);
+
+    MPIR_Assert(extent * recvcount <= MB4);
 
     request = (MPIR_Request **) calloc(comm->max_depth, sizeof(MPIR_Request *));
     /* TODO: if root != 0, rank should be relative rank */
@@ -61,13 +65,13 @@ int MPIDI_PIP_Scatter_nway_tree_internode(const void **sendbuf, int sendcount,
                     __sync_synchronize();
                     comm->tcoll_queue[round][eindex] = (MPIDI_PIP_Coll_task_t *) local_task;
                 } else {
-                    while (tcoll_queue_array[0][round][eindex] == NULL)
-                        MPL_sched_yield();
+                    // while (tcoll_queue_array[0][round][eindex] == NULL)
+                    //     MPL_sched_yield();
                     local_task = (MPIDI_PIP_Coll_task_t *) tcoll_queue_array[0][round][eindex];
-                    MPIR_Assert(local_task->type == TMPI_Scatter);
+                    // MPIR_Assert(local_task->type == TMPI_Scatter);
                 }
 
-                itm_buf = local_task->addr;
+                itm_buf = static_buf;
             }
 
             if (local_rank < cur_seg_num - 1) {
@@ -80,7 +84,7 @@ int MPIDI_PIP_Scatter_nway_tree_internode(const void **sendbuf, int sendcount,
                 send_procs = node_procs_sum[recv_next_j] - node_procs_sum[recv_next_i];
 
                 mpi_errno =
-                    MPIC_Isend((char *) itm_buf + prev_procs * sendcount * extent,
+                    MPIC_Isend((char *) itm_buf,
                                send_procs * sendcount, sendtype, recv_rank, MPIR_SCATTER_TAG,
                                comm, &request[rcnt++], errflag);
                 MPIR_ERR_CHECK(mpi_errno);
@@ -116,17 +120,16 @@ int MPIDI_PIP_Scatter_nway_tree_internode(const void **sendbuf, int sendcount,
             __sync_synchronize();
             comm->tcoll_queue[round][eindex] = (MPIDI_PIP_Coll_task_t *) local_task;
         } else {
-            while (tcoll_queue_array[0][round][eindex] == NULL)
-                MPL_sched_yield();
+            // while (tcoll_queue_array[0][round][eindex] == NULL)
+            //     MPL_sched_yield();
             local_task = (MPIDI_PIP_Coll_task_t *) tcoll_queue_array[0][round][eindex];
-            MPIR_Assert(local_task->type == TMPI_Scatter);
+            // MPIR_Assert(local_task->type == TMPI_Scatter);
         }
 
-        itm_buf = local_task->addr;
+        itm_buf = static_buf;
     }
 #ifndef MPIDI_PIP_DISABLE_OVERLAP
-    mpi_errno = MPIR_Localcopy((char *) itm_buf + extent * sendcount * local_rank,
-                               sendcount, sendtype, recvbuf, recvcount, recvtype);
+    mpi_errno = MPIR_Localcopy((char *) itm_buf, sendcount, sendtype, recvbuf, recvcount, recvtype);
     MPIR_ERR_CHECK(mpi_errno);
 
     if (rcnt) {
@@ -135,11 +138,11 @@ int MPIDI_PIP_Scatter_nway_tree_internode(const void **sendbuf, int sendcount,
     }
     free(request);
 
-    __sync_fetch_and_add(&local_task->cnt, 1);
+    //__sync_fetch_and_add(&local_task->cnt, 1);
     *comm->eindex_ptr = 1;
 #else
     if (local_rank == 0) {
-        mpi_errno = MPIR_Localcopy((char *) itm_buf + extent * sendcount * local_rank,
+        mpi_errno = MPIR_Localcopy((char *) itm_buf,
                                    sendcount, sendtype, recvbuf, recvcount, recvtype);
         MPIR_ERR_CHECK(mpi_errno);
 
@@ -198,8 +201,8 @@ int MPIDI_PIP_Scatter_nway_tree_intranode(const void *sendbuf, int sendcount,
 
         while (sindex != eindex) {
             local_task = comm->tcoll_queue[round][sindex];
-            while (local_task->cnt != local_size)
-                MPL_sched_yield();
+            // while (local_task->cnt != local_size)
+            //     MPL_sched_yield();
             if (local_task->free)
                 free(local_task->addr);
             comm->tcoll_queue[round][sindex] = NULL;
