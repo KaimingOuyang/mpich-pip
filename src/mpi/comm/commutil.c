@@ -510,7 +510,7 @@ static int MPIR_Comm_commit_internal(MPIR_Comm * comm)
 int MPIR_PIP_Comm_barrier(MPIR_Comm * comm)
 {
     int mpi_errno = MPI_SUCCESS;
-    int local_size = comm->local_size;
+    int local_size = comm->node_procs_min;
     MPIDI_Comm_shm_barrier_t *barrier = comm->barrier;
     int sense = MPL_atomic_load_int(&barrier->wait);
 
