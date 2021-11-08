@@ -94,7 +94,7 @@ int MPIDI_PIP_Allgather_bruck_internode(const void *sendbuf, int sendcount,
         }
         curr_cnt *= basek_1;
         pofk_1 *= basek_1;
-        MPIR_PIP_Comm_barrier(comm);
+        MPIR_PIP_Comm_opt_leader_barrier(comm);
     }
 
     /* if comm_size is not a power of k + 1, one more step is needed */
@@ -307,7 +307,7 @@ int MPIDI_PIP_Allgather_ring_internode(const void *sendbuf, int sendcount,
         jnext_node = (comm_size + jnext_node - 1) % comm_size;
         reqs[0] = reqs[1] = NULL;
 
-        MPIR_PIP_Comm_barrier(comm);
+        MPIR_PIP_Comm_opt_leader_barrier(comm);
     }
 
     /* post last one */
@@ -524,7 +524,7 @@ int MPIDI_PIP_Allgatherv_ring_internode(const void *sendbuf, int sendcount, MPI_
         j_node = jnext_node;
         jnext_node = (comm_size + jnext_node - 1) % comm_size;
         reqs[0] = reqs[1] = NULL;
-        MPIR_PIP_Comm_barrier(comm);
+        MPIR_PIP_Comm_opt_leader_barrier(comm);
     }
 
     /* post last one */

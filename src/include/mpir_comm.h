@@ -173,6 +173,9 @@ typedef struct MPIDI_Comm_shm_barrier {
     MPL_atomic_int_t wait;
 } MPIDI_Comm_shm_barrier_t;
 
+typedef struct MPIDI_Comm_leader_barrier {
+    uint8_t *val;
+} MPIDI_Comm_leader_barrier_t;
 
 struct MPIR_Comm {
     MPIR_OBJECT_HEADER;         /* adds handle and ref_count fields */
@@ -218,8 +221,12 @@ struct MPIR_Comm {
     int intranode_size;         /* for pip_roots_comm */
     // pthread_barrier_t *node_barrier;
     // pthread_barrier_t *pip_roots_barrier;
-    MPIDI_Comm_shm_barrier_t *barrier;
+    // MPIDI_Comm_shm_barrier_t *barrier;
     int local_rank;
+    /* each comm and sub-comm have its own barrier */
+    MPIDI_Comm_leader_barrier_t **barrier;
+    uint8_t barrier_val[2];
+    int barrier_round;
     int max_depth;
 
     int *intranode_table;       /* intranode_table[i] gives the rank in
@@ -331,6 +338,7 @@ int MPIR_Comm_create_inter(MPIR_Comm * comm_ptr, MPIR_Group * group_ptr, MPIR_Co
 
 int MPIR_Comm_create_subcomms(MPIR_Comm * comm);
 int MPIR_PIP_Comm_barrier(MPIR_Comm * comm);
+void MPIR_PIP_Comm_opt_leader_barrier(MPIR_Comm * comm);
 int MPIR_Comm_commit(MPIR_Comm *);
 
 int MPIR_Comm_is_parent_comm(MPIR_Comm *);

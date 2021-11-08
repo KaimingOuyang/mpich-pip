@@ -530,6 +530,54 @@ int MPIR_PIP_Comm_barrier(MPIR_Comm * comm)
     return mpi_errno;
 }
 
+#define CACHE_LINE 64
+
+void MPIR_PIP_Comm_opt_leader_barrier(MPIR_Comm * comm)
+{
+    int local_size = comm->node_procs_min;
+    int local_rank = comm->local_rank;
+    int barrier_round = comm->barrier_round;
+    MPIDI_Comm_leader_barrier_t *barrier = comm->barrier[barrier_round];
+    uint8_t barrier_val = comm->barrier_val[barrier_round];
+    uint8_t barrier_next_val = (barrier_val + 1) % 256;
+    int step_len = local_size * CACHE_LINE;
+    int recv, recv_loc, my_loc;
+    int mask = 1;
+    int step = 0, rem;
+    int mask_upper_limit = local_size >> 1;
+
+    MPIR_Assert(barrier != NULL);
+    if (local_size == 1)
+        return;
+
+    while (mask <= mask_upper_limit) {
+        recv = (local_rank + mask) % local_size;
+        recv_loc = step * step_len + recv * CACHE_LINE;
+        my_loc = step * step_len + local_rank * CACHE_LINE;
+
+        barrier->val[my_loc] = barrier_next_val;
+        while (barrier->val[recv_loc] == barrier_val)
+            MPL_sched_yield();
+        mask <<= 1;
+        ++step;
+    }
+
+    rem = local_size - mask;
+    if (rem) {
+        recv = (local_rank + mask) % local_size;
+        recv_loc = step * step_len + recv * CACHE_LINE;
+        my_loc = step * step_len + local_rank * CACHE_LINE;
+
+        barrier->val[my_loc] = barrier_next_val;
+        while (barrier->val[recv_loc] == barrier_val)
+            MPL_sched_yield();
+    }
+
+    comm->barrier_val[barrier_round] = barrier_next_val;
+    comm->barrier_round = barrier_round ^ 1;
+    return;
+}
+
 int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
 {
     int mpi_errno = MPI_SUCCESS;
@@ -595,15 +643,15 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
         MPIDU_Init_shm_get(i, sizeof(struct MPIR_Comm *), &comm->comms_array[i]);
     MPIDU_Init_shm_barrier();
 
-    if (local_rank == 0) {
-        comm->barrier = (MPIDI_Comm_shm_barrier_t *) calloc(1, sizeof(MPIDI_Comm_shm_barrier_t));
-        MPIDU_Init_shm_put(&comm->barrier, sizeof(MPIDI_Comm_shm_barrier_t *));
-        MPIDU_Init_shm_barrier();
-    } else {
-        MPIDU_Init_shm_barrier();
-        MPIDU_Init_shm_get(0, sizeof(MPIDI_Comm_shm_barrier_t *), &comm->barrier);
-    }
-    MPIDU_Init_shm_barrier();
+    // if (local_rank == 0) {
+    //     comm->barrier[0] = (MPIDI_Comm_shm_barrier_t *) calloc(1, sizeof(MPIDI_Comm_shm_barrier_t));
+    //     MPIDU_Init_shm_put(&comm->barrier, sizeof(MPIDI_Comm_shm_barrier_t *));
+    //     MPIDU_Init_shm_barrier();
+    // } else {
+    //     MPIDU_Init_shm_barrier();
+    //     MPIDU_Init_shm_get(0, sizeof(MPIDI_Comm_shm_barrier_t *), &comm->barrier);
+    // }
+    // MPIDU_Init_shm_barrier();
 
     comm->reduce_addr = (MPIDI_PIP_Coll_task_t **) calloc(2, sizeof(MPIDI_PIP_Coll_task_t *));
     MPIDU_Init_shm_put(&comm->reduce_addr, sizeof(MPIDI_PIP_Coll_task_t **));
@@ -758,6 +806,7 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
         comm->pip_roots_comm->local_size = num_external * leader_num;
         comm->pip_roots_comm->remote_size = num_external * leader_num;
         comm->pip_roots_comm->node_procs_min = leader_num;
+        comm->pip_roots_comm->local_rank = root_rank % leader_num;
         comm->pip_roots_comm->node_procs_sum = comm->node_procs_sum;
         comm->pip_roots_comm->node_id = comm->node_id;
         comm->pip_roots_comm->node_count = comm->node_count;
@@ -779,15 +828,26 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
 
         if (comm->pip_roots_comm->local_rank == 0) {
             comm->pip_roots_comm->barrier =
-                (MPIDI_Comm_shm_barrier_t *) calloc(1, sizeof(MPIDI_Comm_shm_barrier_t));
-            MPIDU_Init_shm_put(&comm->pip_roots_comm->barrier, sizeof(MPIDI_Comm_shm_barrier_t *));
+                (MPIDI_Comm_leader_barrier_t **) calloc(2, sizeof(MPIDI_Comm_leader_barrier_t *));
+            comm->pip_roots_comm->barrier[0] =
+                (MPIDI_Comm_leader_barrier_t *) calloc(1, sizeof(MPIDI_Comm_leader_barrier_t));
+            comm->pip_roots_comm->barrier[1] =
+                (MPIDI_Comm_leader_barrier_t *) calloc(1, sizeof(MPIDI_Comm_leader_barrier_t));
+            comm->pip_roots_comm->barrier[0]->val = (char *) calloc(1, leader_num * CACHE_LINE);
+            comm->pip_roots_comm->barrier[1]->val = (char *) calloc(1, leader_num * CACHE_LINE);
+            MPIDU_Init_shm_put(&comm->pip_roots_comm->barrier,
+                               sizeof(MPIDI_Comm_leader_barrier_t **));
             MPIDU_Init_shm_barrier();
         } else {
             MPIDU_Init_shm_barrier();
-            MPIDU_Init_shm_get(0, sizeof(MPIDI_Comm_shm_barrier_t *),
+            MPIDU_Init_shm_get(0, sizeof(MPIDI_Comm_leader_barrier_t **),
                                &comm->pip_roots_comm->barrier);
         }
         MPIDU_Init_shm_barrier();
+        comm->pip_roots_comm->barrier_round = 0;
+        comm->pip_roots_comm->barrier_val[0] = 0;
+        comm->pip_roots_comm->barrier_val[1] = 0;
+
         MPIR_Comm_map_irregular(comm->pip_roots_comm, comm, roots_map, num_external * leader_num,
                                 MPIR_COMM_MAP_DIR__L2L, NULL);
         mpi_errno = MPIR_Comm_commit_internal(comm->pip_roots_comm);
@@ -1245,8 +1305,14 @@ int MPIR_Comm_delete_internal(MPIR_Comm * comm_ptr)
         if (comm_ptr->node_roots_comm)
             MPIR_Comm_release(comm_ptr->node_roots_comm);
         if (comm_ptr->pip_roots_comm) {
-            if (comm_ptr->pip_roots_comm->local_rank == 0)
+            MPIR_PIP_Comm_opt_leader_barrier(comm_ptr->pip_roots_comm);
+            if (comm_ptr->pip_roots_comm->local_rank == 0) {
+                MPL_free(comm_ptr->pip_roots_comm->barrier[0]->val);
+                MPL_free(comm_ptr->pip_roots_comm->barrier[1]->val);
+                MPL_free(comm_ptr->pip_roots_comm->barrier[0]);
+                MPL_free(comm_ptr->pip_roots_comm->barrier[1]);
                 MPL_free(comm_ptr->pip_roots_comm->barrier);
+            }
             MPIR_Comm_release(comm_ptr->pip_roots_comm);
         }
         MPL_free(comm_ptr->intranode_table);
