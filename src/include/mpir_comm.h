@@ -173,9 +173,9 @@ typedef struct MPIDI_Comm_shm_barrier {
     MPL_atomic_int_t wait;
 } MPIDI_Comm_shm_barrier_t;
 
-typedef struct MPIDI_Comm_leader_barrier {
-    uint8_t *val;
-} MPIDI_Comm_leader_barrier_t;
+typedef struct MPIDI_Comm_intra_barrier {
+    volatile uint8_t *val;
+} MPIDI_Comm_intra_barrier_t;
 
 struct MPIR_Comm {
     MPIR_OBJECT_HEADER;         /* adds handle and ref_count fields */
@@ -224,7 +224,7 @@ struct MPIR_Comm {
     // MPIDI_Comm_shm_barrier_t *barrier;
     int local_rank;
     /* each comm and sub-comm have its own barrier */
-    MPIDI_Comm_leader_barrier_t **barrier;
+    MPIDI_Comm_intra_barrier_t *volatile *barrier;
     uint8_t barrier_val[2];
     int barrier_round;
     int max_depth;
@@ -337,9 +337,14 @@ int MPIR_Comm_create_inter(MPIR_Comm * comm_ptr, MPIR_Group * group_ptr, MPIR_Co
 
 
 int MPIR_Comm_create_subcomms(MPIR_Comm * comm);
-int MPIR_PIP_Comm_barrier(MPIR_Comm * comm);
-void MPIR_PIP_Comm_opt_leader_barrier(MPIR_Comm * comm);
+// int MPIR_PIP_Comm_barrier(MPIR_Comm * comm);
+void MPIR_PIP_Comm_opt_intra_barrier(MPIR_Comm * comm, int local_size);
 int MPIR_Comm_commit(MPIR_Comm *);
+void MPIR_PIP_Comm_reclaim_all_tasks(MPIDI_PIP_Coll_task_t ** task_array, int target_cnt);
+MPIDI_PIP_Coll_task_t *MPIR_PIP_Comm_post_task(MPIDI_PIP_Coll_task_t ** task_array, int round,
+                                               int cnt, void *buf);
+MPIDI_PIP_Coll_task_t *MPIR_PIP_Comm_get_task(MPIDI_PIP_Coll_task_t * volatile *task_array,
+                                              int round);
 
 int MPIR_Comm_is_parent_comm(MPIR_Comm *);
 

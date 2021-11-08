@@ -52,7 +52,6 @@ int MPIDI_PIP_Scatter_nway_tree_internode(const void **sendbuf, int sendcount,
                     local_task =
                         (MPIDI_PIP_Coll_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Coll_task_mem);
                     local_task->addr = lsend_buf;
-                    local_task->cnt = 0;
                     local_task->type = TMPI_Scatter;
                     if (lsend_buf != *sendbuf)
                         local_task->free = 1;
@@ -107,7 +106,6 @@ int MPIDI_PIP_Scatter_nway_tree_internode(const void **sendbuf, int sendcount,
         if (local_rank == 0) {
             local_task = (MPIDI_PIP_Coll_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Coll_task_mem);
             local_task->addr = lsend_buf;
-            local_task->cnt = 0;
             local_task->type = TMPI_Scatter;
             if (lsend_buf != *sendbuf)
                 local_task->free = 1;
@@ -135,15 +133,12 @@ int MPIDI_PIP_Scatter_nway_tree_internode(const void **sendbuf, int sendcount,
     }
     free(request);
 
-    __sync_fetch_and_add(&local_task->cnt, 1);
     *comm->eindex_ptr = 1;
 #else
     if (local_rank == 0) {
         mpi_errno = MPIR_Localcopy((char *) itm_buf + extent * sendcount * local_rank,
                                    sendcount, sendtype, recvbuf, recvcount, recvtype);
         MPIR_ERR_CHECK(mpi_errno);
-
-        __sync_fetch_and_add(&local_task->cnt, 1);
         *comm->eindex_ptr = 1;
     }
 
@@ -182,7 +177,6 @@ int MPIDI_PIP_Scatter_nway_tree_intranode(const void *sendbuf, int sendcount,
         if (sindex == eindex) {
             local_task = (MPIDI_PIP_Coll_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Coll_task_mem);
             local_task->addr = (void *) sendbuf;
-            local_task->cnt = 0;
             local_task->type = TMPI_Scatter;
             local_task->free = 0;
             __sync_synchronize();
@@ -192,14 +186,12 @@ int MPIDI_PIP_Scatter_nway_tree_intranode(const void *sendbuf, int sendcount,
                                        sendcount, sendtype, recvbuf, recvcount, recvtype);
             MPIR_ERR_CHECK(mpi_errno);
 
-            __sync_fetch_and_add(&local_task->cnt, 1);
             eindex = (eindex + 1) % MPIDI_COLL_TASK_PREALLOC;
         }
 
+        MPIR_PIP_Comm_opt_intra_barrier(comm, comm->local_size);
         while (sindex != eindex) {
             local_task = comm->tcoll_queue[round][sindex];
-            while (local_task->cnt != local_size)
-                MPL_sched_yield();
             if (local_task->free)
                 free(local_task->addr);
             comm->tcoll_queue[round][sindex] = NULL;
@@ -215,8 +207,9 @@ int MPIDI_PIP_Scatter_nway_tree_intranode(const void *sendbuf, int sendcount,
         mpi_errno = MPIR_Localcopy((char *) local_task->addr + extent * sendcount * local_rank,
                                    sendcount, sendtype, recvbuf, recvcount, recvtype);
         MPIR_ERR_CHECK(mpi_errno);
-
-        __sync_fetch_and_add(&local_task->cnt, 1);
+        MPIR_PIP_Comm_opt_intra_barrier(comm, comm->local_size);
+    } else {
+        MPIR_PIP_Comm_opt_intra_barrier(comm, comm->local_size);
     }
 
     *comm->sindex_ptr = *comm->eindex_ptr = 0;

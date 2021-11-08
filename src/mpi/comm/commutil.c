@@ -507,37 +507,36 @@ static int MPIR_Comm_commit_internal(MPIR_Comm * comm)
     goto fn_exit;
 }
 
-int MPIR_PIP_Comm_barrier(MPIR_Comm * comm)
-{
-    int mpi_errno = MPI_SUCCESS;
-    int local_size = comm->node_procs_min;
-    MPIDI_Comm_shm_barrier_t *barrier = comm->barrier;
-    int sense = MPL_atomic_load_int(&barrier->wait);
+// int MPIR_PIP_Comm_barrier(MPIR_Comm * comm)
+// {
+//     int mpi_errno = MPI_SUCCESS;
+//     int local_size = comm->node_procs_min;
+//     MPIDI_Comm_shm_barrier_t *barrier = comm->barrier;
+//     int sense = MPL_atomic_load_int(&barrier->wait);
 
-    if (local_size == 1)
-        goto fn_exit;
+//     if (local_size == 1)
+//         goto fn_exit;
 
-    if (MPL_atomic_fetch_add_int(&barrier->val, 1) == local_size - 1) {
-        MPL_atomic_store_int(&barrier->val, 0);
-        MPL_atomic_store_int(&barrier->wait, 1 - sense);
-    } else {
-        /* wait */
-        while (MPL_atomic_load_int(&barrier->wait) == sense)
-            MPL_sched_yield();  /* skip */
-    }
+//     if (MPL_atomic_fetch_add_int(&barrier->val, 1) == local_size - 1) {
+//         MPL_atomic_store_int(&barrier->val, 0);
+//         MPL_atomic_store_int(&barrier->wait, 1 - sense);
+//     } else {
+//         /* wait */
+//         while (MPL_atomic_load_int(&barrier->wait) == sense)
+//             MPL_sched_yield();  /* skip */
+//     }
 
-  fn_exit:
-    return mpi_errno;
-}
+//   fn_exit:
+//     return mpi_errno;
+// }
 
 #define CACHE_LINE 64
 
-void MPIR_PIP_Comm_opt_leader_barrier(MPIR_Comm * comm)
+void MPIR_PIP_Comm_opt_intra_barrier(MPIR_Comm * comm, int local_size)
 {
-    int local_size = comm->node_procs_min;
     int local_rank = comm->local_rank;
     int barrier_round = comm->barrier_round;
-    MPIDI_Comm_leader_barrier_t *barrier = comm->barrier[barrier_round];
+    volatile MPIDI_Comm_intra_barrier_t *barrier = comm->barrier[barrier_round];
     uint8_t barrier_val = comm->barrier_val[barrier_round];
     uint8_t barrier_next_val = (barrier_val + 1) % 256;
     int step_len = local_size * CACHE_LINE;
@@ -550,6 +549,7 @@ void MPIR_PIP_Comm_opt_leader_barrier(MPIR_Comm * comm)
     if (local_size == 1)
         return;
 
+    __sync_synchronize();
     while (mask <= mask_upper_limit) {
         recv = (local_rank + mask) % local_size;
         recv_loc = step * step_len + recv * CACHE_LINE;
@@ -585,7 +585,7 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
     int local_rank = -1, external_rank = -1;
     int *local_procs = NULL, *external_procs = NULL, *roots_map = NULL;
     int root_rank;
-    int leader_num;
+    int leader_num, step, mask;
     MPIDI_PIP_Coll_task_t ***tcoll_queue;
 
     MPIR_FUNC_TERSE_STATE_DECL(MPID_STATE_MPIR_COMM_CREATE_SUBCOMMS);
@@ -741,6 +741,7 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
         MPL_DBG_MSG_D(MPIR_DBG_COMM, VERBOSE, "Create node_comm=%p\n", comm->node_comm);
 
         comm->node_comm->local_size = num_local;
+        comm->node_comm->local_rank = local_rank;
         comm->node_comm->remote_size = num_local;
         comm->node_comm->node_procs_min = leader_num;
         comm->node_comm->node_procs_sum = NULL;
@@ -758,6 +759,32 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
         comm->node_comm->rem_addr = comm->rem_addr;
         comm->node_comm->reduce_addr = comm->reduce_addr;
         comm->node_comm->reduce_addr_array = comm->reduce_addr_array;
+
+        if (comm->node_comm->rank == 0) {
+            step = 0;
+            mask = 1;
+            while (mask <= comm->node_comm->local_size) {
+                ++step;
+                mask <<= 1;
+            }
+            comm->node_comm->barrier =
+                (MPIDI_Comm_intra_barrier_t **) calloc(2, sizeof(MPIDI_Comm_intra_barrier_t *));
+            comm->node_comm->barrier[0] =
+                (MPIDI_Comm_intra_barrier_t *) calloc(1, sizeof(MPIDI_Comm_intra_barrier_t));
+            comm->node_comm->barrier[1] =
+                (MPIDI_Comm_intra_barrier_t *) calloc(1, sizeof(MPIDI_Comm_intra_barrier_t));
+            comm->node_comm->barrier[0]->val = (char *) calloc(1, step * num_local * CACHE_LINE);
+            comm->node_comm->barrier[1]->val = (char *) calloc(1, step * num_local * CACHE_LINE);
+            MPIDU_Init_shm_put(&comm->node_comm->barrier, sizeof(MPIDI_Comm_intra_barrier_t **));
+            MPIDU_Init_shm_barrier();
+        } else {
+            MPIDU_Init_shm_barrier();
+            MPIDU_Init_shm_get(0, sizeof(MPIDI_Comm_intra_barrier_t **), &comm->node_comm->barrier);
+        }
+        MPIDU_Init_shm_barrier();
+        comm->node_comm->barrier_round = 0;
+        comm->node_comm->barrier_val[0] = 0;
+        comm->node_comm->barrier_val[1] = 0;
         // comm->node_comm->node_barrier = NULL;
         // comm->node_comm->pip_roots_barrier = NULL;
 
@@ -825,22 +852,30 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
         comm->pip_roots_comm->reduce_addr = comm->reduce_addr;
         comm->pip_roots_comm->rem_addr = comm->rem_addr;
         comm->pip_roots_comm->reduce_addr_array = comm->reduce_addr_array;
-
+        
         if (comm->pip_roots_comm->local_rank == 0) {
+            step = 0;
+            mask = 1;
+            while (mask <= leader_num) {
+                ++step;
+                mask <<= 1;
+            }
             comm->pip_roots_comm->barrier =
-                (MPIDI_Comm_leader_barrier_t **) calloc(2, sizeof(MPIDI_Comm_leader_barrier_t *));
+                (MPIDI_Comm_intra_barrier_t **) calloc(2, sizeof(MPIDI_Comm_intra_barrier_t *));
             comm->pip_roots_comm->barrier[0] =
-                (MPIDI_Comm_leader_barrier_t *) calloc(1, sizeof(MPIDI_Comm_leader_barrier_t));
+                (MPIDI_Comm_intra_barrier_t *) calloc(1, sizeof(MPIDI_Comm_intra_barrier_t));
             comm->pip_roots_comm->barrier[1] =
-                (MPIDI_Comm_leader_barrier_t *) calloc(1, sizeof(MPIDI_Comm_leader_barrier_t));
-            comm->pip_roots_comm->barrier[0]->val = (char *) calloc(1, leader_num * CACHE_LINE);
-            comm->pip_roots_comm->barrier[1]->val = (char *) calloc(1, leader_num * CACHE_LINE);
+                (MPIDI_Comm_intra_barrier_t *) calloc(1, sizeof(MPIDI_Comm_intra_barrier_t));
+            comm->pip_roots_comm->barrier[0]->val =
+                (uint8_t *) calloc(1, step * leader_num * CACHE_LINE);
+            comm->pip_roots_comm->barrier[1]->val =
+                (uint8_t *) calloc(1, step * leader_num * CACHE_LINE);
             MPIDU_Init_shm_put(&comm->pip_roots_comm->barrier,
-                               sizeof(MPIDI_Comm_leader_barrier_t **));
+                               sizeof(MPIDI_Comm_intra_barrier_t **));
             MPIDU_Init_shm_barrier();
         } else {
             MPIDU_Init_shm_barrier();
-            MPIDU_Init_shm_get(0, sizeof(MPIDI_Comm_leader_barrier_t **),
+            MPIDU_Init_shm_get(0, sizeof(MPIDI_Comm_intra_barrier_t **),
                                &comm->pip_roots_comm->barrier);
         }
         MPIDU_Init_shm_barrier();
@@ -852,6 +887,9 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
                                 MPIR_COMM_MAP_DIR__L2L, NULL);
         mpi_errno = MPIR_Comm_commit_internal(comm->pip_roots_comm);
         MPIR_ERR_CHECK(mpi_errno);
+    } else {
+        MPIDU_Init_shm_barrier();
+        MPIDU_Init_shm_barrier();
     }
 
     comm->hierarchy_kind = MPIR_COMM_HIERARCHY_KIND__PARENT;
@@ -1290,8 +1328,13 @@ int MPIR_Comm_delete_internal(MPIR_Comm * comm_ptr)
 
         /* free the intra/inter-node communicators, if they exist */
         if (comm_ptr->node_comm) {
-            if (comm_ptr->node_comm->rank == 0)
-                MPL_free(comm_ptr->barrier);
+            if (comm_ptr->node_comm->rank == 0){
+                MPL_free(comm_ptr->node_comm->barrier[0]->val);
+                MPL_free(comm_ptr->node_comm->barrier[1]->val);
+                MPL_free(comm_ptr->node_comm->barrier[0]);
+                MPL_free(comm_ptr->node_comm->barrier[1]);
+                MPL_free(comm_ptr->node_comm->barrier);
+            }
             MPIR_Comm_release(comm_ptr->node_comm);
             MPL_free(comm_ptr->node_procs_sum);
             MPL_free(comm_ptr->tcoll_queue_array);
@@ -1305,7 +1348,6 @@ int MPIR_Comm_delete_internal(MPIR_Comm * comm_ptr)
         if (comm_ptr->node_roots_comm)
             MPIR_Comm_release(comm_ptr->node_roots_comm);
         if (comm_ptr->pip_roots_comm) {
-            MPIR_PIP_Comm_opt_leader_barrier(comm_ptr->pip_roots_comm);
             if (comm_ptr->pip_roots_comm->local_rank == 0) {
                 MPL_free(comm_ptr->pip_roots_comm->barrier[0]->val);
                 MPL_free(comm_ptr->pip_roots_comm->barrier[1]->val);

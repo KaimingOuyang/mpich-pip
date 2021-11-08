@@ -767,6 +767,9 @@ int MPID_Finalize(void)
         MPIR_ERR_CHECK(mpi_errno);
     }
 
+    mpi_errno = MPIDU_Init_shm_barrier();
+    MPIR_ERR_CHECK(mpi_errno);
+    
     finalize_builtin_comms();
     generic_finalize();
 

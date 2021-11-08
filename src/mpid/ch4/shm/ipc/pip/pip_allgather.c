@@ -28,6 +28,7 @@ int MPIDI_PIP_Allgather_bruck_internode(const void *sendbuf, int sendcount,
     int leader_num = comm->node_procs_min;
     volatile MPIDI_PIP_Coll_task_t *shared_addr;
     int shared_round = *comm->shared_round_ptr;
+    int limit_comm_size;
     MPIDI_PIP_Coll_task_t *volatile *root_shared_addr_ptr = comm->comms_array[0]->shared_addr;
 
     MPIR_CHKLMEM_DECL(1);
@@ -36,6 +37,7 @@ int MPIDI_PIP_Allgather_bruck_internode(const void *sendbuf, int sendcount,
         goto fn_exit;
 
     comm_size = comm->node_count;
+    limit_comm_size = comm_size / basek_1;
     rank = comm->rank;
 
     MPIR_Datatype_get_extent_macro(recvtype, recvtype_extent);
@@ -72,7 +74,7 @@ int MPIDI_PIP_Allgather_bruck_internode(const void *sendbuf, int sendcount,
 
     curr_cnt = recvcount;
     pofk_1 = 1;
-    while (pofk_1 * basek_1 < comm_size) {
+    while (pofk_1 <= limit_comm_size) {
         offset = (local_rank + 1) * pofk_1;
         src_node = (node_id + offset) % comm_size;
         dst_node = (node_id - offset + comm_size) % comm_size;
@@ -94,7 +96,7 @@ int MPIDI_PIP_Allgather_bruck_internode(const void *sendbuf, int sendcount,
         }
         curr_cnt *= basek_1;
         pofk_1 *= basek_1;
-        MPIR_PIP_Comm_opt_leader_barrier(comm);
+        MPIR_PIP_Comm_opt_intra_barrier(comm, comm->node_procs_min);
     }
 
     /* if comm_size is not a power of k + 1, one more step is needed */
@@ -130,10 +132,8 @@ int MPIDI_PIP_Allgather_bruck_internode(const void *sendbuf, int sendcount,
 
     /* Rotate blocks in tmp_buf down by (rank) blocks and store
      * result in recvbuf. */
-    __sync_fetch_and_add(&shared_addr->cnt, 1);
+    MPIR_PIP_Comm_opt_intra_barrier(comm, comm->node_procs_min);
     if (local_rank == 0) {
-        while (shared_addr->cnt != comm->node_procs_min)
-            MPL_sched_yield();
         comm->shared_addr[shared_round] = NULL;
         MPIR_Handle_obj_free(&MPIDI_Coll_task_mem, (void *) shared_addr);
 
@@ -307,7 +307,7 @@ int MPIDI_PIP_Allgather_ring_internode(const void *sendbuf, int sendcount,
         jnext_node = (comm_size + jnext_node - 1) % comm_size;
         reqs[0] = reqs[1] = NULL;
 
-        MPIR_PIP_Comm_opt_leader_barrier(comm);
+        MPIR_PIP_Comm_opt_intra_barrier(comm, comm->node_procs_min);
     }
 
     /* post last one */
@@ -524,7 +524,7 @@ int MPIDI_PIP_Allgatherv_ring_internode(const void *sendbuf, int sendcount, MPI_
         j_node = jnext_node;
         jnext_node = (comm_size + jnext_node - 1) % comm_size;
         reqs[0] = reqs[1] = NULL;
-        MPIR_PIP_Comm_opt_leader_barrier(comm);
+        MPIR_PIP_Comm_opt_intra_barrier(comm, comm->node_procs_min);
     }
 
     /* post last one */
