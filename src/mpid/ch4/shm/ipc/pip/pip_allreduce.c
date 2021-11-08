@@ -27,7 +27,7 @@ int MPIDI_PIP_Allreduce_recursive_bruck_internode(const void *sendbuf, void *rec
 {
     int node_id = comm->node_id;
     int pofk_1 = 1;
-    int local_rank = comm->rank % comm->node_procs_min;
+    int local_rank = comm->local_rank;
     int basek_1 = comm->node_procs_min + 1;
     int rank, comm_size, rem_leader_num;
     int leader_num = comm->node_procs_min;
@@ -239,7 +239,7 @@ int MPIDI_PIP_Allreduce_reduce_scatter_internode(const void *sendbuf, void *recv
     int node_id = comm->node_id;
     int src, dst;
     int leader_num = comm->node_procs_min;
-    int local_rank = comm->rank % leader_num;
+    int local_rank = comm->local_rank;
     int sseg, eseg, seg_cnt, extent;
     MPIDI_PIP_Coll_task_t *shared_addr, *local_addr, *root_addr;
     MPIDI_PIP_Coll_task_t *local_task;

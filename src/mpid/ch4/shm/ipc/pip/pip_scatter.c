@@ -29,7 +29,7 @@ int MPIDI_PIP_Scatter_nway_tree_internode(const void **sendbuf, int sendcount,
     MPIDI_PIP_Coll_task_t *volatile ***tcoll_queue_array = comm->tcoll_queue_array;
 
     rank = comm->rank;
-    local_rank = comm->rank % roots_num;
+    local_rank = comm->local_rank;
     local_size = roots_num;
     MPIR_Datatype_get_extent_macro(sendtype, extent);
 
