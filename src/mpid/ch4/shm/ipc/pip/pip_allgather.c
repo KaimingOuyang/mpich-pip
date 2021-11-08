@@ -15,7 +15,7 @@ int MPIDI_PIP_Allgather_bruck_internode(const void *sendbuf, int sendcount,
 {
     int node_id = comm->node_id;
     int pofk_1 = 1;
-    int local_rank = comm->rank % comm->node_procs_min;
+    int local_rank = comm->local_rank;
     int basek_1 = comm->node_procs_min + 1;
     int comm_size, rank;
     int mpi_errno = MPI_SUCCESS;
@@ -175,7 +175,7 @@ int MPIDI_PIP_Allgather_ring_internode(const void *sendbuf, int sendcount,
     int mpi_errno = MPI_SUCCESS;
     int mpi_errno_ret = MPI_SUCCESS;
     MPI_Aint recvtype_extent;
-    int local_rank = comm->rank % comm->node_procs_min;
+    int local_rank = comm->local_rank;
     int local_size = comm->node_procs_min;
     int intranode_size = comm->intranode_size;
     int node_id = comm->node_id;
@@ -386,7 +386,7 @@ int MPIDI_PIP_Allgatherv_ring_internode(const void *sendbuf, int sendcount, MPI_
     int mpi_errno = MPI_SUCCESS;
     int mpi_errno_ret = MPI_SUCCESS;
     MPI_Aint recvtype_extent;
-    int local_rank = comm->rank % comm->node_procs_min;
+    int local_rank = comm->local_rank;
     int local_size = comm->node_procs_min;
     int node_id = comm->node_id;
     int sindex = *comm->sindex_ptr;

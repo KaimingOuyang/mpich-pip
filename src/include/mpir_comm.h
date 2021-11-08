@@ -219,6 +219,7 @@ struct MPIR_Comm {
     // pthread_barrier_t *node_barrier;
     // pthread_barrier_t *pip_roots_barrier;
     MPIDI_Comm_shm_barrier_t *barrier;
+    int local_rank;
     int max_depth;
 
     int *intranode_table;       /* intranode_table[i] gives the rank in

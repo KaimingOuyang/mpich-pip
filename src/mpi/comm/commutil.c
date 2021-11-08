@@ -604,7 +604,7 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
         MPIDU_Init_shm_get(0, sizeof(MPIDI_Comm_shm_barrier_t *), &comm->barrier);
     }
     MPIDU_Init_shm_barrier();
-    
+
     comm->reduce_addr = (MPIDI_PIP_Coll_task_t **) calloc(2, sizeof(MPIDI_PIP_Coll_task_t *));
     MPIDU_Init_shm_put(&comm->reduce_addr, sizeof(MPIDI_PIP_Coll_task_t **));
     MPIDU_Init_shm_barrier();
@@ -749,6 +749,7 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
             comm->context_id + MPIR_CONTEXT_INTERNODE_OFFSET + MPIR_CONTEXT_INTRANODE_OFFSET;
         comm->pip_roots_comm->recvcontext_id = comm->pip_roots_comm->context_id;
         comm->pip_roots_comm->rank = root_rank;
+        comm->pip_roots_comm->local_rank = root_rank % leader_num;
         comm->pip_roots_comm->comm_kind = MPIR_COMM_KIND__INTRACOMM;
         comm->pip_roots_comm->hierarchy_kind = MPIR_COMM_HIERARCHY_KIND__NODE_ROOTS;
         comm->pip_roots_comm->local_comm = NULL;
@@ -776,7 +777,7 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
         comm->pip_roots_comm->rem_addr = comm->rem_addr;
         comm->pip_roots_comm->reduce_addr_array = comm->reduce_addr_array;
 
-        if (root_rank == 0) {
+        if (comm->pip_roots_comm->local_rank == 0) {
             comm->pip_roots_comm->barrier =
                 (MPIDI_Comm_shm_barrier_t *) calloc(1, sizeof(MPIDI_Comm_shm_barrier_t));
             MPIDU_Init_shm_put(&comm->pip_roots_comm->barrier, sizeof(MPIDI_Comm_shm_barrier_t *));
@@ -1244,7 +1245,7 @@ int MPIR_Comm_delete_internal(MPIR_Comm * comm_ptr)
         if (comm_ptr->node_roots_comm)
             MPIR_Comm_release(comm_ptr->node_roots_comm);
         if (comm_ptr->pip_roots_comm) {
-            if (comm_ptr->pip_roots_comm->rank == 0)
+            if (comm_ptr->pip_roots_comm->local_rank == 0)
                 MPL_free(comm_ptr->pip_roots_comm->barrier);
             MPIR_Comm_release(comm_ptr->pip_roots_comm);
         }
