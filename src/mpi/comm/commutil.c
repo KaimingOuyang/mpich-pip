@@ -531,6 +531,38 @@ static int MPIR_Comm_commit_internal(MPIR_Comm * comm)
 // }
 
 #define CACHE_LINE 64
+MPIDI_PIP_Coll_task_t *MPIR_PIP_Comm_get_task(MPIDI_PIP_Coll_task_t * volatile *task_array,
+                                              int round)
+{
+    while (task_array[round] == NULL)
+        MPL_sched_yield();
+    return task_array[round];
+}
+
+MPIDI_PIP_Coll_task_t *MPIR_PIP_Comm_post_task(MPIDI_PIP_Coll_task_t ** task_array, int round,
+                                               int cnt, void *buf)
+{
+    MPIDI_PIP_Coll_task_t *shared_addr =
+        (MPIDI_PIP_Coll_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Coll_task_mem);
+    shared_addr->addr = buf;
+    shared_addr->cnt = cnt;
+    __sync_synchronize();
+    task_array[round] = (void *) shared_addr;
+    return shared_addr;
+}
+
+void MPIR_PIP_Comm_reclaim_all_tasks(MPIDI_PIP_Coll_task_t ** task_array, int target_cnt,
+                                     int length)
+{
+    for (int i = 0; i < length; ++i) {
+        if (task_array[i] != NULL) {
+            while (task_array[i]->cnt != target_cnt)
+                MPL_sched_yield();
+            MPIR_Handle_obj_free(&MPIDI_Coll_task_mem, (void *) task_array[i]);
+            task_array[i] = NULL;
+        }
+    }
+}
 
 void MPIR_PIP_Comm_opt_intra_barrier(MPIR_Comm * comm, int local_size)
 {
@@ -653,7 +685,9 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
     // }
     // MPIDU_Init_shm_barrier();
 
-    comm->reduce_addr = (MPIDI_PIP_Coll_task_t **) calloc(2, sizeof(MPIDI_PIP_Coll_task_t *));
+    comm->reduce_addr =
+        (MPIDI_PIP_Coll_task_t **) calloc(MPIDI_COLL_TASK_PREALLOC,
+                                          sizeof(MPIDI_PIP_Coll_task_t *));
     MPIDU_Init_shm_put(&comm->reduce_addr, sizeof(MPIDI_PIP_Coll_task_t **));
     MPIDU_Init_shm_barrier();
     MPIR_CHKPMEM_MALLOC(comm->reduce_addr_array, MPIDI_PIP_Coll_task_t * volatile **,
@@ -759,14 +793,20 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
         comm->node_comm->rem_addr = comm->rem_addr;
         comm->node_comm->reduce_addr = comm->reduce_addr;
         comm->node_comm->reduce_addr_array = comm->reduce_addr_array;
-
+        step = 0;
+        mask = 1;
+        while (mask <= comm->node_comm->local_size) {
+            ++step;
+            mask <<= 1;
+        }
+        MPIR_Assert(step < MPIDI_COLL_TASK_PREALLOC);
+        comm->node_comm->max_pof2_step = step;
+        comm->node_comm->tmp_buf = malloc(sizeof(void *) * step);
+        comm->node_comm->tmp_buf[0] = NULL;
+        for (int i = 1; i < step - 1; ++i) {
+            comm->node_comm->tmp_buf[i] = malloc(MPIR_CVAR_ALLREDUCE_SHORT_MSG_SIZE);
+        }
         if (comm->node_comm->rank == 0) {
-            step = 0;
-            mask = 1;
-            while (mask <= comm->node_comm->local_size) {
-                ++step;
-                mask <<= 1;
-            }
             comm->node_comm->barrier =
                 (MPIDI_Comm_intra_barrier_t **) calloc(2, sizeof(MPIDI_Comm_intra_barrier_t *));
             comm->node_comm->barrier[0] =
@@ -852,14 +892,21 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
         comm->pip_roots_comm->reduce_addr = comm->reduce_addr;
         comm->pip_roots_comm->rem_addr = comm->rem_addr;
         comm->pip_roots_comm->reduce_addr_array = comm->reduce_addr_array;
-        
+
+        step = 0;
+        mask = 1;
+        while (mask <= leader_num) {
+            ++step;
+            mask <<= 1;
+        }
+
+        comm->pip_roots_comm->max_pof2_step = step;
+        comm->pip_roots_comm->tmp_buf = malloc(sizeof(void *) * step);
+        comm->pip_roots_comm->tmp_buf[0] = NULL;
+        for (int i = 1; i < step - 1; ++i) {
+            comm->pip_roots_comm->tmp_buf[i] = malloc(MPIR_CVAR_ALLREDUCE_SHORT_MSG_SIZE);
+        }
         if (comm->pip_roots_comm->local_rank == 0) {
-            step = 0;
-            mask = 1;
-            while (mask <= leader_num) {
-                ++step;
-                mask <<= 1;
-            }
             comm->pip_roots_comm->barrier =
                 (MPIDI_Comm_intra_barrier_t **) calloc(2, sizeof(MPIDI_Comm_intra_barrier_t *));
             comm->pip_roots_comm->barrier[0] =
@@ -1344,6 +1391,9 @@ int MPIR_Comm_delete_internal(MPIR_Comm * comm_ptr)
             MPL_free(comm_ptr->comms_array);
             MPL_free(comm_ptr->reduce_addr);
             MPL_free(comm_ptr->reduce_addr_array);
+            for (int i = 1; i < comm_ptr->node_comm->max_pof2_step - 1; ++i)
+                MPL_free(comm_ptr->node_comm->tmp_buf[i]);
+            MPL_free(comm_ptr->node_comm->tmp_buf);
         }
         if (comm_ptr->node_roots_comm)
             MPIR_Comm_release(comm_ptr->node_roots_comm);
@@ -1355,6 +1405,9 @@ int MPIR_Comm_delete_internal(MPIR_Comm * comm_ptr)
                 MPL_free(comm_ptr->pip_roots_comm->barrier[1]);
                 MPL_free(comm_ptr->pip_roots_comm->barrier);
             }
+            for (int i = 1; i < comm_ptr->pip_roots_comm->max_pof2_step - 1; ++i)
+                MPL_free(comm_ptr->pip_roots_comm->tmp_buf[i]);
+            MPL_free(comm_ptr->pip_roots_comm->tmp_buf);
             MPIR_Comm_release(comm_ptr->pip_roots_comm);
         }
         MPL_free(comm_ptr->intranode_table);

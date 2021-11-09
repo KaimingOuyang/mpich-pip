@@ -228,6 +228,8 @@ struct MPIR_Comm {
     uint8_t barrier_val[2];
     int barrier_round;
     int max_depth;
+    void **tmp_buf;
+    int max_pof2_step;
 
     int *intranode_table;       /* intranode_table[i] gives the rank in
                                  * node_comm of rank i in this comm or -1 if i
@@ -340,7 +342,7 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm);
 // int MPIR_PIP_Comm_barrier(MPIR_Comm * comm);
 void MPIR_PIP_Comm_opt_intra_barrier(MPIR_Comm * comm, int local_size);
 int MPIR_Comm_commit(MPIR_Comm *);
-void MPIR_PIP_Comm_reclaim_all_tasks(MPIDI_PIP_Coll_task_t ** task_array, int target_cnt);
+void MPIR_PIP_Comm_reclaim_all_tasks(MPIDI_PIP_Coll_task_t ** task_array, int target_cnt, int length);
 MPIDI_PIP_Coll_task_t *MPIR_PIP_Comm_post_task(MPIDI_PIP_Coll_task_t ** task_array, int round,
                                                int cnt, void *buf);
 MPIDI_PIP_Coll_task_t *MPIR_PIP_Comm_get_task(MPIDI_PIP_Coll_task_t * volatile *task_array,

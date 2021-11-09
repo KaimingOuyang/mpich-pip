@@ -12,7 +12,7 @@ cvars:
     - name        : MPIR_CVAR_ALLREDUCE_SHORT_MSG_SIZE
       category    : COLLECTIVE
       type        : int
-      default     : 2048
+      default     : 81920
       class       : none
       verbosity   : MPI_T_VERBOSITY_USER_BASIC
       scope       : MPI_T_SCOPE_ALL_EQ

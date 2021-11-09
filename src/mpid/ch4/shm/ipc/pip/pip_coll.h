@@ -18,6 +18,8 @@ int MPIDI_PIP_Scatter_nway_tree_intranode(const void *sendbuf, int sendcount,
                                           MPIR_Errflag_t * errflag);
 int MPIDI_PIP_Bcast_intranode(void *buffer, int count, MPI_Datatype datatype, int root,
                               MPIR_Comm * comm, MPIR_Errflag_t * errflag);
+int MPIDI_PIP_Reduce_bcast_intranode(void *buffer, int count, MPI_Datatype datatype, int root,
+                                     MPIR_Comm * pcomm, MPIR_Errflag_t * errflag);
 int MPIDI_PIP_Gather_intranode(const void *sendbuf, int sendcount,
                                MPI_Datatype sendtype, void *recvbuf, int recvcount,
                                MPI_Datatype recvtype, int root, MPIR_Comm * comm,
