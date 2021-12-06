@@ -127,7 +127,7 @@ int MPIDI_PIP_Allreduce_recursive_bruck_internode(const void *sendbuf, void *rec
 
     dst_buf = shared_addr->addr;
     pofk_1 = 1;
-    while (pofk_1 <= rem_step) {
+    while (pofk_1 <= limit_rem_step) {
         offset = (local_rank + 1) * pofk_1;
         src_node = (node_id + offset) % comm_size;
         dst_node = (node_id - offset + comm_size) % comm_size;
