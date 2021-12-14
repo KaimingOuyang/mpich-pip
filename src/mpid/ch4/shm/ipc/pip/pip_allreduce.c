@@ -57,14 +57,13 @@ int MPIDI_PIP_Allreduce_limit_num_intranode(const void *sendbuf, void *recvbuf,
     rem = limit_num - max_pof2;
     MPIR_Assert(recvbuf != NULL);
 
-    if (limit_num == 1 && sendbuf != MPI_IN_PLACE && sendbuf != NULL) {
+    if (sendbuf != MPI_IN_PLACE && sendbuf != NULL) {
         mpi_errno = MPIR_Localcopy(sendbuf, count, datatype, recvbuf, count, datatype);
         MPIR_ERR_CHECK(mpi_errno);
-        if (original_num > 1)
-            goto rem_reduce;
-        else
-            goto fn_exit;
     }
+
+    if (local_rank >= limit_num)
+        goto null_reduce;
 
     MPIR_Datatype_get_extent_macro(datatype, extent);
     if (max_pof2 - rem <= local_rank && local_rank < max_pof2) {
@@ -130,7 +129,8 @@ int MPIDI_PIP_Allreduce_limit_num_intranode(const void *sendbuf, void *recvbuf,
         comm->reduce_addr[1] = NULL;
         MPIR_Handle_obj_free(&MPIDI_Coll_task_mem, (void *) rem_addr);
     }
-
+    
+  null_reduce:
     null_procs = original_num - limit_num;
     if (null_procs > 0) {
         if (limit_num <= local_rank) {
