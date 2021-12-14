@@ -129,7 +129,7 @@ int MPIDI_PIP_Allreduce_limit_num_intranode(const void *sendbuf, void *recvbuf,
         comm->reduce_addr[1] = NULL;
         MPIR_Handle_obj_free(&MPIDI_Coll_task_mem, (void *) rem_addr);
     }
-    
+
   null_reduce:
     null_procs = original_num - limit_num;
     if (null_procs > 0) {
@@ -195,6 +195,11 @@ int MPIDI_PIP_Allreduce_recursive_bruck_internode(const void *sendbuf, void *rec
     if ((count == 0) && (sendbuf != MPI_IN_PLACE))
         goto fn_exit;
 
+    if (sendbuf != MPI_IN_PLACE){
+        mpi_errno = MPIR_Localcopy(sendbuf, count, datatype, recvbuf, count, datatype);
+        MPIR_ERR_CHECK(mpi_errno);
+    }
+    
     comm_size = comm->node_count;
     rank = comm->rank;
     MPIR_Datatype_get_extent_macro(datatype, recvtype_extent);
