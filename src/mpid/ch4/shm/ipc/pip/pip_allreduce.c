@@ -101,6 +101,7 @@ int MPIDI_PIP_Allreduce_limit_num_intranode(const void *sendbuf, void *recvbuf,
             mpi_errno =
                 MPIR_Localcopy(tmp_buf[step], count, datatype, tmp_buf[step + 1], count, datatype);
             MPIR_ERR_CHECK(mpi_errno);
+            tmp_buf[step] = NULL;
 
             mpi_errno =
                 MPIR_Reduce_local(reduce_addr->addr, tmp_buf[step + 1], count, datatype, op);
@@ -199,7 +200,7 @@ int MPIDI_PIP_Allreduce_recursive_bruck_internode(const void *sendbuf, void *rec
         mpi_errno = MPIR_Localcopy(sendbuf, count, datatype, recvbuf, count, datatype);
         MPIR_ERR_CHECK(mpi_errno);
     }
-    
+
     comm_size = comm->node_count;
     rank = comm->rank;
     MPIR_Datatype_get_extent_macro(datatype, recvtype_extent);
