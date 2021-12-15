@@ -51,7 +51,7 @@ int MPIDI_PIP_Allreduce_limit_num_intranode(const void *sendbuf, void *recvbuf,
     void *local_send_buf = NULL;
     int null_procs, null_target_procs;
     MPIDI_PIP_Coll_task_t *volatile **reduce_addr_array = comm->reduce_addr_array;
-
+    void *exchg_tmp;
     local_rank = comm->local_rank;
     max_pof2 = MPL_pof2(limit_num);
     rem = limit_num - max_pof2;
@@ -88,6 +88,7 @@ int MPIDI_PIP_Allreduce_limit_num_intranode(const void *sendbuf, void *recvbuf,
 
     max_pof2_step = MPL_2log(max_pof2);
     tmp_buf[0] = (void *) sendbuf;
+    exchg_tmp = tmp_buf[max_pof2_step];
     tmp_buf[max_pof2_step] = recvbuf;
     step = 0;
     mask = 1;
@@ -101,7 +102,6 @@ int MPIDI_PIP_Allreduce_limit_num_intranode(const void *sendbuf, void *recvbuf,
             mpi_errno =
                 MPIR_Localcopy(tmp_buf[step], count, datatype, tmp_buf[step + 1], count, datatype);
             MPIR_ERR_CHECK(mpi_errno);
-            tmp_buf[step] = NULL;
 
             mpi_errno =
                 MPIR_Reduce_local(reduce_addr->addr, tmp_buf[step + 1], count, datatype, op);
@@ -115,6 +115,8 @@ int MPIDI_PIP_Allreduce_limit_num_intranode(const void *sendbuf, void *recvbuf,
         mask <<= 1;
     }
 
+    tmp_buf[max_pof2_step] = exchg_tmp;
+    
   rem_reduce:
     if (max_pof2 - rem <= local_rank && local_rank < max_pof2) {
         /* wait for rem to post data */
