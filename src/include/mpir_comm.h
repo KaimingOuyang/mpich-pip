@@ -184,7 +184,7 @@ typedef struct MPIDI_Comm_shm_barrier {
 } MPIDI_Comm_shm_barrier_t;
 
 typedef struct MPIDI_Comm_intra_barrier {
-    volatile uint8_t *val;
+    volatile uint32_t val;
 } MPIDI_Comm_intra_barrier_t;
 
 MPIDI_PIP_Coll_easy_task_t *MPIR_Comm_post_easy_task(void *addr, MPIDI_PIP_Coll_task_type_t type,
@@ -212,6 +212,10 @@ struct MPIR_Comm {
     int scatter_post_index;
     int *scatter_get_index;
 
+    MPIDI_PIP_Coll_easy_task_t *volatile allgather_queue[MPIDI_COLL_TASK_PREALLOC];
+    int allgather_post_index;
+    int *allgather_get_index;
+
     MPIR_Comm_hierarchy_kind_t hierarchy_kind;  /* flat, parent, node, or node_roots */
     struct MPIR_Comm *node_comm;        /* Comm of processes in this comm that are on
                                          * the same node as this process. */
@@ -221,7 +225,7 @@ struct MPIR_Comm {
     int node_procs_min, node_id;
     MPIDI_PIP_Coll_task_t ***tcoll_queue;
     MPIDI_PIP_Coll_task_t *volatile ***tcoll_queue_array;
-    volatile struct MPIR_Comm **comms_array;
+    struct MPIR_Comm **comms_array;
     int round, sindex, eindex;
     int *round_ptr, *sindex_ptr, *eindex_ptr;
     MPIDI_PIP_Coll_task_t **shared_addr;
@@ -241,8 +245,7 @@ struct MPIR_Comm {
     // MPIDI_Comm_shm_barrier_t *barrier;
     int local_rank;
     /* each comm and sub-comm have its own barrier */
-    MPIDI_Comm_intra_barrier_t *volatile *barrier;
-    uint8_t barrier_val[2];
+    MPIDI_Comm_intra_barrier_t *barrier;
     int barrier_round;
     int max_depth;
     void **tmp_buf;

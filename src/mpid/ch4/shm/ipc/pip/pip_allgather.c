@@ -26,23 +26,21 @@ int MPIDI_PIP_Allgather_bruck_internode(const void *sendbuf, int sendcount,
     int curr_cnt, dst, dst_node;
     int offset, my_rem, tmp_rem;
     int leader_num = comm->node_procs_min;
-    volatile MPIDI_PIP_Coll_task_t *shared_addr;
-    int shared_round = *comm->shared_round_ptr;
-    int limit_comm_size;
-    MPIDI_PIP_Coll_task_t *volatile *root_shared_addr_ptr = comm->comms_array[0]->shared_addr;
+    MPIDI_PIP_Coll_easy_task_t *shared_addr;
+    int limit_comm_size, node_recv_size;
 
     MPIR_CHKLMEM_DECL(1);
 
-    if (((sendcount == 0) && (sendbuf != MPI_IN_PLACE)) || (recvcount == 0))
+    if (sendcount == 0 || recvcount == 0)
         goto fn_exit;
 
     comm_size = comm->node_count;
     limit_comm_size = comm_size / basek_1;
-    rank = comm->rank;
 
     MPIR_Datatype_get_extent_macro(recvtype, recvtype_extent);
     MPIR_Datatype_get_extent_macro(sendtype, sendtype_extent);
     MPIR_Datatype_get_size_macro(recvtype, recvtype_sz);
+    node_recv_size = recvcount * recvtype_sz;
 
     /* allocate a temporary buffer of the same size as recvbuf. */
     if (local_rank == 0) {
@@ -51,24 +49,18 @@ int MPIDI_PIP_Allgather_bruck_internode(const void *sendbuf, int sendcount,
         /* copy local data to the top of tmp_buf */
         if (sendbuf != MPI_IN_PLACE) {
             mpi_errno = MPIR_Localcopy(sendbuf, sendcount, sendtype,
-                                       tmp_buf, recvcount * recvtype_sz, MPI_BYTE);
+                                       tmp_buf, node_recv_size, MPI_BYTE);
         } else {
             mpi_errno =
-                MPIR_Localcopy((char *) recvbuf + node_id * sendcount * sendtype_extent, sendcount,
-                               sendtype, tmp_buf, recvcount * recvtype_sz, MPI_BYTE);
+                MPIR_Localcopy((char *) recvbuf + node_id * recvcount * recvtype_extent, recvcount,
+                               recvtype, tmp_buf, node_recv_size, MPI_BYTE);
         }
         MPIR_ERR_CHECK(mpi_errno);
 
         /* post tmp buffer */
-        shared_addr = (MPIDI_PIP_Coll_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Coll_task_mem);
-        shared_addr->addr = tmp_buf;
-        shared_addr->cnt = 0;
-        __sync_synchronize();
-        comm->shared_addr[shared_round] = shared_addr;
+        shared_addr = MPIR_Comm_post_easy_task(tmp_buf, TMPI_Allgather, 0, 0, leader_num, comm);
     } else {
-        while (root_shared_addr_ptr[shared_round] == NULL)
-            MPL_sched_yield();
-        shared_addr = root_shared_addr_ptr[shared_round];
+        shared_addr = MPIR_Comm_get_easy_task(comm, 0, TMPI_Allgather);
         tmp_buf = shared_addr->addr;
     }
 
@@ -78,8 +70,8 @@ int MPIDI_PIP_Allgather_bruck_internode(const void *sendbuf, int sendcount,
         offset = (local_rank + 1) * pofk_1;
         src_node = (node_id + offset) % comm_size;
         dst_node = (node_id - offset + comm_size) % comm_size;
-        src = src_node * comm->node_procs_min + local_rank;
-        dst = dst_node * comm->node_procs_min + local_rank;
+        src = src_node * leader_num + local_rank;
+        dst = dst_node * leader_num + local_rank;
 
         mpi_errno = MPIC_Sendrecv(tmp_buf, curr_cnt * recvtype_sz, MPI_BYTE, dst,
                                   MPIR_ALLGATHER_TAG,
@@ -100,25 +92,20 @@ int MPIDI_PIP_Allgather_bruck_internode(const void *sendbuf, int sendcount,
     }
 
     /* if comm_size is not a power of k + 1, one more step is needed */
-    rem = comm_size - pofk_1;
-    for (int i = 0; i < leader_num; i++) {
-        tmp_rem = rem > pofk_1 ? pofk_1 : rem;
-        if (i == local_rank)
-            my_rem = tmp_rem;
-        rem -= tmp_rem;
-    }
+    rem = (comm_size - pofk_1) - pofk_1 * local_rank;
+    my_rem = rem > pofk_1 ? pofk_1 : rem;
 
     if (my_rem > 0) {
         offset = (local_rank + 1) * pofk_1;
         src_node = (node_id + offset) % comm_size;
         dst_node = (node_id - offset + comm_size) % comm_size;
-        src = src_node * comm->node_procs_min + local_rank;
-        dst = dst_node * comm->node_procs_min + local_rank;
+        src = src_node * leader_num + local_rank;
+        dst = dst_node * leader_num + local_rank;
 
-        mpi_errno = MPIC_Sendrecv(tmp_buf, my_rem * recvcount * recvtype_sz, MPI_BYTE,
+        mpi_errno = MPIC_Sendrecv(tmp_buf, my_rem * node_recv_size, MPI_BYTE,
                                   dst, MPIR_ALLGATHER_TAG,
                                   ((char *) tmp_buf + curr_cnt * recvtype_sz * (local_rank + 1)),
-                                  my_rem * recvcount * recvtype_sz, MPI_BYTE,
+                                  my_rem * node_recv_size, MPI_BYTE,
                                   src, MPIR_ALLGATHER_TAG, comm, MPI_STATUS_IGNORE, errflag);
         if (mpi_errno) {
             /* for communication errors, just record the error but continue */
@@ -133,26 +120,20 @@ int MPIDI_PIP_Allgather_bruck_internode(const void *sendbuf, int sendcount,
     /* Rotate blocks in tmp_buf down by (rank) blocks and store
      * result in recvbuf. */
     MPIR_PIP_Comm_opt_intra_barrier(comm, comm->node_procs_min);
-    if (local_rank == 0) {
-        comm->shared_addr[shared_round] = NULL;
-        MPIR_Handle_obj_free(&MPIDI_Coll_task_mem, (void *) shared_addr);
+    mpi_errno =
+        MPIR_Localcopy(tmp_buf, (comm_size - node_id) * node_recv_size, MPI_BYTE,
+                       (char *) recvbuf + node_id * recvcount * recvtype_extent,
+                       (comm_size - node_id) * recvcount, recvtype);
+    MPIR_ERR_CHECK(mpi_errno);
 
-        mpi_errno =
-            MPIR_Localcopy(tmp_buf, (comm_size - node_id) * recvcount * recvtype_sz, MPI_BYTE,
-                           (char *) recvbuf + node_id * recvcount * recvtype_extent,
-                           (comm_size - node_id) * recvcount, recvtype);
+    if (node_id) {
+        mpi_errno = MPIR_Localcopy((char *) tmp_buf +
+                                   (comm_size - node_id) * node_recv_size,
+                                   node_id * node_recv_size, MPI_BYTE, recvbuf,
+                                   node_id * recvcount, recvtype);
         MPIR_ERR_CHECK(mpi_errno);
-
-        if (node_id) {
-            mpi_errno = MPIR_Localcopy((char *) tmp_buf +
-                                       (comm_size - node_id) * recvcount * recvtype_sz,
-                                       node_id * recvcount * recvtype_sz, MPI_BYTE, recvbuf,
-                                       node_id * recvcount, recvtype);
-            MPIR_ERR_CHECK(mpi_errno);
-        }
     }
-
-    *comm->shared_round_ptr = shared_round ^ 1;
+    __sync_fetch_and_add(&shared_addr->complete, 1);
 
   fn_exit:
     MPIR_CHKLMEM_FREEALL();
@@ -604,7 +585,7 @@ int MPIDI_PIP_Allgather_impl(const void *sendbuf, int sendcount,
     int local_size, local_rank;
     int gsize = comm->local_size;
     int node_id = comm->node_id;
-    int node_recvcount;
+    size_t node_recvcount, recvtype_extent;
 
     if (comm->node_comm) {
         local_rank = comm->node_comm->rank;
@@ -615,8 +596,9 @@ int MPIDI_PIP_Allgather_impl(const void *sendbuf, int sendcount,
     }
 
     /* FIXME: we assume now #procs on each node is equal. */
+    MPIR_Datatype_get_extent_macro(recvtype, recvtype_extent);
     node_recvcount = recvcount * local_size;
-    local_root0_buf = (char *) recvbuf + node_recvcount * node_id;
+    local_root0_buf = (char *) recvbuf + node_recvcount * (size_t) node_id * recvtype_extent;
 
     if (comm->node_comm) {
         mpi_errno =
@@ -647,7 +629,7 @@ int MPIDI_PIP_Allgather_impl(const void *sendbuf, int sendcount,
         MPIR_ERR_CHECK(mpi_errno);
     }
 
-    if (comm->node_comm) {
+    if (comm->node_comm && comm->node_comm->local_size > comm->node_procs_min) {
         mpi_errno =
             MPIDI_PIP_Bcast_intranode(recvbuf, recvcount * gsize, recvtype, 0,
                                       comm->node_comm, errflag);
