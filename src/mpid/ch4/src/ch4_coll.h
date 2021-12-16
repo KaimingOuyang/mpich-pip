@@ -284,10 +284,12 @@ MPL_STATIC_INLINE_PREFIX int MPID_Scatter(const void *sendbuf, int sendcount,
 {
     int mpi_errno = MPI_SUCCESS;
 #ifdef MPIDI_CH4_SHM_ENABLE_PIP
-    mpi_errno =
+    if (comm->node_count > 1) {
+        mpi_errno =
         MPIDI_PIP_Scatter_nway_tree(sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype,
                                     root, comm, errflag);
-#else
+    } else {
+#endif
     const MPIDI_Csel_container_s *cnt = NULL;
 
     MPIR_Csel_coll_sig_s coll_sig = {
@@ -323,6 +325,8 @@ MPL_STATIC_INLINE_PREFIX int MPID_Scatter(const void *sendbuf, int sendcount,
             break;
         default:
             MPIR_Assert(0);
+    }
+#ifdef MPIDI_CH4_SHM_ENABLE_PIP
     }
 #endif
     MPIR_ERR_CHECK(mpi_errno);

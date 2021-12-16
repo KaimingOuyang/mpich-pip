@@ -168,6 +168,16 @@ typedef struct MPIDI_PIP_Coll_task {
     MPIDI_PIP_Coll_task_type_t type;
 } MPIDI_PIP_Coll_task_t;
 
+typedef struct MPIDI_PIP_Coll_easy_task {
+    MPIR_OBJECT_HEADER;
+    void *volatile addr;
+    size_t data_sz;
+    volatile int complete;
+    int target_cmpl;
+    int free;
+    MPIDI_PIP_Coll_task_type_t type;
+} MPIDI_PIP_Coll_easy_task_t;
+
 typedef struct MPIDI_Comm_shm_barrier {
     MPL_atomic_int_t val;
     MPL_atomic_int_t wait;
@@ -177,6 +187,10 @@ typedef struct MPIDI_Comm_intra_barrier {
     volatile uint8_t *val;
 } MPIDI_Comm_intra_barrier_t;
 
+MPIDI_PIP_Coll_easy_task_t *MPIR_Comm_post_easy_task(void *addr, MPIDI_PIP_Coll_task_type_t type,
+                                                     int data_sz, int free_flag, int target_cmpl,
+                                                     MPIR_Comm * comm);
+MPIDI_PIP_Coll_easy_task_t *MPIR_Comm_get_easy_task(MPIR_Comm * comm, int target, int type);
 struct MPIR_Comm {
     MPIR_OBJECT_HEADER;         /* adds handle and ref_count fields */
     MPID_Thread_mutex_t mutex;
@@ -194,6 +208,9 @@ struct MPIR_Comm {
     MPIR_Errhandler *errhandler;        /* Pointer to the error handler structure */
     struct MPIR_Comm *local_comm;       /* Defined only for intercomms, holds
                                          * an intracomm for the local group */
+    MPIDI_PIP_Coll_easy_task_t *volatile scatter_queue[MPIDI_COLL_TASK_PREALLOC];
+    int scatter_post_index;
+    int *scatter_get_index;
 
     MPIR_Comm_hierarchy_kind_t hierarchy_kind;  /* flat, parent, node, or node_roots */
     struct MPIR_Comm *node_comm;        /* Comm of processes in this comm that are on
@@ -342,7 +359,8 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm);
 // int MPIR_PIP_Comm_barrier(MPIR_Comm * comm);
 void MPIR_PIP_Comm_opt_intra_barrier(MPIR_Comm * comm, int local_size);
 int MPIR_Comm_commit(MPIR_Comm *);
-void MPIR_PIP_Comm_reclaim_all_tasks(MPIDI_PIP_Coll_task_t ** task_array, int target_cnt, int length);
+void MPIR_PIP_Comm_reclaim_all_tasks(MPIDI_PIP_Coll_task_t ** task_array, int target_cnt,
+                                     int length);
 MPIDI_PIP_Coll_task_t *MPIR_PIP_Comm_post_task(MPIDI_PIP_Coll_task_t ** task_array, int round,
                                                int cnt, void *buf);
 MPIDI_PIP_Coll_task_t *MPIR_PIP_Comm_get_task(MPIDI_PIP_Coll_task_t * volatile *task_array,
@@ -371,7 +389,7 @@ int MPIR_Comm_split_filesystem(MPI_Comm comm, int key, const char *dirname, MPI_
  * Additional attributes may be added in the future.
  */
 void MPIR_Comm_hint_init(void);
-typedef int (*MPIR_Comm_hint_fn_t) (MPIR_Comm *, int, int);     /* comm, key, val */
+typedef int (*MPIR_Comm_hint_fn_t)(MPIR_Comm *, int, int);      /* comm, key, val */
 int MPIR_Comm_register_hint(int index, const char *hint_key, MPIR_Comm_hint_fn_t fn,
                             int type, int attr);
 
@@ -408,7 +426,7 @@ extern MPIR_Comm MPIR_Comm_direct[];
 #define MPIR_ICOMM_WORLD  ((MPI_Comm)0x44000002)
 
 typedef struct MPIR_Commops {
-    int (*split_type) (MPIR_Comm *, int, int, MPIR_Info *, MPIR_Comm **);
+    int (*split_type)(MPIR_Comm *, int, int, MPIR_Info *, MPIR_Comm **);
 } MPIR_Commops;
 extern struct MPIR_Commops *MPIR_Comm_fns;      /* Communicator creation functions */
 

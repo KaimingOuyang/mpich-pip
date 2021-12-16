@@ -78,6 +78,7 @@ typedef struct MPIDI_PIP_ipc_handle {
 extern MPIDI_PIP_global_t MPIDI_PIP_global;
 extern MPIR_Object_alloc_t MPIDI_Task_mem;
 extern MPIR_Object_alloc_t MPIDI_Coll_task_mem;
+extern MPIR_Object_alloc_t MPIDI_Coll_easy_task_mem;
 extern int owner_pid;
 
 #define MPIDI_PIP_REQUEST(req, field)      ((req)->dev.ch4.am.shm_am.pip.field)
