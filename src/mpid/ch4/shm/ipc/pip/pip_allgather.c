@@ -134,6 +134,10 @@ int MPIDI_PIP_Allgather_bruck_internode(const void *sendbuf, int sendcount,
         MPIR_ERR_CHECK(mpi_errno);
     }
     __sync_fetch_and_add(&shared_addr->complete, 1);
+    if (local_rank == 0) {
+        while (shared_addr->target_cmpl != shared_addr->complete)
+            MPL_sched_yield();
+    }
 
   fn_exit:
     MPIR_CHKLMEM_FREEALL();
@@ -155,39 +159,25 @@ int MPIDI_PIP_Allgather_ring_internode(const void *sendbuf, int sendcount,
     int comm_size, rank;
     int mpi_errno = MPI_SUCCESS;
     int mpi_errno_ret = MPI_SUCCESS;
-    MPI_Aint recvtype_extent;
+    size_t recvtype_extent;
     int local_rank = comm->local_rank;
     int local_size = comm->node_procs_min;
     int intranode_size = comm->intranode_size;
     int node_id = comm->node_id;
-    int sindex = *comm->sindex_ptr;
-    int eindex = *comm->eindex_ptr;
-    int round = *comm->round_ptr;
     int j, i, left_node, right_node;
-    int j_node, jnext_node;
-    int cnt_offset, real_cnt;
-    int left, right, jnext;
-    volatile MPIDI_PIP_Coll_task_t *local_task;
+    size_t j_node, jnext_node;
+    size_t cnt_offset, real_cnt;
+    int left, right;
+    MPIDI_PIP_Coll_easy_task_t *local_task;
     void *root_buf;
     MPIR_Request *reqs[2] = { NULL, NULL };
-    MPIDI_PIP_Coll_task_t *volatile ***tcoll_queue_array = comm->tcoll_queue_array;
-    volatile MPIDI_PIP_Coll_task_t *shared_addr;
-    int shared_round = *comm->shared_round_ptr;
-    MPIDI_PIP_Coll_task_t *volatile *root_shared_addr_ptr = comm->comms_array[0]->shared_addr;
+    MPIDI_PIP_Coll_easy_task_t *shared_addr;
+    size_t bcast_offset = 0, bcast_bsize;
 
-    if (((sendcount == 0) && (sendbuf != MPI_IN_PLACE)) || (recvcount == 0))
-        return MPI_SUCCESS;
+    MPIR_Assert(sendbuf == MPI_IN_PLACE);
 
     comm_size = comm->node_count;
     MPIR_Datatype_get_extent_macro(recvtype, recvtype_extent);
-
-    /* First, load the "local" version in the recvbuf. */
-    if (local_rank == 0 && sendbuf != MPI_IN_PLACE) {
-        mpi_errno = MPIR_Localcopy(sendbuf, sendcount, sendtype,
-                                   ((char *) recvbuf +
-                                    rank * recvcount * recvtype_extent), recvcount, recvtype);
-        MPIR_ERR_CHECK(mpi_errno);
-    }
 
     /*
      * Now, send left to right.  This fills in the receive area in
@@ -195,8 +185,9 @@ int MPIDI_PIP_Allgather_ring_internode(const void *sendbuf, int sendcount,
      */
     left_node = (comm_size + node_id - 1) % comm_size;
     right_node = (node_id + 1) % comm_size;
-    left = left_node * comm->node_procs_min + local_rank;
-    right = right_node * comm->node_procs_min + local_rank;
+    left = left_node * local_size + local_rank;
+    right = right_node * local_size + local_rank;
+    bcast_bsize = (size_t) recvcount *recvtype_extent;
 
     MPIR_Assert(recvcount >= local_size);
     j_node = node_id;
@@ -205,16 +196,9 @@ int MPIDI_PIP_Allgather_ring_internode(const void *sendbuf, int sendcount,
     real_cnt = recvcount * (local_rank + 1) / local_size - cnt_offset;
 
     if (local_rank == 0) {
-        /* post tmp buffer */
-        shared_addr = (MPIDI_PIP_Coll_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Coll_task_mem);
-        shared_addr->addr = recvbuf;
-        shared_addr->cnt = 0;
-        __sync_synchronize();
-        comm->shared_addr[shared_round] = shared_addr;
+        shared_addr = MPIR_Comm_post_easy_task(recvbuf, TMPI_Allgather, 0, 0, 1, comm);
     } else {
-        while (root_shared_addr_ptr[shared_round] == NULL)
-            MPL_sched_yield();
-        shared_addr = root_shared_addr_ptr[shared_round];
+        shared_addr = MPIR_Comm_get_easy_task(comm, 0, TMPI_Allgather);
     }
 
     root_buf = shared_addr->addr;
@@ -222,65 +206,35 @@ int MPIDI_PIP_Allgather_ring_internode(const void *sendbuf, int sendcount,
     for (i = 1; i < comm_size; i++) {
         if (local_rank == 0) {
             /* post intranode task */
-            if (((eindex + 1) % MPIDI_COLL_TASK_PREALLOC) == sindex) {
-                local_task = comm->tcoll_queue[round][sindex];
-                while (local_task->cnt != intranode_size) {
-                    MPL_sched_yield();
-                }
-                if (local_task->free)
-                    free(local_task->addr);
-                comm->tcoll_queue[round][sindex] = NULL;
-                sindex = (sindex + 1) % MPIDI_COLL_TASK_PREALLOC;
-            } else {
-                local_task = (MPIDI_PIP_Coll_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Coll_task_mem);
-            }
-
-            local_task->addr = (char *) recvbuf + j_node * recvcount * recvtype_extent;
-            local_task->cnt = 1;
-            local_task->offset = j_node * recvcount * recvtype_extent;
-            local_task->count = recvcount;
-            local_task->type = TMPI_Bcast;
-            local_task->free = 0;
-            __sync_synchronize();
-            comm->tcoll_queue[round][eindex] = (MPIDI_PIP_Coll_task_t *) local_task;
-            eindex = (eindex + 1) % MPIDI_COLL_TASK_PREALLOC;
+            local_task =
+                MPIR_Comm_post_easy_task((char *) recvbuf +
+                                         j_node * (size_t) recvcount * recvtype_extent, TMPI_Bcast,
+                                         bcast_bsize, 0, local_size - 1, comm);
         }
 
         mpi_errno =
-            MPIC_Isend(((char *) root_buf + (j_node * recvcount + cnt_offset) * recvtype_extent),
-                       real_cnt, recvtype, right, MPIR_ALLGATHER_TAG, comm, &reqs[0], errflag);
+            MPIC_Isend(((char *) root_buf +
+                        (j_node * (size_t) recvcount + cnt_offset) * recvtype_extent), real_cnt,
+                       recvtype, right, MPIR_ALLGATHER_TAG, comm, &reqs[0], errflag);
         MPIR_ERR_CHECK(mpi_errno);
 
         mpi_errno =
             MPIC_Irecv(((char *) root_buf +
-                        (jnext_node * recvcount + cnt_offset) * recvtype_extent), real_cnt,
+                        (jnext_node * (size_t) recvcount + cnt_offset) * recvtype_extent), real_cnt,
                        recvtype, left, MPIR_ALLGATHER_TAG, comm, &reqs[1]);
-        if (mpi_errno) {
-            /* for communication errors, just record the error but continue */
-            *errflag =
-                MPIX_ERR_PROC_FAILED ==
-                MPIR_ERR_GET_CLASS(mpi_errno) ? MPIR_ERR_PROC_FAILED : MPIR_ERR_OTHER;
-            MPIR_ERR_SET(mpi_errno, *errflag, "**fail");
-            MPIR_ERR_ADD(mpi_errno_ret, mpi_errno);
-        }
+        MPIR_ERR_CHECK(mpi_errno);
 
         /* intranode copy */
         if (local_rank != 0) {
-            if (((eindex + 1) % MPIDI_COLL_TASK_PREALLOC) == sindex) {
-                sindex = (sindex + 1) % MPIDI_COLL_TASK_PREALLOC;
-            }
-
-            while (tcoll_queue_array[0][round][eindex] == NULL)
-                MPL_sched_yield();
-            local_task = tcoll_queue_array[0][round][eindex];
-
+            local_task = MPIR_Comm_get_easy_task(comm, 0, TMPI_Bcast);
+            bcast_offset = j_node * (size_t) recvcount *recvtype_extent;
             mpi_errno =
                 MPIR_Localcopy(local_task->addr, recvcount, recvtype,
-                               (char *) recvbuf + local_task->offset, recvcount, recvtype);
+                               (char *) recvbuf + bcast_offset, recvcount, recvtype);
             MPIR_ERR_CHECK(mpi_errno);
 
-            __sync_fetch_and_add(&local_task->cnt, 1);
-            eindex = (eindex + 1) % MPIDI_COLL_TASK_PREALLOC;
+
+            __sync_fetch_and_add(&local_task->complete, 1);
         }
 
         mpi_errno = MPIC_Waitall(2, reqs, MPI_STATUSES_IGNORE, errflag);
@@ -294,64 +248,23 @@ int MPIDI_PIP_Allgather_ring_internode(const void *sendbuf, int sendcount,
     /* post last one */
     if (local_rank == 0) {
         /* post intranode task */
-        if (((eindex + 1) % MPIDI_COLL_TASK_PREALLOC) == sindex) {
-            local_task = comm->tcoll_queue[round][sindex];
-            while (local_task->cnt != intranode_size) {
-                MPL_sched_yield();
-            }
-            if (local_task->free)
-                free(local_task->addr);
-            comm->tcoll_queue[round][sindex] = NULL;
-            sindex = (sindex + 1) % MPIDI_COLL_TASK_PREALLOC;
-        } else {
-            local_task = (MPIDI_PIP_Coll_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Coll_task_mem);
-        }
-
-        local_task->addr = (char *) recvbuf + j_node * recvcount * recvtype_extent;
-        local_task->cnt = 1;
-        local_task->offset = j_node * recvcount * recvtype_extent;
-        local_task->count = recvcount;
-        local_task->type = TMPI_Bcast_End;
-        local_task->free = 0;
-        __sync_synchronize();
-        comm->tcoll_queue[round][eindex] = (MPIDI_PIP_Coll_task_t *) local_task;
-        eindex = (eindex + 1) % MPIDI_COLL_TASK_PREALLOC;
-    } else {
-        if (((eindex + 1) % MPIDI_COLL_TASK_PREALLOC) == sindex) {
-            sindex = (sindex + 1) % MPIDI_COLL_TASK_PREALLOC;
-        }
-
-        while (tcoll_queue_array[0][round][eindex] == NULL)
+        local_task =
+            MPIR_Comm_post_easy_task((char *) recvbuf + j_node * recvcount * recvtype_extent,
+                                     TMPI_Bcast, bcast_bsize, 0, local_size - 1, comm);
+        while (local_task->target_cmpl != local_task->complete)
             MPL_sched_yield();
-        local_task = tcoll_queue_array[0][round][eindex];
-
+        shared_addr->complete = 1;
+    } else {
+        local_task = MPIR_Comm_get_easy_task(comm, 0, TMPI_Bcast);
+        bcast_offset = j_node * (size_t) recvcount *recvtype_extent;
         mpi_errno =
             MPIR_Localcopy(local_task->addr, recvcount, recvtype,
-                           (char *) recvbuf + local_task->offset, recvcount, recvtype);
+                           (char *) recvbuf + bcast_offset, recvcount, recvtype);
         MPIR_ERR_CHECK(mpi_errno);
-
-        __sync_fetch_and_add(&local_task->cnt, 1);
-        eindex = (eindex + 1) % MPIDI_COLL_TASK_PREALLOC;
+        __sync_fetch_and_add(&local_task->complete, 1);
     }
-
-    __sync_fetch_and_add(&shared_addr->cnt, 1);
-    if (local_rank == 0) {
-        while (shared_addr->cnt != local_size)
-            MPL_sched_yield();
-        comm->shared_addr[shared_round] = NULL;
-        MPIR_Handle_obj_free(&MPIDI_Coll_task_mem, (void *) shared_addr);
-    }
-
-    *comm->sindex_ptr = sindex;
-    *comm->eindex_ptr = eindex;
-    *comm->shared_round_ptr = shared_round ^ 1;
 
   fn_exit:
-    if (mpi_errno_ret)
-        mpi_errno = mpi_errno_ret;
-    else if (*errflag != MPIR_ERR_NONE)
-        MPIR_ERR_SET(mpi_errno, *errflag, "**coll_fail");
-
     return mpi_errno;
 
   fn_fail:
@@ -370,50 +283,26 @@ int MPIDI_PIP_Allgatherv_ring_internode(const void *sendbuf, int sendcount, MPI_
     int local_rank = comm->local_rank;
     int local_size = comm->node_procs_min;
     int node_id = comm->node_id;
-    int sindex = *comm->sindex_ptr;
-    int eindex = *comm->eindex_ptr;
-    int round = *comm->round_ptr;
     int j, i, left_node, right_node;
     int j_node, jnext_node;
     int cnt_offset, real_cnt;
     int left, right, jnext;
-    int intranode_size = comm->intranode_size;
-    volatile MPIDI_PIP_Coll_task_t *local_task;
+    MPIDI_PIP_Coll_easy_task_t *local_task;
     MPIR_Request *reqs[2] = { NULL, NULL };
-    MPIDI_PIP_Coll_task_t *volatile ***tcoll_queue_array = comm->tcoll_queue_array;
     void *root_buf;
-    int shared_round = *comm->shared_round_ptr;
-    volatile MPIDI_PIP_Coll_task_t *shared_addr;
+    MPIDI_PIP_Coll_easy_task_t *shared_addr;
     int my_send_offset, my_send_cnt;
     int my_recv_offset, my_recv_cnt;
-    MPIDI_PIP_Coll_task_t *volatile *root_shared_addr_ptr = comm->comms_array[0]->shared_addr;
-
-    if (((sendcount == 0) && (sendbuf != MPI_IN_PLACE)))
-        return MPI_SUCCESS;
+    int bcast_bsize;
+    size_t bcast_offset;
 
     comm_size = comm->node_count;
     MPIR_Datatype_get_extent_macro(recvtype, recvtype_extent);
 
-    /* First, load the "local" version in the recvbuf. */
-    if (local_rank == 0 && sendbuf != MPI_IN_PLACE) {
-        mpi_errno = MPIR_Localcopy(sendbuf, sendcount, sendtype,
-                                   ((char *) recvbuf +
-                                    displs[node_id] * recvtype_extent), recvcounts[node_id],
-                                   recvtype);
-        MPIR_ERR_CHECK(mpi_errno);
-    }
-
     if (local_rank == 0) {
-        /* post tmp buffer */
-        shared_addr = (MPIDI_PIP_Coll_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Coll_task_mem);
-        shared_addr->addr = recvbuf;
-        shared_addr->cnt = 0;
-        __sync_synchronize();
-        comm->shared_addr[shared_round] = shared_addr;
+        shared_addr = MPIR_Comm_post_easy_task(recvbuf, TMPI_Allgather, 0, 0, 1, comm);
     } else {
-        while (root_shared_addr_ptr[shared_round] == NULL)
-            MPL_sched_yield();
-        shared_addr = root_shared_addr_ptr[shared_round];
+        shared_addr = MPIR_Comm_get_easy_task(comm, 0, TMPI_Allgather);
     }
 
     root_buf = shared_addr->addr;
@@ -433,28 +322,10 @@ int MPIDI_PIP_Allgatherv_ring_internode(const void *sendbuf, int sendcount, MPI_
     for (i = 1; i < comm_size; i++) {
         if (local_rank == 0) {
             /* post intranode task */
-            if (((eindex + 1) % MPIDI_COLL_TASK_PREALLOC) == sindex) {
-                local_task = comm->tcoll_queue[round][sindex];
-                while (local_task->cnt != intranode_size) {
-                    MPL_sched_yield();
-                }
-                if (local_task->free)
-                    free(local_task->addr);
-                comm->tcoll_queue[round][sindex] = NULL;
-                sindex = (sindex + 1) % MPIDI_COLL_TASK_PREALLOC;
-            } else {
-                local_task = (MPIDI_PIP_Coll_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Coll_task_mem);
-            }
-
-            local_task->addr = (char *) recvbuf + displs[j_node] * recvtype_extent;
-            local_task->offset = displs[j_node] * recvtype_extent;
-            local_task->cnt = 1;
-            local_task->count = recvcounts[j_node];
-            local_task->type = TMPI_Bcast;
-            local_task->free = 0;
-            __sync_synchronize();
-            comm->tcoll_queue[round][eindex] = (MPIDI_PIP_Coll_task_t *) local_task;
-            eindex = (eindex + 1) % MPIDI_COLL_TASK_PREALLOC;
+            // bcast_bsize = recvcounts[j_node] * recvtype_extent;
+            local_task =
+                MPIR_Comm_post_easy_task((char *) recvbuf + displs[j_node] * recvtype_extent,
+                                         TMPI_Bcast, recvcounts[j_node], 0, local_size - 1, comm);
         }
 
         my_send_offset = recvcounts[j_node] * local_rank / local_size;
@@ -472,33 +343,18 @@ int MPIDI_PIP_Allgatherv_ring_internode(const void *sendbuf, int sendcount, MPI_
             MPIC_Irecv(((char *) root_buf +
                         (displs[jnext_node] + my_recv_offset) * recvtype_extent), my_recv_cnt,
                        recvtype, left, MPIR_ALLGATHERV_TAG, comm, &reqs[1]);
-        if (mpi_errno) {
-            /* for communication errors, just record the error but continue */
-            *errflag =
-                MPIX_ERR_PROC_FAILED ==
-                MPIR_ERR_GET_CLASS(mpi_errno) ? MPIR_ERR_PROC_FAILED : MPIR_ERR_OTHER;
-            MPIR_ERR_SET(mpi_errno, *errflag, "**fail");
-            MPIR_ERR_ADD(mpi_errno_ret, mpi_errno);
-        }
+        MPIR_ERR_CHECK(mpi_errno);
 
         /* intranode copy */
         if (local_rank != 0) {
-            if (((eindex + 1) % MPIDI_COLL_TASK_PREALLOC) == sindex) {
-                sindex = (sindex + 1) % MPIDI_COLL_TASK_PREALLOC;
-            }
-
-            while (tcoll_queue_array[0][round][eindex] == NULL)
-                MPL_sched_yield();
-            local_task = tcoll_queue_array[0][round][eindex];
-
-            MPIR_Assert(local_task->count <= recvcounts[j_node]);
+            local_task = MPIR_Comm_get_easy_task(comm, 0, TMPI_Bcast);
+            bcast_offset = displs[j_node] * recvtype_extent;
             mpi_errno =
-                MPIR_Localcopy(local_task->addr, local_task->count, recvtype,
-                               (char *) recvbuf + local_task->offset, local_task->count, recvtype);
+                MPIR_Localcopy(local_task->addr, recvcounts[j_node], recvtype,
+                               (char *) recvbuf + bcast_offset, recvcounts[j_node], recvtype);
             MPIR_ERR_CHECK(mpi_errno);
 
-            __sync_fetch_and_add(&local_task->cnt, 1);
-            eindex = (eindex + 1) % MPIDI_COLL_TASK_PREALLOC;
+            __sync_fetch_and_add(&local_task->complete, 1);
         }
 
         mpi_errno = MPIC_Waitall(2, reqs, MPI_STATUSES_IGNORE, errflag);
@@ -511,64 +367,24 @@ int MPIDI_PIP_Allgatherv_ring_internode(const void *sendbuf, int sendcount, MPI_
     /* post last one */
     if (local_rank == 0) {
         /* post intranode task */
-        if (((eindex + 1) % MPIDI_COLL_TASK_PREALLOC) == sindex) {
-            local_task = comm->tcoll_queue[round][sindex];
-            while (local_task->cnt != intranode_size) {
-                MPL_sched_yield();
-            }
-            if (local_task->free)
-                free(local_task->addr);
-            comm->tcoll_queue[round][sindex] = NULL;
-            sindex = (sindex + 1) % MPIDI_COLL_TASK_PREALLOC;
-        } else {
-            local_task = (MPIDI_PIP_Coll_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Coll_task_mem);
-        }
-
-        local_task->addr = (char *) recvbuf + displs[j_node] * recvtype_extent;
-        local_task->cnt = 1;
-        local_task->offset = displs[j_node] * recvtype_extent;
-        local_task->count = recvcounts[j_node];
-        local_task->type = TMPI_Bcast_End;
-        local_task->free = 0;
-        __sync_synchronize();
-        comm->tcoll_queue[round][eindex] = (MPIDI_PIP_Coll_task_t *) local_task;
-        eindex = (eindex + 1) % MPIDI_COLL_TASK_PREALLOC;
+        // bcast_bsize = recvcounts[j_node] * recvtype_extent;
+        local_task =
+            MPIR_Comm_post_easy_task((char *) recvbuf + displs[j_node] * recvtype_extent,
+                                     TMPI_Bcast, recvcounts[j_node], 0, local_size - 1, comm);
+        while (local_task->target_cmpl != local_task->complete)
+            MPL_sched_yield();
+        shared_addr->complete = 1;
     } else {
-        if (((eindex + 1) % MPIDI_COLL_TASK_PREALLOC) == sindex) {
-            sindex = (sindex + 1) % MPIDI_COLL_TASK_PREALLOC;
-        }
-
-        while (tcoll_queue_array[0][round][eindex] == NULL)
-            MPL_sched_yield();
-        local_task = tcoll_queue_array[0][round][eindex];
-
+        local_task = MPIR_Comm_get_easy_task(comm, 0, TMPI_Bcast);
+        bcast_offset = displs[j_node] * recvtype_extent;
         mpi_errno =
-            MPIR_Localcopy(local_task->addr, local_task->count, recvtype,
-                           (char *) recvbuf + local_task->offset, local_task->count, recvtype);
+            MPIR_Localcopy(local_task->addr, recvcounts[j_node], recvtype,
+                           (char *) recvbuf + bcast_offset, recvcounts[j_node], recvtype);
         MPIR_ERR_CHECK(mpi_errno);
-
-        __sync_fetch_and_add(&local_task->cnt, 1);
-        eindex = (eindex + 1) % MPIDI_COLL_TASK_PREALLOC;
+        __sync_fetch_and_add(&local_task->complete, 1);
     }
-
-    __sync_fetch_and_add(&shared_addr->cnt, 1);
-    if (local_rank == 0) {
-        while (shared_addr->cnt != local_size)
-            MPL_sched_yield();
-        comm->shared_addr[shared_round] = NULL;
-        MPIR_Handle_obj_free(&MPIDI_Coll_task_mem, (void *) shared_addr);
-    }
-
-    *comm->sindex_ptr = sindex;
-    *comm->eindex_ptr = eindex;
-    *comm->shared_round_ptr = shared_round ^ 1;
 
   fn_exit:
-    if (mpi_errno_ret)
-        mpi_errno = mpi_errno_ret;
-    else if (*errflag != MPIR_ERR_NONE)
-        MPIR_ERR_SET(mpi_errno, *errflag, "**coll_fail");
-
     return mpi_errno;
 
   fn_fail:
@@ -582,9 +398,10 @@ int MPIDI_PIP_Allgather_impl(const void *sendbuf, int sendcount,
     size_t data_sz, rtype_size;
     int mpi_errno = MPI_SUCCESS;
     void *local_root0_buf = NULL;
-    int local_size, local_rank;
+    int local_rank;
+    size_t local_size;
     int gsize = comm->local_size;
-    int node_id = comm->node_id;
+    size_t node_id = comm->node_id;
     size_t node_recvcount, recvtype_extent;
 
     if (comm->node_comm) {
@@ -597,8 +414,8 @@ int MPIDI_PIP_Allgather_impl(const void *sendbuf, int sendcount,
 
     /* FIXME: we assume now #procs on each node is equal. */
     MPIR_Datatype_get_extent_macro(recvtype, recvtype_extent);
-    node_recvcount = recvcount * local_size;
-    local_root0_buf = (char *) recvbuf + node_recvcount * (size_t) node_id * recvtype_extent;
+    node_recvcount = (size_t) recvcount *local_size;
+    local_root0_buf = (char *) recvbuf + node_recvcount * node_id * recvtype_extent;
 
     if (comm->node_comm) {
         mpi_errno =

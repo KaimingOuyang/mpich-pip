@@ -216,6 +216,10 @@ struct MPIR_Comm {
     int allgather_post_index;
     int *allgather_get_index;
 
+    MPIDI_PIP_Coll_easy_task_t *volatile bcast_queue[MPIDI_COLL_TASK_PREALLOC];
+    int bcast_post_index;
+    int *bcast_get_index;
+
     MPIR_Comm_hierarchy_kind_t hierarchy_kind;  /* flat, parent, node, or node_roots */
     struct MPIR_Comm *node_comm;        /* Comm of processes in this comm that are on
                                          * the same node as this process. */

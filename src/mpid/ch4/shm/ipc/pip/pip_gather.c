@@ -8,7 +8,7 @@ int MPIDI_PIP_Gather_intranode(const void *sendbuf, int sendcount,
                                MPI_Datatype recvtype, int root, MPIR_Comm * comm,
                                MPIR_Errflag_t * errflag)
 {
-    int recv_extent;
+    size_t recv_extent;
     int local_rank = comm->rank;
     int local_size = comm->local_size;
     int mpi_errno = MPI_SUCCESS;
@@ -19,7 +19,8 @@ int MPIDI_PIP_Gather_intranode(const void *sendbuf, int sendcount,
         local_task = MPIR_Comm_post_easy_task(recvbuf, TMPI_Allgather, 0, 0, local_size - 1, comm);
         mpi_errno =
             MPIR_Localcopy(sendbuf, sendcount, sendtype,
-                           (char *) recvbuf + recv_extent * recvcount * local_rank, recvcount,
+                           (char *) recvbuf +
+                           recv_extent * (size_t) recvcount * (size_t) local_rank, recvcount,
                            recvtype);
         MPIR_ERR_CHECK(mpi_errno);
         while (local_task->target_cmpl != local_task->complete)
@@ -28,8 +29,9 @@ int MPIDI_PIP_Gather_intranode(const void *sendbuf, int sendcount,
         local_task = MPIR_Comm_get_easy_task(comm, root, TMPI_Allgather);
         mpi_errno =
             MPIR_Localcopy(sendbuf, sendcount, sendtype,
-                           (char *) local_task->addr + recv_extent * recvcount * local_rank,
-                           recvcount, recvtype);
+                           (char *) local_task->addr +
+                           recv_extent * (size_t) recvcount * (size_t) local_rank, recvcount,
+                           recvtype);
         MPIR_ERR_CHECK(mpi_errno);
         __sync_fetch_and_add(&local_task->complete, 1);
     }
