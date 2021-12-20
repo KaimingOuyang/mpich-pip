@@ -621,6 +621,7 @@ MPIDI_PIP_Coll_easy_task_t *MPIR_Comm_post_easy_task(void *addr, MPIDI_PIP_Coll_
                 __sync_synchronize();
                 comm->scatter_queue[comm->scatter_post_index] = local_task;
                 comm->scatter_post_index = next_index;
+                break;
             }
 
         case TMPI_Allgather:{
@@ -642,6 +643,7 @@ MPIDI_PIP_Coll_easy_task_t *MPIR_Comm_post_easy_task(void *addr, MPIDI_PIP_Coll_
                 __sync_synchronize();
                 comm->allgather_queue[comm->allgather_post_index] = local_task;
                 comm->allgather_post_index = next_index;
+                break;
             }
 
         case TMPI_Bcast:{
@@ -663,7 +665,10 @@ MPIDI_PIP_Coll_easy_task_t *MPIR_Comm_post_easy_task(void *addr, MPIDI_PIP_Coll_
                 __sync_synchronize();
                 comm->bcast_queue[comm->bcast_post_index] = local_task;
                 comm->bcast_post_index = next_index;
+                break;
             }
+        default:
+            MPIR_Assert(0);
     }
     return local_task;
 }
@@ -679,6 +684,7 @@ MPIDI_PIP_Coll_easy_task_t *MPIR_Comm_get_easy_task(MPIR_Comm * comm, int target
                     MPL_sched_yield();
                 target_task = target_comm->scatter_queue[target_get_index];
                 comm->scatter_get_index[target] = (target_get_index + 1) % MPIDI_COLL_TASK_PREALLOC;
+                break;
             }
         case TMPI_Allgather:{
                 int target_get_index = comm->allgather_get_index[target];
@@ -687,6 +693,7 @@ MPIDI_PIP_Coll_easy_task_t *MPIR_Comm_get_easy_task(MPIR_Comm * comm, int target
                 target_task = target_comm->allgather_queue[target_get_index];
                 comm->allgather_get_index[target] =
                     (target_get_index + 1) % MPIDI_COLL_TASK_PREALLOC;
+                break;
             }
         case TMPI_Bcast:{
                 int target_get_index = comm->bcast_get_index[target];
@@ -694,6 +701,7 @@ MPIDI_PIP_Coll_easy_task_t *MPIR_Comm_get_easy_task(MPIR_Comm * comm, int target
                     MPL_sched_yield();
                 target_task = target_comm->bcast_queue[target_get_index];
                 comm->bcast_get_index[target] = (target_get_index + 1) % MPIDI_COLL_TASK_PREALLOC;
+                break;
             }
     }
     return target_task;
