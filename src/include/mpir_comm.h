@@ -220,6 +220,14 @@ struct MPIR_Comm {
     int bcast_post_index;
     int *bcast_get_index;
 
+    MPIDI_PIP_Coll_easy_task_t *volatile allreduce_queue[MPIDI_COLL_TASK_PREALLOC];
+    int allreduce_post_index;
+    int *allreduce_get_index;
+
+    MPIDI_PIP_Coll_easy_task_t *volatile reduce_queue[MPIDI_COLL_TASK_PREALLOC];
+    int reduce_post_index;
+    int *reduce_get_index;
+
     MPIR_Comm_hierarchy_kind_t hierarchy_kind;  /* flat, parent, node, or node_roots */
     struct MPIR_Comm *node_comm;        /* Comm of processes in this comm that are on
                                          * the same node as this process. */
@@ -298,6 +306,8 @@ struct MPIR_Comm {
         int pof2;               /* Nearest (smaller than or equal to) power of 2
                                  * to the number of ranks in the communicator.
                                  * To be used during collective communication */
+        int pof2_leader;
+        int base_leader;
     } coll;
 
     void *csel_comm;            /* collective selector handle */

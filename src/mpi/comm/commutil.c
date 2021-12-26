@@ -667,6 +667,51 @@ MPIDI_PIP_Coll_easy_task_t *MPIR_Comm_post_easy_task(void *addr, MPIDI_PIP_Coll_
                 comm->bcast_post_index = next_index;
                 break;
             }
+
+        case TMPI_Allreduce:{
+                int next_index = (comm->allreduce_post_index + 1) % MPIDI_COLL_TASK_PREALLOC;
+                if (comm->allreduce_queue[next_index] != NULL) {
+                    MPIDI_PIP_Coll_easy_task_t *reclaim_task;
+                    int tmp_next_index = next_index;
+                    while (reclaim_task = comm->allreduce_queue[tmp_next_index]) {
+                        while (reclaim_task->complete != reclaim_task->target_cmpl)
+                            MPL_sched_yield();
+                        if (reclaim_task->free == 1)
+                            free(reclaim_task->addr);
+                        MPIR_Handle_obj_free(&MPIDI_Coll_easy_task_mem, (void *) reclaim_task);
+                        comm->allreduce_queue[tmp_next_index] = NULL;
+                        tmp_next_index = (tmp_next_index + 1) % MPIDI_COLL_TASK_PREALLOC;
+                    }
+                }
+
+                __sync_synchronize();
+                comm->allreduce_queue[comm->allreduce_post_index] = local_task;
+                comm->allreduce_post_index = next_index;
+                break;
+            }
+
+        case TMPI_Reduce:{
+                int next_index = (comm->reduce_post_index + 1) % MPIDI_COLL_TASK_PREALLOC;
+                if (comm->reduce_queue[next_index] != NULL) {
+                    MPIDI_PIP_Coll_easy_task_t *reclaim_task;
+                    int tmp_next_index = next_index;
+                    while (reclaim_task = comm->reduce_queue[tmp_next_index]) {
+                        while (reclaim_task->complete != reclaim_task->target_cmpl)
+                            MPL_sched_yield();
+                        if (reclaim_task->free == 1)
+                            free(reclaim_task->addr);
+                        MPIR_Handle_obj_free(&MPIDI_Coll_easy_task_mem, (void *) reclaim_task);
+                        comm->reduce_queue[tmp_next_index] = NULL;
+                        tmp_next_index = (tmp_next_index + 1) % MPIDI_COLL_TASK_PREALLOC;
+                    }
+                }
+
+                __sync_synchronize();
+                comm->reduce_queue[comm->reduce_post_index] = local_task;
+                comm->reduce_post_index = next_index;
+                break;
+            }
+
         default:
             MPIR_Assert(0);
     }
@@ -703,6 +748,25 @@ MPIDI_PIP_Coll_easy_task_t *MPIR_Comm_get_easy_task(MPIR_Comm * comm, int target
                 comm->bcast_get_index[target] = (target_get_index + 1) % MPIDI_COLL_TASK_PREALLOC;
                 break;
             }
+        case TMPI_Allreduce:{
+                int target_get_index = comm->allreduce_get_index[target];
+                while (target_comm->allreduce_queue[target_get_index] == NULL)
+                    MPL_sched_yield();
+                target_task = target_comm->allreduce_queue[target_get_index];
+                comm->allreduce_get_index[target] =
+                    (target_get_index + 1) % MPIDI_COLL_TASK_PREALLOC;
+                break;
+            }
+        case TMPI_Reduce:{
+                int target_get_index = comm->reduce_get_index[target];
+                while (target_comm->reduce_queue[target_get_index] == NULL)
+                    MPL_sched_yield();
+                target_task = target_comm->reduce_queue[target_get_index];
+                comm->reduce_get_index[target] = (target_get_index + 1) % MPIDI_COLL_TASK_PREALLOC;
+                break;
+            }
+        default:
+            MPIR_Assert(0);
     }
     return target_task;
 }
@@ -907,6 +971,18 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
         comm->node_comm->bcast_post_index = 0;
         comm->node_comm->bcast_get_index = (int *) calloc(comm->node_comm->local_size, sizeof(int));
 
+        memset((void *) comm->node_comm->allreduce_queue, 0,
+               sizeof(MPIDI_PIP_Coll_easy_task_t *) * MPIDI_COLL_TASK_PREALLOC);
+        comm->node_comm->allreduce_post_index = 0;
+        comm->node_comm->allreduce_get_index =
+            (int *) calloc(comm->node_comm->local_size, sizeof(int));
+
+        memset((void *) comm->node_comm->reduce_queue, 0,
+               sizeof(MPIDI_PIP_Coll_easy_task_t *) * MPIDI_COLL_TASK_PREALLOC);
+        comm->node_comm->reduce_post_index = 0;
+        comm->node_comm->reduce_get_index =
+            (int *) calloc(comm->node_comm->local_size, sizeof(int));
+
         comm->node_comm->comms_array =
             (MPIR_Comm **) malloc(comm->node_comm->local_size * sizeof(MPIR_Comm *));
         MPIDU_Init_shm_put(&comm->node_comm, sizeof(MPIR_Comm *));
@@ -999,6 +1075,12 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
         comm->pip_roots_comm->sindex_ptr = &comm->sindex;
         comm->pip_roots_comm->eindex_ptr = &comm->eindex;
         comm->pip_roots_comm->intranode_size = num_local;
+        comm->pip_roots_comm->coll.pof2_leader = MPL_pof2(leader_num);
+        if (comm->node_comm) {
+            comm->pip_roots_comm->node_comm = comm->node_comm;
+            comm->node_comm->coll.pof2_leader = comm->pip_roots_comm->coll.pof2_leader;
+            comm->node_comm->node_procs_min = leader_num;
+        }
         comm->pip_roots_comm->shared_addr = comm->shared_addr;
         comm->pip_roots_comm->shared_round_ptr = &comm->shared_round;
         comm->pip_roots_comm->reduce_round_ptr = &comm->reduce_round;
@@ -1021,6 +1103,16 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
                sizeof(MPIDI_PIP_Coll_easy_task_t *) * MPIDI_COLL_TASK_PREALLOC);
         comm->pip_roots_comm->bcast_post_index = 0;
         comm->pip_roots_comm->bcast_get_index = (int *) calloc(leader_num, sizeof(int));
+
+        memset((void *) comm->pip_roots_comm->allreduce_queue, 0,
+               sizeof(MPIDI_PIP_Coll_easy_task_t *) * MPIDI_COLL_TASK_PREALLOC);
+        comm->pip_roots_comm->allreduce_post_index = 0;
+        comm->pip_roots_comm->allreduce_get_index = (int *) calloc(leader_num, sizeof(int));
+
+        memset((void *) comm->pip_roots_comm->reduce_queue, 0,
+               sizeof(MPIDI_PIP_Coll_easy_task_t *) * MPIDI_COLL_TASK_PREALLOC);
+        comm->pip_roots_comm->reduce_post_index = 0;
+        comm->pip_roots_comm->reduce_get_index = (int *) calloc(leader_num, sizeof(int));
 
         comm->pip_roots_comm->comms_array =
             (MPIR_Comm **) malloc(comm->node_procs_min * sizeof(MPIR_Comm *));
@@ -1509,6 +1601,8 @@ int MPIR_Comm_delete_internal(MPIR_Comm * comm_ptr)
                 MPL_free(comm_ptr->node_comm->scatter_get_index);
                 MPL_free(comm_ptr->node_comm->allgather_get_index);
                 MPL_free(comm_ptr->node_comm->bcast_get_index);
+                MPL_free(comm_ptr->node_comm->allreduce_get_index);
+                MPL_free(comm_ptr->node_comm->reduce_get_index);
             }
             MPIR_Comm_release(comm_ptr->node_comm);
             MPL_free(comm_ptr->node_procs_sum);
@@ -1531,10 +1625,13 @@ int MPIR_Comm_delete_internal(MPIR_Comm * comm_ptr)
                 MPL_free(comm_ptr->pip_roots_comm->scatter_get_index);
                 MPL_free(comm_ptr->pip_roots_comm->allgather_get_index);
                 MPL_free(comm_ptr->pip_roots_comm->bcast_get_index);
+                MPL_free(comm_ptr->pip_roots_comm->allreduce_get_index);
+                MPL_free(comm_ptr->pip_roots_comm->reduce_get_index);
             }
             for (int i = 1; i < comm_ptr->pip_roots_comm->max_pof2_step - 1; ++i)
                 MPL_free(comm_ptr->pip_roots_comm->tmp_buf[i]);
             MPL_free(comm_ptr->pip_roots_comm->tmp_buf);
+            comm_ptr->pip_roots_comm->node_comm = NULL;
             MPIR_Comm_release(comm_ptr->pip_roots_comm);
         }
         MPL_free(comm_ptr->intranode_table);

@@ -33,134 +33,189 @@ static inline int MPL_2log(int number)
     return i;
 }
 
-int MPIDI_PIP_Allreduce_limit_num_intranode(const void *sendbuf, void *recvbuf,
-                                            int count, MPI_Datatype datatype, MPI_Op op,
-                                            int limit_num, int original_num,
-                                            MPIR_Comm * comm, MPIR_Errflag_t * errflag)
+int MPIR_Allreduce_leader_intra_recursive_doubling(const void *sendbuf,
+                                                   void *recvbuf,
+                                                   int count,
+                                                   MPI_Datatype datatype,
+                                                   int leader_num,
+                                                   MPI_Op op, MPIR_Comm * comm_ptr,
+                                                   MPIR_Errflag_t * errflag)
 {
+    MPIR_CHKLMEM_DECL(1);
+    int comm_size, rank;
     int mpi_errno = MPI_SUCCESS;
-    int local_rank;
-    int mask;
-    int reduce_round = 0;
-    int max_pof2, rem, dest;
-    volatile MPIDI_PIP_Coll_task_t *reduce_addr;
-    volatile MPIDI_PIP_Coll_task_t *rem_addr;
-    int extent, step;
-    int max_pof2_step;
-    void **tmp_buf = comm->tmp_buf;
-    void *local_send_buf = NULL;
-    int null_procs, null_target_procs;
-    MPIDI_PIP_Coll_task_t *volatile **reduce_addr_array = comm->reduce_addr_array;
-    void *exchg_tmp;
-    local_rank = comm->local_rank;
-    max_pof2 = MPL_pof2(limit_num);
-    rem = limit_num - max_pof2;
-    MPIR_Assert(recvbuf != NULL);
+    int mpi_errno_ret = MPI_SUCCESS;
+    int mask, dst, is_commutative, pof2, newrank, rem, newdst;
+    MPI_Aint true_extent, true_lb, extent;
+    void *tmp_buf;
+    MPIDI_PIP_Coll_easy_task_t *shared_addr;
 
-    if (sendbuf != MPI_IN_PLACE && sendbuf != NULL) {
+    if (sendbuf == NULL)
+        goto copy_res;
+    comm_size = leader_num;
+    rank = comm_ptr->local_rank;
+
+    is_commutative = MPIR_Op_is_commutative(op);
+
+    /* need to allocate temporary buffer to store incoming data */
+    MPIR_Type_get_true_extent_impl(datatype, &true_lb, &true_extent);
+    MPIR_Datatype_get_extent_macro(datatype, extent);
+
+    MPIR_CHKLMEM_MALLOC(tmp_buf, void *, count * (MPL_MAX(extent, true_extent)), mpi_errno,
+                        "temporary buffer", MPL_MEM_BUFFER);
+
+    /* adjust for potential negative lower bound in datatype */
+    tmp_buf = (void *) ((char *) tmp_buf - true_lb);
+
+    /* copy local data into recvbuf */
+    if (sendbuf != MPI_IN_PLACE) {
         mpi_errno = MPIR_Localcopy(sendbuf, count, datatype, recvbuf, count, datatype);
         MPIR_ERR_CHECK(mpi_errno);
     }
 
-    if (local_rank >= limit_num)
-        goto null_reduce;
+    /* get nearest power-of-two less than or equal to comm_size */
+    pof2 = MPL_pof2(comm_size);
 
-    MPIR_Datatype_get_extent_macro(datatype, extent);
-    if (max_pof2 - rem <= local_rank && local_rank < max_pof2) {
-        /* wait for rem to post data */
-        dest = local_rank + rem;
-        local_send_buf = malloc(count * extent);
-        memcpy(local_send_buf, sendbuf, count * extent);
+    rem = comm_size - pof2;
 
-        rem_addr = MPIR_PIP_Comm_get_task(reduce_addr_array[dest], 0);
-        mpi_errno = MPIR_Reduce_local(rem_addr->addr, local_send_buf, count, datatype, op);
-        MPIR_ERR_CHECK(mpi_errno);
-        sendbuf = local_send_buf;
-        __sync_fetch_and_add(&rem_addr->cnt, 1);
-    } else if (max_pof2 <= local_rank && local_rank < limit_num) {
-        rem_addr = MPIR_PIP_Comm_post_task(comm->reduce_addr, 0, 0, (void *) sendbuf);
-        while (rem_addr->cnt != 1)
-            MPL_sched_yield();
-        comm->reduce_addr[0] = NULL;
-        MPIR_Handle_obj_free(&MPIDI_Coll_task_mem, (void *) rem_addr);
-        goto rem_reduce;
-    }
+    /* In the non-power-of-two case, all even-numbered
+     * processes of rank < 2*rem send their data to
+     * (rank+1). These even-numbered processes no longer
+     * participate in the algorithm until the very end. The
+     * remaining processes form a nice power-of-two. */
 
-    max_pof2_step = MPL_2log(max_pof2);
-    tmp_buf[0] = (void *) sendbuf;
-    exchg_tmp = tmp_buf[max_pof2_step];
-    tmp_buf[max_pof2_step] = recvbuf;
-    step = 0;
-    mask = 1;
-    while (mask < max_pof2) {
-        if (local_rank < max_pof2) {
-            MPIR_PIP_Comm_post_task(comm->reduce_addr, reduce_round, 0, tmp_buf[step]);
+    if (rank < 2 * rem) {
+        if (rank % 2 == 0) {    /* even */
+            mpi_errno = MPIC_Send(recvbuf, count,
+                                  datatype, rank + 1, MPIR_ALLREDUCE_TAG, comm_ptr, errflag);
+            if (mpi_errno) {
+                /* for communication errors, just record the error but continue */
+                *errflag =
+                    MPIX_ERR_PROC_FAILED ==
+                    MPIR_ERR_GET_CLASS(mpi_errno) ? MPIR_ERR_PROC_FAILED : MPIR_ERR_OTHER;
+                MPIR_ERR_SET(mpi_errno, *errflag, "**fail");
+                MPIR_ERR_ADD(mpi_errno_ret, mpi_errno);
+            }
 
-            dest = local_rank ^ mask;
-            reduce_addr = MPIR_PIP_Comm_get_task(reduce_addr_array[dest], reduce_round);
+            /* temporarily set the rank to -1 so that this
+             * process does not pariticipate in recursive
+             * doubling */
+            newrank = -1;
+        } else {        /* odd */
+            mpi_errno = MPIC_Recv(tmp_buf, count,
+                                  datatype, rank - 1,
+                                  MPIR_ALLREDUCE_TAG, comm_ptr, MPI_STATUS_IGNORE, errflag);
+            if (mpi_errno) {
+                /* for communication errors, just record the error but continue */
+                *errflag =
+                    MPIX_ERR_PROC_FAILED ==
+                    MPIR_ERR_GET_CLASS(mpi_errno) ? MPIR_ERR_PROC_FAILED : MPIR_ERR_OTHER;
+                MPIR_ERR_SET(mpi_errno, *errflag, "**fail");
+                MPIR_ERR_ADD(mpi_errno_ret, mpi_errno);
+            }
 
-            mpi_errno =
-                MPIR_Localcopy(tmp_buf[step], count, datatype, tmp_buf[step + 1], count, datatype);
+            /* do the reduction on received data. since the
+             * ordering is right, it doesn't matter whether
+             * the operation is commutative or not. */
+            mpi_errno = MPIR_Reduce_local(tmp_buf, recvbuf, count, datatype, op);
             MPIR_ERR_CHECK(mpi_errno);
 
-            mpi_errno =
-                MPIR_Reduce_local(reduce_addr->addr, tmp_buf[step + 1], count, datatype, op);
-            MPIR_ERR_CHECK(mpi_errno);
-            __sync_fetch_and_add(&reduce_addr->cnt, 1);
+            /* change the rank */
+            newrank = rank / 2;
         }
+    } else      /* rank >= 2*rem */
+        newrank = rank - rem;
 
-        step += 1;
-        reduce_round += 1;
-        MPIR_Assert(reduce_round < MPIDI_COLL_TASK_PREALLOC);
-        mask <<= 1;
-    }
+    /* If op is user-defined or count is less than pof2, use
+     * recursive doubling algorithm. Otherwise do a reduce-scatter
+     * followed by allgather. (If op is user-defined,
+     * derived datatypes are allowed and the user could pass basic
+     * datatypes on one process and derived on another as long as
+     * the type maps are the same. Breaking up derived
+     * datatypes to do the reduce-scatter is tricky, therefore
+     * using recursive doubling in that case.) */
 
-    tmp_buf[max_pof2_step] = exchg_tmp;
-    
-  rem_reduce:
-    if (max_pof2 - rem <= local_rank && local_rank < max_pof2) {
-        /* wait for rem to post data */
-        dest = local_rank + rem;
-        rem_addr = MPIR_PIP_Comm_get_task(reduce_addr_array[dest], 1);
-        mpi_errno = MPIR_Localcopy(recvbuf, count, datatype, rem_addr->addr, count, datatype);
-        MPIR_ERR_CHECK(mpi_errno);
-        __sync_fetch_and_add(&rem_addr->cnt, 1);
-    } else if (max_pof2 <= local_rank && local_rank < limit_num) {
-        rem_addr = MPIR_PIP_Comm_post_task(comm->reduce_addr, 1, 0, recvbuf);
-        while (rem_addr->cnt != 1)
-            MPL_sched_yield();
-        comm->reduce_addr[1] = NULL;
-        MPIR_Handle_obj_free(&MPIDI_Coll_task_mem, (void *) rem_addr);
-    }
+    if (newrank != -1) {
+        mask = 0x1;
+        while (mask < pof2) {
+            newdst = newrank ^ mask;
+            /* find real rank of dest */
+            dst = (newdst < rem) ? newdst * 2 + 1 : newdst + rem;
 
-  null_reduce:
-    null_procs = original_num - limit_num;
-    if (null_procs > 0) {
-        if (limit_num <= local_rank) {
-            rem_addr = MPIR_PIP_Comm_post_task(comm->reduce_addr, 0, 0, recvbuf);
-            while (rem_addr->cnt != 1)
-                MPL_sched_yield();
-            comm->reduce_addr[0] = NULL;
-            MPIR_Handle_obj_free(&MPIDI_Coll_task_mem, (void *) rem_addr);
-        } else {
-            null_target_procs = local_rank + limit_num;
-            while (null_target_procs < original_num) {
-                rem_addr = MPIR_PIP_Comm_get_task(reduce_addr_array[null_target_procs], 0);
-                mpi_errno =
-                    MPIR_Localcopy(recvbuf, count, datatype, rem_addr->addr, count, datatype);
+            /* Send the most current data, which is in recvbuf. Recv
+             * into tmp_buf */
+            mpi_errno = MPIC_Sendrecv(recvbuf, count, datatype,
+                                      dst, MPIR_ALLREDUCE_TAG, tmp_buf,
+                                      count, datatype, dst,
+                                      MPIR_ALLREDUCE_TAG, comm_ptr, MPI_STATUS_IGNORE, errflag);
+            if (mpi_errno) {
+                /* for communication errors, just record the error but continue */
+                *errflag =
+                    MPIX_ERR_PROC_FAILED ==
+                    MPIR_ERR_GET_CLASS(mpi_errno) ? MPIR_ERR_PROC_FAILED : MPIR_ERR_OTHER;
+                MPIR_ERR_SET(mpi_errno, *errflag, "**fail");
+                MPIR_ERR_ADD(mpi_errno_ret, mpi_errno);
+            }
+
+            /* tmp_buf contains data received in this step.
+             * recvbuf contains data accumulated so far */
+
+            if (is_commutative || (dst < rank)) {
+                /* op is commutative OR the order is already right */
+                mpi_errno = MPIR_Reduce_local(tmp_buf, recvbuf, count, datatype, op);
                 MPIR_ERR_CHECK(mpi_errno);
-                __sync_fetch_and_add(&rem_addr->cnt, 1);
-                null_target_procs += limit_num;
+            } else {
+                /* op is noncommutative and the order is not right */
+                mpi_errno = MPIR_Reduce_local(recvbuf, tmp_buf, count, datatype, op);
+                MPIR_ERR_CHECK(mpi_errno);
+
+                /* copy result back into recvbuf */
+                mpi_errno = MPIR_Localcopy(tmp_buf, count, datatype, recvbuf, count, datatype);
+                MPIR_ERR_CHECK(mpi_errno);
+            }
+            mask <<= 1;
+        }
+    }
+    /* In the non-power-of-two case, all odd-numbered
+     * processes of rank < 2*rem send the result to
+     * (rank-1), the ranks who didn't participate above. */
+    if (rank < 2 * rem) {
+        if (rank % 2)   /* odd */
+            mpi_errno = MPIC_Send(recvbuf, count,
+                                  datatype, rank - 1, MPIR_ALLREDUCE_TAG, comm_ptr, errflag);
+        else    /* even */
+            mpi_errno = MPIC_Recv(recvbuf, count,
+                                  datatype, rank + 1,
+                                  MPIR_ALLREDUCE_TAG, comm_ptr, MPI_STATUS_IGNORE, errflag);
+        if (mpi_errno) {
+            /* for communication errors, just record the error but continue */
+            *errflag =
+                MPIX_ERR_PROC_FAILED ==
+                MPIR_ERR_GET_CLASS(mpi_errno) ? MPIR_ERR_PROC_FAILED : MPIR_ERR_OTHER;
+            MPIR_ERR_SET(mpi_errno, *errflag, "**fail");
+            MPIR_ERR_ADD(mpi_errno_ret, mpi_errno);
+        }
+    }
+  copy_res:
+    if (leader_num != comm_ptr->node_procs_min) {
+        if (rank == 0) {
+            shared_addr =
+                MPIR_Comm_post_easy_task(recvbuf, TMPI_Allreduce, 0, 0,
+                                         comm_ptr->node_procs_min - leader_num, comm_ptr);
+        } else {
+            shared_addr = MPIR_Comm_get_easy_task(comm_ptr, 0, TMPI_Allreduce);
+            if (rank >= leader_num) {
+                mpi_errno =
+                    MPIR_Localcopy(shared_addr->addr, count, datatype, recvbuf, count, datatype);
+                MPIR_ERR_CHECK(mpi_errno);
+                __sync_fetch_and_add(&shared_addr->complete, 1);
             }
         }
     }
 
-    MPIR_PIP_Comm_reclaim_all_tasks(comm->reduce_addr, 1, reduce_round);
-    MPIR_PIP_Comm_opt_intra_barrier(comm, original_num);
-
   fn_exit:
+    MPIR_CHKLMEM_FREEALL();
     return mpi_errno;
-
   fn_fail:
     goto fn_exit;
 }
@@ -183,22 +238,15 @@ int MPIDI_PIP_Allreduce_recursive_bruck_internode(const void *sendbuf, void *rec
     int src, rem, src_node;
     int tmp_rem, my_rem = 0;
     void *tmp_buf = NULL, *dst_buf, *rem_buf = NULL;
-    int dst, dst_node, offset;
-    // int rem_round = *comm->rem_round_ptr;
-    volatile MPIDI_PIP_Coll_task_t *shared_addr;
+    int dst, dst_node, offset, new_leader_num;
     int rem_step_limit = rem_step / basek_1;
-    // volatile MPIDI_PIP_Coll_task_t *rem_addr;
-    MPIDI_PIP_Coll_task_t *volatile ***tcoll_queue_array = comm->tcoll_queue_array;
-    int shared_round, reduce_round;
-    MPIDI_PIP_Coll_task_t *volatile *root_shared_addr_ptr = comm->comms_array[0]->shared_addr;
-    // MPIDI_PIP_Coll_task_t *volatile *root_rem_addr_ptr = comm->comms_array[0]->rem_addr;
 
     MPIR_CHKLMEM_DECL(2);
 
     if ((count == 0) && (sendbuf != MPI_IN_PLACE))
         goto fn_exit;
 
-    if (sendbuf != MPI_IN_PLACE){
+    if (sendbuf != MPI_IN_PLACE) {
         mpi_errno = MPIR_Localcopy(sendbuf, count, datatype, recvbuf, count, datatype);
         MPIR_ERR_CHECK(mpi_errno);
     }
@@ -211,31 +259,19 @@ int MPIDI_PIP_Allreduce_recursive_bruck_internode(const void *sendbuf, void *rec
     pofk_1 = 1;
     while (pofk_1 <= rem_step_limit)
         pofk_1 *= basek_1;
-    rem = rem_step - pofk_1;
-    while (rem >= pofk_1)
-        rem -= pofk_1;
+    rem = (rem_step - pofk_1) % pofk_1;
     if (rem > 0) {
         MPIR_CHKLMEM_MALLOC(rem_buf, void *, count * recvtype_extent, mpi_errno, "tmp_buf",
                             MPL_MEM_BUFFER);
-        if (sendbuf == MPI_IN_PLACE)
-            mpi_errno =
-                MPIDI_PIP_Allreduce_recursive_bruck_internode(recvbuf, rem_buf, count, datatype, op,
-                                                              comm, rem, errflag);
-        else
-            mpi_errno =
-                MPIDI_PIP_Allreduce_recursive_bruck_internode(sendbuf, rem_buf, count, datatype, op,
-                                                              comm, rem, errflag);
+        mpi_errno =
+            MPIDI_PIP_Allreduce_recursive_bruck_internode(recvbuf, rem_buf, count, datatype, op,
+                                                          comm, rem, errflag);
     }
 
     /* allocate a temporary buffer of the same size as recvbuf to receive intermediate results. */
     MPIR_Assert(recvbuf != NULL);
     MPIR_CHKLMEM_MALLOC(tmp_buf, void *, count * recvtype_extent, mpi_errno, "tmp_buf",
                         MPL_MEM_BUFFER);
-
-    if (local_rank == 0 && sendbuf != MPI_IN_PLACE) {
-        mpi_errno = MPIR_Localcopy(sendbuf, count, datatype, recvbuf, count, datatype);
-        MPIR_ERR_CHECK(mpi_errno);
-    }
 
     pofk_1 = 1;
     while (pofk_1 <= rem_step_limit) {
@@ -258,24 +294,25 @@ int MPIDI_PIP_Allreduce_recursive_bruck_internode(const void *sendbuf, void *rec
         }
 
         if (local_rank == 0) {
-            mpi_errno = MPIR_Reduce_local(recvbuf, tmp_buf, count, datatype, op);
+            mpi_errno = MPIR_Reduce_local(tmp_buf, recvbuf, count, datatype, op);
+            MPIR_ERR_CHECK(mpi_errno);
+        } else {
+            mpi_errno = MPIR_Localcopy(tmp_buf, count, datatype, recvbuf, count, datatype);
             MPIR_ERR_CHECK(mpi_errno);
         }
         mpi_errno =
-            MPIDI_PIP_Allreduce_limit_num_intranode(tmp_buf, recvbuf, count, datatype, op,
-                                                    leader_num, local_size, comm, errflag);
+            MPIR_Allreduce_leader_intra_recursive_doubling(MPI_IN_PLACE, recvbuf, count, datatype,
+                                                           comm->node_procs_min, op, 
+                                                           comm->node_comm, errflag);
         MPIR_ERR_CHECK(mpi_errno);
         pofk_1 *= basek_1;
     }
 
     /* if comm_size is not a power of k + 1, one more step is needed */
     rem = rem_step - pofk_1;
-    for (rem_leader_num = 0; rem_leader_num < local_size && rem > 0; ++rem_leader_num) {
-        tmp_rem = rem > pofk_1 ? pofk_1 : rem;
-        if (rem_leader_num == local_rank)
-            my_rem = tmp_rem;
-        rem -= tmp_rem;
-    }
+    new_leader_num = rem / pofk_1 + (rem % pofk_1 == 0 ? 0 : 1);
+    rem = rem - pofk_1 * local_rank;
+    my_rem = rem > pofk_1 ? pofk_1 : rem;
 
     if (my_rem > 0) {
         offset = (local_rank + 1) * pofk_1;
@@ -293,27 +330,25 @@ int MPIDI_PIP_Allreduce_recursive_bruck_internode(const void *sendbuf, void *rec
                                       dst, MPIR_ALLREDUCE_TAG, tmp_buf, count, datatype,
                                       src, MPIR_ALLREDUCE_TAG, comm, MPI_STATUS_IGNORE, errflag);
         }
-        if (mpi_errno) {
-            /* for communication errors, just record the error but continue */
-            *errflag =
-                MPIX_ERR_PROC_FAILED ==
-                MPIR_ERR_GET_CLASS(mpi_errno) ? MPIR_ERR_PROC_FAILED : MPIR_ERR_OTHER;
-            MPIR_ERR_SET(mpi_errno, *errflag, "**fail");
-            MPIR_ERR_ADD(mpi_errno_ret, mpi_errno);
-        }
+        MPIR_ERR_CHECK(mpi_errno);
 
         if (local_rank == 0) {
-            mpi_errno = MPIR_Reduce_local(recvbuf, tmp_buf, count, datatype, op);
+            mpi_errno = MPIR_Reduce_local(tmp_buf, recvbuf, count, datatype, op);
+            MPIR_ERR_CHECK(mpi_errno);
+        } else {
+            mpi_errno = MPIR_Localcopy(tmp_buf, count, datatype, recvbuf, count, datatype);
             MPIR_ERR_CHECK(mpi_errno);
         }
         mpi_errno =
-            MPIDI_PIP_Allreduce_limit_num_intranode(tmp_buf, recvbuf, count, datatype, op,
-                                                    rem_leader_num, local_size, comm, errflag);
+            MPIR_Allreduce_leader_intra_recursive_doubling(MPI_IN_PLACE, recvbuf, count, datatype,
+                                                           new_leader_num, op, comm->node_comm,
+                                                           errflag);
         MPIR_ERR_CHECK(mpi_errno);
     } else {
         mpi_errno =
-            MPIDI_PIP_Allreduce_limit_num_intranode(NULL, recvbuf, count, datatype, op,
-                                                    rem_leader_num, local_size, comm, errflag);
+            MPIR_Allreduce_leader_intra_recursive_doubling(NULL, recvbuf, count, datatype,
+                                                           new_leader_num, op, comm->node_comm,
+                                                           errflag);
         MPIR_ERR_CHECK(mpi_errno);
     }
 
@@ -501,9 +536,7 @@ int MPIDI_PIP_Allreduce_impl(const void *sendbuf, void *recvbuf, int count,
     if (comm->node_comm) {
         if (data_sz < MPIR_CVAR_ALLREDUCE_SHORT_MSG_SIZE) {
             mpi_errno =
-                MPIDI_PIP_Allreduce_limit_num_intranode(sendbuf, recvbuf, count, datatype, op,
-                                                        comm->node_comm->local_size,
-                                                        comm->node_comm->local_size,
+                MPIR_Allreduce_intra_recursive_doubling(sendbuf, recvbuf, count, datatype, op,
                                                         comm->node_comm, errflag);
         } else {
             if (comm->node_count > 1) {
@@ -561,7 +594,7 @@ int MPIDI_PIP_Allreduce_impl(const void *sendbuf, void *recvbuf, int count,
         MPIR_ERR_CHECK(mpi_errno);
     }
 
-    if (comm->node_comm) {
+    if (comm->node_comm && comm->node_comm->local_size > comm->node_procs_min) {
         if (data_sz < MPIR_CVAR_ALLREDUCE_SHORT_MSG_SIZE) {
             mpi_errno =
                 MPIDI_PIP_Reduce_bcast_intranode(recvbuf, count, datatype, 0, comm, errflag);
