@@ -109,50 +109,54 @@ MPL_STATIC_INLINE_PREFIX int MPID_Allreduce(const void *sendbuf, void *recvbuf, 
 {
     int mpi_errno = MPI_SUCCESS;
 #ifdef MPIDI_CH4_SHM_ENABLE_PIP
-    mpi_errno = MPIDI_PIP_Allreduce_impl(sendbuf, recvbuf, count, datatype, op, comm, errflag);
-#else
-    const MPIDI_Csel_container_s *cnt = NULL;
+    if (comm->node_count > 1) {
+        mpi_errno = MPIDI_PIP_Allreduce_impl(sendbuf, recvbuf, count, datatype, op, comm, errflag);
+    } else {
+#endif
+        const MPIDI_Csel_container_s *cnt = NULL;
 
-    MPIR_Csel_coll_sig_s coll_sig = {
-        .coll_type = MPIR_CSEL_COLL_TYPE__ALLREDUCE,
-        .comm_ptr = comm,
+        MPIR_Csel_coll_sig_s coll_sig = {
+            .coll_type = MPIR_CSEL_COLL_TYPE__ALLREDUCE,
+            .comm_ptr = comm,
 
-        .u.allreduce.sendbuf = sendbuf,
-        .u.allreduce.recvbuf = recvbuf,
-        .u.allreduce.count = count,
-        .u.allreduce.datatype = datatype,
-        .u.allreduce.op = op,
-    };
+            .u.allreduce.sendbuf = sendbuf,
+            .u.allreduce.recvbuf = recvbuf,
+            .u.allreduce.count = count,
+            .u.allreduce.datatype = datatype,
+            .u.allreduce.op = op,
+        };
 
-    MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPID_ALLREDUCE);
-    MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPID_ALLREDUCE);
+        MPIR_FUNC_VERBOSE_STATE_DECL(MPID_STATE_MPID_ALLREDUCE);
+        MPIR_FUNC_VERBOSE_ENTER(MPID_STATE_MPID_ALLREDUCE);
 
-    cnt = MPIR_Csel_search(MPIDI_COMM(comm, csel_comm), coll_sig);
+        cnt = MPIR_Csel_search(MPIDI_COMM(comm, csel_comm), coll_sig);
 
-    if (cnt == NULL) {
-        mpi_errno = MPIR_Allreduce_impl(sendbuf, recvbuf, count, datatype, op, comm, errflag);
-        MPIR_ERR_CHECK(mpi_errno);
-        goto fn_exit;
-    }
+        if (cnt == NULL) {
+            mpi_errno = MPIR_Allreduce_impl(sendbuf, recvbuf, count, datatype, op, comm, errflag);
+            MPIR_ERR_CHECK(mpi_errno);
+            goto fn_exit;
+        }
 
-    switch (cnt->id) {
-        case MPIDI_CSEL_CONTAINER_TYPE__COMPOSITION__MPIDI_Allreduce_intra_composition_alpha:
-            mpi_errno =
-                MPIDI_Allreduce_intra_composition_alpha(sendbuf, recvbuf, count, datatype, op,
-                                                        comm, errflag);
-            break;
-        case MPIDI_CSEL_CONTAINER_TYPE__COMPOSITION__MPIDI_Allreduce_intra_composition_beta:
-            mpi_errno =
-                MPIDI_Allreduce_intra_composition_beta(sendbuf, recvbuf, count, datatype, op,
-                                                       comm, errflag);
-            break;
-        case MPIDI_CSEL_CONTAINER_TYPE__COMPOSITION__MPIDI_Allreduce_intra_composition_gamma:
-            mpi_errno =
-                MPIDI_Allreduce_intra_composition_gamma(sendbuf, recvbuf, count, datatype, op,
-                                                        comm, errflag);
-            break;
-        default:
-            MPIR_Assert(0);
+        switch (cnt->id) {
+            case MPIDI_CSEL_CONTAINER_TYPE__COMPOSITION__MPIDI_Allreduce_intra_composition_alpha:
+                mpi_errno =
+                    MPIDI_Allreduce_intra_composition_alpha(sendbuf, recvbuf, count, datatype, op,
+                                                            comm, errflag);
+                break;
+            case MPIDI_CSEL_CONTAINER_TYPE__COMPOSITION__MPIDI_Allreduce_intra_composition_beta:
+                mpi_errno =
+                    MPIDI_Allreduce_intra_composition_beta(sendbuf, recvbuf, count, datatype, op,
+                                                           comm, errflag);
+                break;
+            case MPIDI_CSEL_CONTAINER_TYPE__COMPOSITION__MPIDI_Allreduce_intra_composition_gamma:
+                mpi_errno =
+                    MPIDI_Allreduce_intra_composition_gamma(sendbuf, recvbuf, count, datatype, op,
+                                                            comm, errflag);
+                break;
+            default:
+                MPIR_Assert(0);
+        }
+#ifdef MPIDI_CH4_SHM_ENABLE_PIP
     }
 #endif
     MPIR_ERR_CHECK(mpi_errno);

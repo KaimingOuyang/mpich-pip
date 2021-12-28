@@ -50,10 +50,11 @@ int MPIR_Allreduce_leader_intra_recursive_doubling(const void *sendbuf,
     void *tmp_buf;
     MPIDI_PIP_Coll_easy_task_t *shared_addr;
 
-    if (sendbuf == NULL)
-        goto copy_res;
     comm_size = leader_num;
     rank = comm_ptr->local_rank;
+
+    if (sendbuf == NULL)
+        goto copy_res;
 
     is_commutative = MPIR_Op_is_commutative(op);
 
@@ -202,6 +203,8 @@ int MPIR_Allreduce_leader_intra_recursive_doubling(const void *sendbuf,
             shared_addr =
                 MPIR_Comm_post_easy_task(recvbuf, TMPI_Allreduce, 0, 0,
                                          comm_ptr->node_procs_min - leader_num, comm_ptr);
+            while (shared_addr->complete != shared_addr->target_cmpl)
+                MPL_sched_yield();
         } else {
             shared_addr = MPIR_Comm_get_easy_task(comm_ptr, 0, TMPI_Allreduce);
             if (rank >= leader_num) {
@@ -240,6 +243,7 @@ int MPIDI_PIP_Allreduce_recursive_bruck_internode(const void *sendbuf, void *rec
     void *tmp_buf = NULL, *dst_buf, *rem_buf = NULL;
     int dst, dst_node, offset, new_leader_num;
     int rem_step_limit = rem_step / basek_1;
+    MPIDI_PIP_Coll_easy_task_t *shared_addr;
 
     MPIR_CHKLMEM_DECL(2);
 
@@ -254,6 +258,10 @@ int MPIDI_PIP_Allreduce_recursive_bruck_internode(const void *sendbuf, void *rec
     comm_size = comm->node_count;
     rank = comm->rank;
     MPIR_Datatype_get_extent_macro(datatype, recvtype_extent);
+
+    if (rem_step == 1) {
+        goto fn_exit;
+    }
 
     /* keep first rem results for rem */
     pofk_1 = 1;
@@ -302,7 +310,7 @@ int MPIDI_PIP_Allreduce_recursive_bruck_internode(const void *sendbuf, void *rec
         }
         mpi_errno =
             MPIR_Allreduce_leader_intra_recursive_doubling(MPI_IN_PLACE, recvbuf, count, datatype,
-                                                           comm->node_procs_min, op, 
+                                                           comm->node_procs_min, op,
                                                            comm->node_comm, errflag);
         MPIR_ERR_CHECK(mpi_errno);
         pofk_1 *= basek_1;
@@ -368,29 +376,23 @@ int MPIDI_PIP_Allreduce_reduce_scatter_internode(const void *sendbuf, void *recv
                                                  MPI_Datatype datatype, MPI_Op op, MPIR_Comm * comm,
                                                  MPIR_Errflag_t * errflag)
 {
-    int chunk_sz = MPIR_CVAR_ALLREDUCE_CHUNK_SIZE;
     int node_count = comm->node_count;
     int node_id = comm->node_id;
     int src, dst;
     int leader_num = comm->node_procs_min;
     int local_rank = comm->local_rank;
     int sseg, eseg, seg_cnt, extent;
-    MPIDI_PIP_Coll_task_t *shared_addr, *local_addr, *root_addr;
-    MPIDI_PIP_Coll_task_t *local_task;
-    int scnt;
-    int ecnt;
+    MPIDI_PIP_Coll_easy_task_t *shared_addr, *local_addr, *root_addr;
+    MPIDI_PIP_Coll_easy_task_t *local_task;
+    int scnt, ecnt, real_cnt;
     MPIR_Request *rreq = NULL;
-    MPIR_Request **sreq;
-    int sreq_cnt = 0;
-    int round = *comm->round_ptr;
+    MPIR_Request **reqs;
+    int req_cnt = 0;
     void *dst_buf, *tmp_buf, *src_buf;
     int mpi_errno = MPI_SUCCESS;
-    int shared_round = *comm->shared_round_ptr;
     int target_cnt, max_req_cnt;
-    MPIDI_PIP_Coll_task_t *volatile ***tcoll_queue_array = comm->tcoll_queue_array;
-    MPIDI_PIP_Coll_task_t *volatile *root_shared_addr_ptr = comm->comms_array[0]->shared_addr;
 
-    if ((count == 0) && (sendbuf != MPI_IN_PLACE))
+    if (count == 0)
         goto fn_exit;
 
     MPIR_CHKLMEM_DECL(2);
@@ -398,121 +400,68 @@ int MPIDI_PIP_Allreduce_reduce_scatter_internode(const void *sendbuf, void *recv
     sseg = node_count * local_rank / leader_num;
     eseg = node_count * (local_rank + 1) / leader_num;
 
+    if (local_rank == 0)
+        shared_addr = MPIR_Comm_post_easy_task(recvbuf, TMPI_Allreduce, 0, 0, leader_num, comm);
+    else
+        shared_addr = MPIR_Comm_get_easy_task(comm, 0, TMPI_Allreduce);
+    dst_buf = shared_addr->addr;
+
+    if (sseg == eseg)
+        goto fn_exit;
+
     MPIR_Datatype_get_extent_macro(datatype, extent);
-
-    if (local_rank == 0) {
-        shared_addr = (MPIDI_PIP_Coll_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Coll_task_mem);
-        shared_addr->addr = recvbuf;
-        shared_addr->cnt = 0;
-        __sync_synchronize();
-        comm->shared_addr[shared_round] = shared_addr;
-    } else {
-        shared_addr = (MPIDI_PIP_Coll_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Coll_task_mem);
-        shared_addr->addr = (void *) sendbuf;
-        shared_addr->cnt = 0;
-        __sync_synchronize();
-        comm->shared_addr[shared_round] = (void *) shared_addr;
-    }
-    MPIR_PIP_Comm_opt_intra_barrier(comm, leader_num);
-
-    MPIR_CHKLMEM_MALLOC(tmp_buf, void *, MPIR_CVAR_ALLREDUCE_CHUNK_SIZE * extent, mpi_errno,
-                        "tmp_buf", MPL_MEM_BUFFER);
-    max_req_cnt = (count / node_count + 1) / chunk_sz + 1;
-    MPIR_CHKLMEM_MALLOC(sreq, MPIR_Request **, sizeof(MPIR_Request *) * max_req_cnt, mpi_errno,
-                        "sreq", MPL_MEM_BUFFER);
-    memset(sreq, 0, sizeof(MPIR_Request *) * max_req_cnt);
-
-    while (root_shared_addr_ptr[shared_round] == NULL)
-        MPL_sched_yield();
-    root_addr = root_shared_addr_ptr[shared_round];
-    dst_buf = root_addr->addr;
+    max_req_cnt = node_count / leader_num + 1;
+    MPIR_CHKLMEM_MALLOC(reqs, MPIR_Request **, sizeof(MPIR_Request *) * max_req_cnt, mpi_errno,
+                        "reqs", MPL_MEM_BUFFER);
+    memset(reqs, 0, sizeof(MPIR_Request *) * max_req_cnt);
 
     for (int i = sseg; i < eseg; ++i) {
+        if (i == node_id)
+            continue;
         /* deal with node i data */
-        int j, real_cnt;
         scnt = count * i / node_count;
         ecnt = count * (i + 1) / node_count;
+        real_cnt = ecnt - scnt;
 
-        for (j = scnt; j < ecnt; j += chunk_sz) {
-            int cur_recv_node = 0;
-            real_cnt = chunk_sz > (ecnt - j) ? (ecnt - j) : chunk_sz;
-            /* reduce local result */
-            for (int k = 1; k < leader_num; ++k) {
-                if (i == node_id && cur_recv_node < node_count) {
-                    /* I am processing my own data, need to receive final results from others. */
-                    if (cur_recv_node != node_id) {
-                        mpi_errno =
-                            MPIC_Irecv(tmp_buf, real_cnt, datatype,
-                                       cur_recv_node * leader_num + local_rank, MPIR_ALLREDUCE_TAG,
-                                       comm, &rreq);
-                        MPIR_ERR_CHECK(mpi_errno);
-                    }
-                    cur_recv_node++;
-                }
-                // while (comm->comms_array[k]->shared_addr[shared_round] == NULL)
-                //     MPL_sched_yield();
-                local_addr = comm->comms_array[k]->shared_addr[shared_round];
-                src_buf = local_addr->addr;
-                mpi_errno =
-                    MPIR_Reduce_local((char *) src_buf + j * extent, (char *) dst_buf + j * extent,
-                                      real_cnt, datatype, op);
-                MPIR_ERR_CHECK(mpi_errno);
+        mpi_errno =
+            MPIC_Isend((char *) dst_buf + scnt * extent,
+                       real_cnt, datatype, i * leader_num + local_rank, MPIR_ALLREDUCE_TAG,
+                       comm, &reqs[req_cnt++], errflag);
+        MPIR_ERR_CHECK(mpi_errno);
+    }
 
-                if (rreq) {
-                    mpi_errno = MPIC_Wait(rreq, errflag);
-                    MPIR_ERR_CHECK(mpi_errno);
-                    rreq = NULL;
+    if (sseg <= node_id && node_id < eseg) {
+        MPIR_CHKLMEM_MALLOC(tmp_buf, void *, (count / node_count + 1) * extent, mpi_errno,
+                            "tmp_buf", MPL_MEM_BUFFER);
+        scnt = count * node_id / node_count;
+        ecnt = count * (node_id + 1) / node_count;
+        real_cnt = ecnt - scnt;
+        for (int i = 0; i < node_count; ++i) {
+            if (i == node_id)
+                continue;
 
-                    mpi_errno =
-                        MPIR_Reduce_local(tmp_buf, (char *) dst_buf + j * extent,
-                                          real_cnt, datatype, op);
-                    MPIR_ERR_CHECK(mpi_errno);
-                }
-            }
-
-            if (i != node_id) {
-                mpi_errno =
-                    MPIC_Isend((char *) dst_buf + j * extent,
-                               real_cnt, datatype, i * leader_num + local_rank, MPIR_ALLREDUCE_TAG,
-                               comm, &sreq[sreq_cnt++], errflag);
-                MPIR_ERR_CHECK(mpi_errno);
-            } else if (cur_recv_node < node_count) {
-                /* receive the rest of chunks */
-                for (int nindex = cur_recv_node; nindex < node_count; ++nindex) {
-                    if (nindex == node_id)
-                        continue;
-                    mpi_errno =
-                        MPIC_Recv(tmp_buf, real_cnt, datatype, nindex * leader_num + local_rank,
-                                  MPIR_ALLREDUCE_TAG, comm, MPI_STATUS_IGNORE, errflag);
-                    MPIR_ERR_CHECK(mpi_errno);
-                    mpi_errno =
-                        MPIR_Reduce_local(tmp_buf, (char *) dst_buf + j * extent,
-                                          real_cnt, datatype, op);
-                    MPIR_ERR_CHECK(mpi_errno);
-                }
-            }
-        }
-
-        if (sreq_cnt) {
-            mpi_errno = MPIC_Waitall(sreq_cnt, sreq, MPI_STATUSES_IGNORE, errflag);
+            mpi_errno =
+                MPIC_Recv(tmp_buf, real_cnt, datatype, i * leader_num + local_rank,
+                          MPIR_ALLREDUCE_TAG, comm, MPI_STATUS_IGNORE, errflag);
             MPIR_ERR_CHECK(mpi_errno);
-            memset(sreq, 0, sizeof(MPIR_Request *) * sreq_cnt);
-            sreq_cnt = 0;
+
+            mpi_errno =
+                MPIR_Reduce_local(tmp_buf, (char *) dst_buf + scnt * extent,
+                                  real_cnt, datatype, op);
+            MPIR_ERR_CHECK(mpi_errno);
         }
     }
 
-    for (int i = 1; i < leader_num; ++i)
-        __sync_fetch_and_add(&comm->comms_array[i]->shared_addr[shared_round]->cnt, 1);
-
-    __sync_fetch_and_add(&root_addr->cnt, 1);
-    while (comm->shared_addr[shared_round]->cnt != leader_num)
-        MPL_sched_yield();
-    MPIR_Handle_obj_free(&MPIDI_Coll_task_mem, (void *) comm->shared_addr[shared_round]);
-    comm->shared_addr[shared_round] = NULL;
-
-    *comm->shared_round_ptr = shared_round ^ 1;
+    MPIR_Assert(req_cnt <= max_req_cnt);
+    if (req_cnt) {
+        mpi_errno = MPIC_Waitall(req_cnt, reqs, MPI_STATUSES_IGNORE, errflag);
+        MPIR_ERR_CHECK(mpi_errno);
+    }
 
   fn_exit:
+    __sync_fetch_and_add(&shared_addr->complete, 1);
+    while (shared_addr->complete != leader_num)
+        MPL_sched_yield();
     MPIR_CHKLMEM_FREEALL();
     if (*errflag != MPIR_ERR_NONE)
         MPIR_ERR_SET(mpi_errno, *errflag, "**coll_fail");
@@ -539,15 +488,9 @@ int MPIDI_PIP_Allreduce_impl(const void *sendbuf, void *recvbuf, int count,
                 MPIR_Allreduce_intra_recursive_doubling(sendbuf, recvbuf, count, datatype, op,
                                                         comm->node_comm, errflag);
         } else {
-            if (comm->node_count > 1) {
-                mpi_errno =
-                    MPIDI_PIP_Reduce_partial_intranode(sendbuf, recvbuf, count, datatype, op, 0,
-                                                       comm->node_comm, errflag);
-            } else {
-                mpi_errno =
-                    MPIDI_PIP_Reduce_full_intranode(sendbuf, recvbuf, count, datatype, op, 0,
-                                                    comm->node_comm, errflag);
-            }
+            mpi_errno =
+                MPIDI_PIP_intranode_reduce(sendbuf, recvbuf, count, datatype, op, 0,
+                                           comm->node_comm, errflag);
         }
     } else {
         if (sendbuf != MPI_IN_PLACE)
@@ -566,16 +509,11 @@ int MPIDI_PIP_Allreduce_impl(const void *sendbuf, void *recvbuf, int count,
             int node_count = comm->node_count;
             int local_rank = comm->node_comm->rank;
 
-            if (local_rank == 0) {
-                mpi_errno =
-                    MPIDI_PIP_Allreduce_reduce_scatter_internode(MPI_IN_PLACE, recvbuf, count,
-                                                                 datatype, op, comm->pip_roots_comm,
-                                                                 errflag);
-            } else {
-                mpi_errno =
-                    MPIDI_PIP_Allreduce_reduce_scatter_internode(sendbuf, recvbuf, count, datatype,
-                                                                 op, comm->pip_roots_comm, errflag);
-            }
+            MPIR_Assert(node_count > 1);
+            mpi_errno =
+                MPIDI_PIP_Allreduce_reduce_scatter_internode(MPI_IN_PLACE, recvbuf, count,
+                                                             datatype, op, comm->pip_roots_comm,
+                                                             errflag);
             MPIR_ERR_CHECK(mpi_errno);
 
             recvcounts = (int *) malloc(node_count * sizeof(int));

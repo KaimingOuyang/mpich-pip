@@ -53,9 +53,9 @@ int MPIDI_PIP_Allreduce_recursive_bruck_internode(const void *sendbuf, void *rec
                                                   MPIR_Comm * comm, int comm_size,
                                                   MPIR_Errflag_t * errflag);
 /* reduce algorithm interface */
-int MPIDI_PIP_Reduce_full_intranode(const void *sendbuf, void *recvbuf,
-                                    int count, MPI_Datatype datatype, MPI_Op op,
-                                    int root, MPIR_Comm * comm, MPIR_Errflag_t * errflag);
+int MPIDI_PIP_intranode_reduce(const void *sendbuf, void *recvbuf,
+                               int count, MPI_Datatype datatype, MPI_Op op,
+                               int root, MPIR_Comm * comm, MPIR_Errflag_t * errflag);
 int MPIDI_PIP_Reduce_partial_intranode(const void *sendbuf, void *recvbuf,
                                        int count, MPI_Datatype datatype, MPI_Op op,
                                        int root, MPIR_Comm * comm, MPIR_Errflag_t * errflag);

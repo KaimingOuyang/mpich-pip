@@ -163,7 +163,7 @@ int MPIDI_PIP_Reduce_partial_intranode(const void *sendbuf, void *recvbuf,
 
     root_buf = root_task->addr;
     for (int i = leader_num; i < local_size; ++i) {
-        while(tcoll_queue_array[i][round][index] == NULL)
+        while (tcoll_queue_array[i][round][index] == NULL)
             MPL_sched_yield();
         local_task = tcoll_queue_array[i][round][index];
         src_buf = local_task->addr;
@@ -195,9 +195,9 @@ int MPIDI_PIP_Reduce_partial_intranode(const void *sendbuf, void *recvbuf,
     goto fn_exit;
 }
 
-int MPIDI_PIP_Reduce_full_intranode(const void *sendbuf, void *recvbuf,
-                                    int count, MPI_Datatype datatype, MPI_Op op,
-                                    int root, MPIR_Comm * comm, MPIR_Errflag_t * errflag)
+int MPIDI_PIP_intranode_reduce(const void *sendbuf, void *recvbuf,
+                               int count, MPI_Datatype datatype, MPI_Op op,
+                               int root, MPIR_Comm * comm, MPIR_Errflag_t * errflag)
 {
     int mpi_errno = MPI_SUCCESS;
     MPI_Aint extent;
@@ -205,12 +205,10 @@ int MPIDI_PIP_Reduce_full_intranode(const void *sendbuf, void *recvbuf,
     int round = *comm->round_ptr;
     int local_size = comm->local_size;
     int local_rank = comm->rank;
-    int leader_num = comm->node_procs_min;
     int scnt, ecnt, copy_cnt;
     void *src_buf, *root_buf;
-    volatile MPIDI_PIP_Coll_task_t *local_task;
-    volatile MPIDI_PIP_Coll_task_t *root_task;
-    MPIDI_PIP_Coll_task_t *volatile ***tcoll_queue_array = comm->tcoll_queue_array;
+    MPIDI_PIP_Coll_easy_task_t *local_task;
+    MPIDI_PIP_Coll_easy_task_t *root_task;
 
     MPIR_Assert(count >= local_size);
     scnt = count * local_rank / local_size;
@@ -218,55 +216,31 @@ int MPIDI_PIP_Reduce_full_intranode(const void *sendbuf, void *recvbuf,
     copy_cnt = ecnt - scnt;
     MPIR_Datatype_get_extent_macro(datatype, extent);
 
-    if (local_rank == root) {
-        if (sendbuf != MPI_IN_PLACE) {
-            mpi_errno = MPIR_Localcopy(sendbuf, count, datatype, recvbuf, count, datatype);
-            MPIR_ERR_CHECK(mpi_errno);
-        }
-        local_task = (MPIDI_PIP_Coll_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Coll_task_mem);
-        local_task->addr = (void *) recvbuf;
-        local_task->cnt = 0;
-        local_task->type = TMPI_Reduce;
-        __sync_synchronize();
-        comm->tcoll_queue[round][index] = (MPIDI_PIP_Coll_task_t *) local_task;
-    } else {
-        local_task = (MPIDI_PIP_Coll_task_t *) MPIR_Handle_obj_alloc(&MPIDI_Coll_task_mem);
-        local_task->addr = (void *) sendbuf;
-        local_task->cnt = 0;
-        local_task->type = TMPI_Reduce;
-        __sync_synchronize();
-        comm->tcoll_queue[round][index] = (MPIDI_PIP_Coll_task_t *) local_task;
+    if (sendbuf != MPI_IN_PLACE) {
+        mpi_errno = MPIR_Localcopy(sendbuf, count, datatype, recvbuf, count, datatype);
+        MPIR_ERR_CHECK(mpi_errno);
     }
 
-    while (tcoll_queue_array[root][round][index] == NULL)
-        MPL_sched_yield();
-    root_task = tcoll_queue_array[root][round][index];
-
+    local_task = MPIR_Comm_post_easy_task(recvbuf, TMPI_Reduce, 0, 0, local_size, comm);
+    root_task = MPIR_Comm_get_easy_task(comm, 0, TMPI_Reduce);
     root_buf = root_task->addr;
+
     for (int i = 0; i < local_size; ++i) {
         if (i == root)
             continue;
-        while(tcoll_queue_array[i][round][index] == NULL)
-            MPL_sched_yield();
-        local_task = tcoll_queue_array[i][round][index];
+        local_task = MPIR_Comm_get_easy_task(comm, i, TMPI_Reduce);
         src_buf = local_task->addr;
         mpi_errno =
             MPIR_Reduce_local((char *) src_buf + scnt * extent, (char *) root_buf + scnt * extent,
                               copy_cnt, datatype, op);
         MPIR_ERR_CHECK(mpi_errno);
 
-        __sync_fetch_and_add(&local_task->cnt, 1);
+        __sync_fetch_and_add(&local_task->complete, 1);
     }
 
-    __sync_fetch_and_add(&root_task->cnt, 1);
-
-    local_task = comm->tcoll_queue[round][index];
-    while (local_task->cnt != local_size)
+    __sync_fetch_and_add(&root_task->complete, 1);
+    while (root_task->complete != root_task->target_cmpl)
         MPL_sched_yield();
-    MPIR_Handle_obj_free(&MPIDI_Coll_task_mem, (void *) local_task);
-
-    comm->tcoll_queue[round][index] = NULL;
-    *comm->round_ptr = round ^ 1;
 
   fn_exit:
     if (*errflag != MPIR_ERR_NONE)

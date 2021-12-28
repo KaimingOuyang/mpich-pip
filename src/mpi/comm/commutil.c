@@ -936,6 +936,7 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
         MPL_DBG_MSG_D(MPIR_DBG_COMM, VERBOSE, "Create node_comm=%p\n", comm->node_comm);
 
         comm->node_comm->local_size = num_local;
+        comm->node_comm->node_count = 1;
         comm->node_comm->local_rank = local_rank;
         comm->node_comm->remote_size = num_local;
         comm->node_comm->node_procs_min = leader_num;
