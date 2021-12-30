@@ -44,14 +44,14 @@ int MPIR_Reduce_intra_binomial(const void *sendbuf,
 
     /* If I'm not the root, then my recvbuf may not be valid, therefore
      * I have to allocate a temporary one */
-    if (rank != root) {
+    if (rank != root && recvbuf == NULL) {
         MPIR_CHKLMEM_MALLOC(recvbuf, void *,
                             count * (MPL_MAX(extent, true_extent)),
                             mpi_errno, "receive buffer", MPL_MEM_BUFFER);
         recvbuf = (void *) ((char *) recvbuf - true_lb);
     }
 
-    if ((rank != root) || (sendbuf != MPI_IN_PLACE)) {
+    if (sendbuf != MPI_IN_PLACE) {
         mpi_errno = MPIR_Localcopy(sendbuf, count, datatype, recvbuf, count, datatype);
         MPIR_ERR_CHECK(mpi_errno);
     }
