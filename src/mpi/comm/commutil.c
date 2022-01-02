@@ -576,6 +576,8 @@ void MPIR_PIP_Comm_opt_intra_barrier(MPIR_Comm * comm, int local_size)
         return;
 
     if (local_rank == 0) {
+        while (barrier->val != local_size - 1)
+            MPL_sched_yield();
         comm->barrier[barrier_round ^ 1].val = 0;
     }
     __sync_fetch_and_add(&barrier->val, 1);
