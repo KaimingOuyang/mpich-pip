@@ -18,8 +18,10 @@ int MPIDI_PIP_Scatter_nway_tree_intranode(const void *sendbuf, int sendcount,
                                           MPIR_Errflag_t * errflag);
 int MPIDI_PIP_Bcast_intranode(void *buffer, int count, MPI_Datatype datatype, int root,
                               MPIR_Comm * comm, MPIR_Errflag_t * errflag);
-int MPIDI_PIP_Reduce_bcast_intranode(void *buffer, int count, MPI_Datatype datatype, int root,
-                                     MPIR_Comm * pcomm, MPIR_Errflag_t * errflag);
+int MPIDI_PIP_partial_bcast_intranode(void *buffer, int count, MPI_Datatype datatype, int root,
+                                      MPIR_Comm * comm, MPIR_Errflag_t * errflag);
+// int MPIDI_PIP_Reduce_bcast_intranode(void *buffer, int count, MPI_Datatype datatype, int root,
+//                                      MPIR_Comm * pcomm, MPIR_Errflag_t * errflag);
 int MPIDI_PIP_Gather_intranode(const void *sendbuf, int sendcount,
                                MPI_Datatype sendtype, void *recvbuf, int recvcount,
                                MPI_Datatype recvtype, int root, MPIR_Comm * comm,
@@ -61,18 +63,18 @@ int MPIR_Reduce_leader_intra_binomial_tree(const void *sendbuf,
                                            MPIR_Errflag_t * errflag);
 int MPIDI_PIP_intranode_reduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype datatype,
                                MPI_Op op, int root, MPIR_Comm * comm, MPIR_Errflag_t * errflag);
-int MPIDI_PIP_Reduce_partial_intranode(const void *sendbuf, void *recvbuf, int count,
-                                       MPI_Datatype datatype, MPI_Op op, int root, MPIR_Comm * comm,
-                                       MPIR_Errflag_t * errflag);
-int MPIDI_PIP_Reduce_binomial_intranode(const void *sendbuf, void *recvbuf, int count,
-                                        MPI_Datatype datatype, MPI_Op op, int root,
-                                        MPIR_Comm * comm, MPIR_Errflag_t * errflag);
-int MPIDI_PIP_Reduce_leader_binomial_intranode(const void *sendbuf, void *recvbuf, int count,
-                                               MPI_Datatype datatype, MPI_Op op, int root,
-                                               int comm_size, int local_rank, int round,
-                                               MPIR_Comm * comm, MPIR_Errflag_t * errflag);
-int MPIDI_PIP_Reduce_leader_rem_intranode(const void *sendbuf, void *recvbuf, void *rem_buf,
-                                          int rem, int count, MPI_Datatype datatype, MPI_Op op,
-                                          int root, int comm_size, int local_rank, int round,
-                                          MPIR_Comm * comm, MPIR_Errflag_t * errflag);
+// int MPIDI_PIP_Reduce_partial_intranode(const void *sendbuf, void *recvbuf, int count,
+//                                        MPI_Datatype datatype, MPI_Op op, int root, MPIR_Comm * comm,
+//                                        MPIR_Errflag_t * errflag);
+// int MPIDI_PIP_Reduce_binomial_intranode(const void *sendbuf, void *recvbuf, int count,
+//                                         MPI_Datatype datatype, MPI_Op op, int root,
+//                                         MPIR_Comm * comm, MPIR_Errflag_t * errflag);
+// int MPIDI_PIP_Reduce_leader_binomial_intranode(const void *sendbuf, void *recvbuf, int count,
+//                                                MPI_Datatype datatype, MPI_Op op, int root,
+//                                                int comm_size, int local_rank, int round,
+//                                                MPIR_Comm * comm, MPIR_Errflag_t * errflag);
+// int MPIDI_PIP_Reduce_leader_rem_intranode(const void *sendbuf, void *recvbuf, void *rem_buf,
+//                                           int rem, int count, MPI_Datatype datatype, MPI_Op op,
+//                                           int root, int comm_size, int local_rank, int round,
+//                                           MPIR_Comm * comm, MPIR_Errflag_t * errflag);
 #endif /* PIP_COLL_H_INCLUDED */

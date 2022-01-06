@@ -448,8 +448,8 @@ int MPIDI_PIP_Allgather_impl(const void *sendbuf, int sendcount,
 
     if (comm->node_comm && comm->node_comm->local_size > comm->node_procs_min) {
         mpi_errno =
-            MPIDI_PIP_Bcast_intranode(recvbuf, recvcount * gsize, recvtype, 0,
-                                      comm->node_comm, errflag);
+            MPIDI_PIP_partial_bcast_intranode(recvbuf, recvcount * gsize, recvtype, 0,
+                                              comm->node_comm, errflag);
     }
 
   fn_exit:

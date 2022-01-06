@@ -233,24 +233,9 @@ struct MPIR_Comm {
                                          * the same node as this process. */
     struct MPIR_Comm *node_roots_comm;  /* Comm of root processes for other nodes. */
     struct MPIR_Comm *pip_roots_comm;   /* Comm of root processes for other nodes. */
+    struct MPIR_Comm **comms_array;
     int *node_procs_sum;
     int node_procs_min, node_id;
-    MPIDI_PIP_Coll_task_t ***tcoll_queue;
-    MPIDI_PIP_Coll_task_t *volatile ***tcoll_queue_array;
-    struct MPIR_Comm **comms_array;
-    int round, sindex, eindex;
-    int *round_ptr, *sindex_ptr, *eindex_ptr;
-    MPIDI_PIP_Coll_task_t **shared_addr;
-    int shared_round;
-    int *shared_round_ptr;
-    MPIDI_PIP_Coll_task_t **reduce_addr;
-    MPIDI_PIP_Coll_task_t *volatile **reduce_addr_array;
-    MPIDI_PIP_Coll_task_t **rem_addr;
-    MPIDI_PIP_Coll_task_t *volatile **rem_addr_array;
-    int reduce_round;
-    int rem_round;
-    int *reduce_round_ptr;
-    int *rem_round_ptr;
     int intranode_size;         /* for pip_roots_comm */
     // pthread_barrier_t *node_barrier;
     // pthread_barrier_t *pip_roots_barrier;
@@ -260,7 +245,6 @@ struct MPIR_Comm {
     MPIDI_Comm_intra_barrier_t *barrier;
     int barrier_round;
     int max_depth;
-    void **tmp_buf;
     int max_pof2_step;
 
     int *intranode_table;       /* intranode_table[i] gives the rank in
@@ -306,8 +290,6 @@ struct MPIR_Comm {
         int pof2;               /* Nearest (smaller than or equal to) power of 2
                                  * to the number of ranks in the communicator.
                                  * To be used during collective communication */
-        int pof2_leader;
-        int base_leader;
     } coll;
 
     void *csel_comm;            /* collective selector handle */

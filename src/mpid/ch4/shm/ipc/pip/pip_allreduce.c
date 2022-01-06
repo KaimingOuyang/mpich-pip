@@ -533,13 +533,9 @@ int MPIDI_PIP_Allreduce_impl(const void *sendbuf, void *recvbuf, int count,
     }
 
     if (comm->node_comm && comm->node_comm->local_size > comm->node_procs_min) {
-        if (data_sz < MPIR_CVAR_ALLREDUCE_SHORT_MSG_SIZE) {
-            mpi_errno =
-                MPIDI_PIP_Reduce_bcast_intranode(recvbuf, count, datatype, 0, comm, errflag);
-        } else {
-            mpi_errno =
-                MPIDI_PIP_Bcast_intranode(recvbuf, count, datatype, 0, comm->node_comm, errflag);
-        }
+        mpi_errno =
+            MPIDI_PIP_partial_bcast_intranode(recvbuf, count, datatype, 0, comm->node_comm,
+                                              errflag);
     }
 
   fn_exit:

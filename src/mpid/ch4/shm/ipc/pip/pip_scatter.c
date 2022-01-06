@@ -171,9 +171,6 @@ int MPIDI_PIP_Scatter_nway_tree_intranode(const void *sendbuf, int sendcount,
     int local_size = comm->local_size;
     int extent;
     int mpi_errno = MPI_SUCCESS;
-    int eindex = *comm->eindex_ptr;
-    int sindex = *comm->sindex_ptr;
-    int round = *comm->round_ptr;
     MPIDI_PIP_Coll_easy_task_t *local_task;
 
     MPIR_Datatype_get_extent_macro(sendtype, extent);
@@ -206,9 +203,6 @@ int MPIDI_PIP_Scatter_nway_tree_partial_intranode(const void *sendbuf, int sendc
     int local_size = comm->local_size;
     int extent;
     int mpi_errno = MPI_SUCCESS;
-    int eindex = *comm->eindex_ptr;
-    int sindex = *comm->sindex_ptr;
-    int round = *comm->round_ptr;
     MPIDI_PIP_Coll_easy_task_t *local_task;
 
     MPIR_Datatype_get_extent_macro(sendtype, extent);
@@ -236,7 +230,7 @@ int MPIDI_PIP_Scatter_nway_tree(const void *sendbuf, int sendcount,
                                 MPIR_Errflag_t * errflag)
 {
     int mpi_errno = MPI_SUCCESS;
-    void *root_sendbuf = sendbuf;
+    void *root_sendbuf = (void *) sendbuf;
     /* right now just support root == 0 to test function and performance. */
     MPIR_Assert(root == 0);
 
