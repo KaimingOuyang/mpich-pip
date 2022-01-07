@@ -429,7 +429,7 @@ int MPIDI_PIP_Allgather_impl(const void *sendbuf, int sendcount,
 
     if (comm->pip_roots_comm) {
         MPIR_Datatype_get_size_macro(recvtype, rtype_size);
-        data_sz = recvcount * rtype_size * comm->local_size;
+        data_sz = recvcount * rtype_size * comm->node_comm->local_size;
 
         if (data_sz < MPIR_CVAR_ALLGATHER_SHORT_MSG_SIZE) {
             /* TODO: here should use allgatherv, but for research, we assume #procs is equal on each node. */
