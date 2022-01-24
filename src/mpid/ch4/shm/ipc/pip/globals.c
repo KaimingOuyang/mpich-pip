@@ -20,7 +20,7 @@ MPIDI_PIP_global_t MPIDI_PIP_global;
 
 MPIDI_PIP_task_t MPIDI_Task_direct[1] = { 0 };
 MPIDI_PIP_Coll_task_t MPIDI_Coll_task_direct[1] = { 0 };        /* +1 to avoid dynamic allocation */
-MPIDI_PIP_Coll_easy_task_t MPIDI_Coll_easy_task_direct[MPIDI_COLL_TASK_PREALLOC + 1] = { 0 };
+MPIDI_PIP_Coll_easy_task_t MPIDI_Coll_easy_task_direct[MPIDI_COLL_EASY_TASK_PREALLOC + 1] = { 0 };
 
 MPIR_Object_alloc_t MPIDI_Task_mem = {
     0, 0, 0, 0, 0, 0, MPIR_INTERNAL, sizeof(MPIDI_PIP_task_t), MPIDI_Task_direct,
@@ -35,5 +35,5 @@ MPIR_Object_alloc_t MPIDI_Coll_task_mem = {
 MPIR_Object_alloc_t MPIDI_Coll_easy_task_mem = {
     0, 0, 0, 0, 0, 0, MPIR_INTERNAL, sizeof(MPIDI_PIP_Coll_easy_task_t),
     MPIDI_Coll_easy_task_direct,
-    MPIDI_COLL_TASK_PREALLOC, NULL
+    MPIDI_COLL_EASY_TASK_PREALLOC, NULL
 };

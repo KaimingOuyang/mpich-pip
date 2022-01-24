@@ -600,6 +600,7 @@ MPIDI_PIP_Coll_easy_task_t *MPIR_Comm_post_easy_task(void *addr, MPIDI_PIP_Coll_
     local_task->data_sz = data_sz;
     local_task->free = free_flag;
     local_task->complete = 0;
+    local_task->root_complete = 0;
     local_task->target_cmpl = target_cmpl;
 
     switch (type) {
@@ -714,6 +715,27 @@ MPIDI_PIP_Coll_easy_task_t *MPIR_Comm_post_easy_task(void *addr, MPIDI_PIP_Coll_
                 break;
             }
 
+        case TMPI_Rem:{
+                int next_index = (comm->rem_post_index + 1) % MPIDI_COLL_TASK_PREALLOC;
+                if (comm->rem_queue[next_index] != NULL) {
+                    MPIDI_PIP_Coll_easy_task_t *reclaim_task;
+                    int tmp_next_index = next_index;
+                    while (reclaim_task = comm->rem_queue[tmp_next_index]) {
+                        while (reclaim_task->complete != reclaim_task->target_cmpl)
+                            MPL_sched_yield();
+                        if (reclaim_task->free == 1)
+                            free(reclaim_task->addr);
+                        MPIR_Handle_obj_free(&MPIDI_Coll_easy_task_mem, (void *) reclaim_task);
+                        comm->rem_queue[tmp_next_index] = NULL;
+                        tmp_next_index = (tmp_next_index + 1) % MPIDI_COLL_TASK_PREALLOC;
+                    }
+                }
+
+                __sync_synchronize();
+                comm->rem_queue[comm->rem_post_index] = local_task;
+                comm->rem_post_index = next_index;
+                break;
+            }
         default:
             MPIR_Assert(0);
     }
@@ -767,6 +789,14 @@ MPIDI_PIP_Coll_easy_task_t *MPIR_Comm_get_easy_task(MPIR_Comm * comm, int target
                 comm->reduce_get_index[target] = (target_get_index + 1) % MPIDI_COLL_TASK_PREALLOC;
                 break;
             }
+        case TMPI_Rem:{
+                int target_get_index = comm->rem_get_index[target];
+                while (target_comm->rem_queue[target_get_index] == NULL)
+                    MPL_sched_yield();
+                target_task = target_comm->rem_queue[target_get_index];
+                comm->rem_get_index[target] = (target_get_index + 1) % MPIDI_COLL_TASK_PREALLOC;
+                break;
+        }
         default:
             MPIR_Assert(0);
     }
@@ -907,6 +937,11 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
         comm->node_comm->allgather_get_index =
             (int *) calloc(comm->node_comm->local_size, sizeof(int));
 
+        memset((void *) comm->node_comm->rem_queue, 0,
+               sizeof(MPIDI_PIP_Coll_easy_task_t *) * MPIDI_COLL_TASK_PREALLOC);
+        comm->node_comm->rem_post_index = 0;
+        comm->node_comm->rem_get_index = (int *) calloc(comm->node_comm->local_size, sizeof(int));
+
         memset((void *) comm->node_comm->bcast_queue, 0,
                sizeof(MPIDI_PIP_Coll_easy_task_t *) * MPIDI_COLL_TASK_PREALLOC);
         comm->node_comm->bcast_post_index = 0;
@@ -1034,6 +1069,11 @@ int MPIR_Comm_create_subcomms(MPIR_Comm * comm)
                sizeof(MPIDI_PIP_Coll_easy_task_t *) * MPIDI_COLL_TASK_PREALLOC);
         comm->pip_roots_comm->reduce_post_index = 0;
         comm->pip_roots_comm->reduce_get_index = (int *) calloc(leader_num, sizeof(int));
+
+        memset((void *) comm->pip_roots_comm->rem_queue, 0,
+               sizeof(MPIDI_PIP_Coll_easy_task_t *) * MPIDI_COLL_TASK_PREALLOC);
+        comm->pip_roots_comm->rem_post_index = 0;
+        comm->pip_roots_comm->rem_get_index = (int *) calloc(leader_num, sizeof(int));
 
         comm->pip_roots_comm->comms_array =
             (MPIR_Comm **) malloc(comm->node_procs_min * sizeof(MPIR_Comm *));
@@ -1519,6 +1559,7 @@ int MPIR_Comm_delete_internal(MPIR_Comm * comm_ptr)
                 MPL_free(comm_ptr->node_comm->bcast_get_index);
                 MPL_free(comm_ptr->node_comm->allreduce_get_index);
                 MPL_free(comm_ptr->node_comm->reduce_get_index);
+                MPL_free(comm_ptr->node_comm->rem_get_index);
             }
             MPIR_Comm_release(comm_ptr->node_comm);
             MPL_free(comm_ptr->node_procs_sum);
@@ -1534,6 +1575,7 @@ int MPIR_Comm_delete_internal(MPIR_Comm * comm_ptr)
                 MPL_free(comm_ptr->pip_roots_comm->bcast_get_index);
                 MPL_free(comm_ptr->pip_roots_comm->allreduce_get_index);
                 MPL_free(comm_ptr->pip_roots_comm->reduce_get_index);
+                MPL_free(comm_ptr->pip_roots_comm->rem_get_index);
             }
             comm_ptr->pip_roots_comm->node_comm = NULL;
             MPIR_Comm_release(comm_ptr->pip_roots_comm);

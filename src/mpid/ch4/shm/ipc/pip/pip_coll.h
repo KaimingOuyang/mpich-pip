@@ -55,6 +55,10 @@ int MPIDI_PIP_Allreduce_recursive_bruck_internode(const void *sendbuf, void *rec
                                                   MPIR_Comm * comm, int comm_size,
                                                   MPIR_Errflag_t * errflag);
 /* reduce algorithm interface */
+int MPIDI_PIP_Reduce_recursive_bruck_internode(const void *sendbuf, void *recvbuf, int count,
+                                               MPI_Datatype datatype, MPI_Op op,
+                                               MPIR_Comm * comm, int rem_step,
+                                               MPIR_Errflag_t * errflag);
 int MPIR_Reduce_leader_intra_binomial_tree(const void *sendbuf,
                                            void *recvbuf,
                                            int count,

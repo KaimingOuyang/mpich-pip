@@ -152,9 +152,9 @@ typedef enum MPIDI_PIP_Coll_task_type {
     TMPI_Allgather,
     TMPI_Gather,
     TMPI_Bcast,
-    TMPI_Bcast_End,
     TMPI_Allreduce,
-    TMPI_Reduce
+    TMPI_Reduce,
+    TMPI_Rem
 } MPIDI_PIP_Coll_task_type_t;
 
 typedef struct MPIDI_PIP_Coll_task {
@@ -172,7 +172,7 @@ typedef struct MPIDI_PIP_Coll_easy_task {
     MPIR_OBJECT_HEADER;
     void *volatile addr;
     size_t data_sz;
-    volatile int complete;
+    volatile int complete, root_complete;
     int target_cmpl;
     int free;
     MPIDI_PIP_Coll_task_type_t type;
@@ -227,6 +227,10 @@ struct MPIR_Comm {
     MPIDI_PIP_Coll_easy_task_t *volatile reduce_queue[MPIDI_COLL_TASK_PREALLOC];
     int reduce_post_index;
     int *reduce_get_index;
+
+    MPIDI_PIP_Coll_easy_task_t *volatile rem_queue[MPIDI_COLL_TASK_PREALLOC];
+    int rem_post_index;
+    int *rem_get_index;
 
     MPIR_Comm_hierarchy_kind_t hierarchy_kind;  /* flat, parent, node, or node_roots */
     struct MPIR_Comm *node_comm;        /* Comm of processes in this comm that are on
