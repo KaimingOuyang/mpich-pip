@@ -241,7 +241,7 @@ int MPIDI_PIP_Allreduce_recursive_bruck_internode(const void *sendbuf, void *rec
     /* bcast results */
     if (leader_num > 1) {
         if (local_rank == 0) {
-            bcast_task = MPIR_Comm_post_easy_task(recvbuf, TMPI_Bcast, 0, 1, leader_num - 1, comm);
+            bcast_task = MPIR_Comm_post_easy_task(recvbuf, TMPI_Bcast, 0, 0, leader_num - 1, comm);
             while (bcast_task->complete != bcast_task->target_cmpl)
                 MPL_sched_yield();
         } else {

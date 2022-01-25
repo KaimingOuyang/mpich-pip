@@ -65,6 +65,12 @@ int MPIR_Reduce_leader_intra_binomial_tree(const void *sendbuf,
                                            MPI_Datatype datatype, int leader_num,
                                            MPI_Op op, int root, MPIR_Comm * comm_ptr,
                                            MPIR_Errflag_t * errflag);
+int MPIR_Reduce_leader_rem_intra_binomial_tree(const void *sendbuf,
+                                               void *recvbuf,
+                                               int count,
+                                               MPI_Datatype datatype, int leader_num,
+                                               MPI_Op op, int root, MPIR_Comm * comm_ptr,
+                                               MPIR_Errflag_t * errflag);
 int MPIDI_PIP_intranode_reduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype datatype,
                                MPI_Op op, int root, MPIR_Comm * comm, MPIR_Errflag_t * errflag);
 // int MPIDI_PIP_Reduce_partial_intranode(const void *sendbuf, void *recvbuf, int count,
