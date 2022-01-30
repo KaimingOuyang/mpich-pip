@@ -522,7 +522,8 @@ int MPIDI_PIP_Reduce_recursive_bruck_internode(const void *sendbuf, void *recvbu
     my_rem = rem > pofk_1 ? pofk_1 : rem;
 
     if (rem_count > 0) {
-        rem_buf = malloc(count * recvtype_extent);
+        MPIR_CHKLMEM_MALLOC(rem_buf, void *, count * recvtype_extent, mpi_errno, "rem_buf",
+                        MPL_MEM_BUFFER);
     }
 
     if (sendbuf != MPI_IN_PLACE) {
