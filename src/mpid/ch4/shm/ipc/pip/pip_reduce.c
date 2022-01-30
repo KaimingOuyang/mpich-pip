@@ -527,21 +527,24 @@ int MPIDI_PIP_Reduce_recursive_bruck_internode(const void *sendbuf, void *recvbu
 
     if (rem_count > 0) {
         pofk_1 /= basek_1;
-        local_rem_bufs = malloc(max_buf_cnt * sizeof(struct rem_bufs));
-
+        // local_rem_bufs = malloc(max_buf_cnt * sizeof(struct rem_bufs));
+        MPIR_CHKLMEM_MALLOC(local_rem_bufs, void *, max_buf_cnt * sizeof(struct rem_bufs),
+                            mpi_errno, "tmp_buf", MPL_MEM_BUFFER);
         while (rem_count > 0) {
             rem = rem_count;
             rem_count = rem % pofk_1;
             if_send = (rem_count == 0) ? 0 : 1;
             local_rem_bufs[rem_buf_cnt].new_leader_num = rem / pofk_1 + if_send;
-            local_rem_bufs[rem_buf_cnt].rem_buf = malloc(count * recvtype_extent);      /* at pofk_1 step, rem_buf contains rem results. */
+            MPIR_CHKLMEM_MALLOC(local_rem_bufs[rem_buf_cnt].rem_buf, void *,
+                                count * recvtype_extent, mpi_errno, "tmp_buf", MPL_MEM_BUFFER);
+            // local_rem_bufs[rem_buf_cnt].rem_buf = malloc(count * recvtype_extent);      /* at pofk_1 step, rem_buf contains rem results. */
             local_rem_bufs[rem_buf_cnt++].base = pofk_1;
             pofk_1 /= basek_1;
         }
 
         if (local_rank == 0) {
             root_rem_addr =
-                MPIR_Comm_post_easy_task(local_rem_bufs, TMPI_Rem, rem_buf_cnt, 1, 1, comm);
+                MPIR_Comm_post_easy_task(local_rem_bufs, TMPI_Rem, rem_buf_cnt, 0, 1, comm);
         } else {
             root_rem_addr = MPIR_Comm_get_easy_task(comm, 0, TMPI_Rem);
         }
@@ -693,11 +696,16 @@ int MPIDI_PIP_Reduce_recursive_bruck_internode(const void *sendbuf, void *recvbu
     //         __sync_fetch_and_add(&shared_addr->complete, 1);
     //     }
     // }
-    if (local_rem_bufs && local_rank != 0) {
-        for (int i = 0; i < rem_buf_cnt; ++i) {
-            free(local_rem_bufs[i].rem_buf);
-        }
-        free(local_rem_bufs);
+    // if (local_rem_bufs && local_rank != 0) {
+    //     for (int i = 0; i < rem_buf_cnt; ++i) {
+    //         free(local_rem_bufs[i].rem_buf);
+    //     }
+    //     free(local_rem_bufs);
+    // }
+
+    if (local_rank == 0 && root_rem_addr) {
+        while (root_rem_addr->complete != root_rem_addr->target_cmpl)
+            MPL_sched_yield();
     }
 
   fn_exit:
