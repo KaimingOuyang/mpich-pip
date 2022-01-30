@@ -720,15 +720,18 @@ MPIDI_PIP_Coll_easy_task_t *MPIR_Comm_post_easy_task(void *addr, MPIDI_PIP_Coll_
                 if (comm->rem_queue[next_index] != NULL) {
                     MPIDI_PIP_Coll_easy_task_t *reclaim_task;
                     int tmp_next_index = next_index;
-                    while (reclaim_task = comm->rem_queue[tmp_next_index]) {
-                        while (reclaim_task->complete != reclaim_task->target_cmpl)
-                            MPL_sched_yield();
-                        if (reclaim_task->free == 1)
-                            free(reclaim_task->addr);
-                        MPIR_Handle_obj_free(&MPIDI_Coll_easy_task_mem, (void *) reclaim_task);
-                        comm->rem_queue[tmp_next_index] = NULL;
-                        tmp_next_index = (tmp_next_index + 1) % MPIDI_COLL_TASK_PREALLOC;
-                    }
+                    int buf_cnt;
+                    struct rem_bufs *tmp_rem_buf;
+                    while (reclaim_task->complete != reclaim_task->target_cmpl)
+                        MPL_sched_yield();
+                    buf_cnt = reclaim_task->data_sz;
+                    tmp_rem_buf = (struct rem_bufs *) reclaim_task->addr;
+                    for (int i = 0; i < buf_cnt; ++i)
+                        free(tmp_rem_buf[i].rem_buf);
+                    free(tmp_rem_buf);
+                    MPIR_Handle_obj_free(&MPIDI_Coll_easy_task_mem, (void *) reclaim_task);
+                    comm->rem_queue[tmp_next_index] = NULL;
+                    tmp_next_index = (tmp_next_index + 1) % MPIDI_COLL_TASK_PREALLOC;
                 }
 
                 __sync_synchronize();
@@ -796,7 +799,7 @@ MPIDI_PIP_Coll_easy_task_t *MPIR_Comm_get_easy_task(MPIR_Comm * comm, int target
                 target_task = target_comm->rem_queue[target_get_index];
                 comm->rem_get_index[target] = (target_get_index + 1) % MPIDI_COLL_TASK_PREALLOC;
                 break;
-        }
+            }
         default:
             MPIR_Assert(0);
     }

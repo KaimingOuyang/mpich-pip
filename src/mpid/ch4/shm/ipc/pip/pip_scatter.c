@@ -208,8 +208,8 @@ int MPIDI_PIP_Scatter_nway_tree_partial_intranode(const void *sendbuf, int sendc
     MPIR_Datatype_get_extent_macro(sendtype, extent);
     if (local_rank == root) {
         local_task =
-            MPIR_Comm_post_easy_task(sendbuf, TMPI_Scatter, 0, 0, local_size - comm->node_procs_min,
-                                     comm);
+            MPIR_Comm_post_easy_task((void *) sendbuf, TMPI_Scatter, 0, 0,
+                                     local_size - comm->node_procs_min, comm);
     } else {
         local_task = MPIR_Comm_get_easy_task(comm, root, TMPI_Scatter);
         mpi_errno = MPIR_Localcopy((char *) local_task->addr + extent * sendcount * local_rank,

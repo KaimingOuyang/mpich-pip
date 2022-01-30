@@ -475,7 +475,6 @@ int MPIR_Reduce_leader_rem_intra_binomial_tree(const void *sendbuf,
     goto fn_exit;
 }
 
-
 int MPIDI_PIP_Reduce_recursive_bruck_internode(const void *sendbuf, void *recvbuf, int count,
                                                MPI_Datatype datatype, MPI_Op op,
                                                MPIR_Comm * comm, int rem_step,
@@ -493,13 +492,15 @@ int MPIDI_PIP_Reduce_recursive_bruck_internode(const void *sendbuf, void *recvbu
     MPI_Aint recvtype_extent;
     int src, rem, src_node;
     int tmp_rem, my_rem = 0;
-    void *tmp_buf = NULL, *dst_buf, *rem_buf = NULL;
-    int dst, dst_node, offset, new_leader_num;
+    void *tmp_buf = NULL, *dst_buf, *tmp_rem_buf = NULL;
+    int dst, dst_node, offset;
     int rem_step_limit = rem_step / basek_1;
-    MPIDI_PIP_Coll_easy_task_t *shared_addr;
-    int root_completee_step = 1, if_send, rem_proc, rem_count;
+    MPIDI_PIP_Coll_easy_task_t *shared_addr, *root_rem_addr = NULL;
+    struct rem_bufs *local_rem_bufs = NULL, *root_rem_bufs = NULL;
+    int root_completee_step = 1, if_send, rem_proc, rem_count, rem_buf_cnt = 0;
+    int cur_buf_cnt, cur_rem, max_buf_cnt = 1, final_leader_num;
 
-    MPIR_CHKLMEM_DECL(2);
+    MPIR_CHKLMEM_DECL(16);
 
     if ((count == 0) && (sendbuf != MPI_IN_PLACE))
         goto fn_exit;
@@ -510,21 +511,44 @@ int MPIDI_PIP_Reduce_recursive_bruck_internode(const void *sendbuf, void *recvbu
 
     /* keep first rem results for rem */
     pofk_1 = 1;
-    while (pofk_1 <= rem_step_limit)
+    while (pofk_1 <= rem_step_limit) {
         pofk_1 *= basek_1;
-    rem_count = (rem_step - pofk_1) % pofk_1;
+        max_buf_cnt++;
+    }
+
     rem = rem_step - pofk_1;
+    rem_count = rem % pofk_1;
     if_send = (rem_count == 0) ? 0 : 1;
     rem_proc = rem / pofk_1;
-    new_leader_num = rem_proc + if_send;
+    final_leader_num = rem_proc + if_send;
 
-    rem = rem - pofk_1 * local_rank;
-    my_rem = rem > pofk_1 ? pofk_1 : rem;
+    cur_rem = rem - pofk_1 * local_rank;
+    my_rem = cur_rem > pofk_1 ? pofk_1 : cur_rem;
 
     if (rem_count > 0) {
-        MPIR_CHKLMEM_MALLOC(rem_buf, void *, count * recvtype_extent, mpi_errno, "rem_buf",
-                        MPL_MEM_BUFFER);
+        pofk_1 /= basek_1;
+        local_rem_bufs = malloc(max_buf_cnt * sizeof(struct rem_bufs));
+
+        while (rem_count > 0) {
+            rem = rem_count;
+            rem_count = rem % pofk_1;
+            if_send = (rem_count == 0) ? 0 : 1;
+            local_rem_bufs[rem_buf_cnt].new_leader_num = rem / pofk_1 + if_send;
+            local_rem_bufs[rem_buf_cnt].rem_buf = malloc(count * recvtype_extent);      /* at pofk_1 step, rem_buf contains rem results. */
+            local_rem_bufs[rem_buf_cnt++].base = pofk_1;
+            pofk_1 /= basek_1;
+        }
+
+        if (local_rank == 0) {
+            root_rem_addr =
+                MPIR_Comm_post_easy_task(local_rem_bufs, TMPI_Rem, rem_buf_cnt, 1, 1, comm);
+        } else {
+            root_rem_addr = MPIR_Comm_get_easy_task(comm, 0, TMPI_Rem);
+        }
+        root_rem_bufs = root_rem_addr->addr;
     }
+
+    cur_buf_cnt = rem_buf_cnt;
 
     if (sendbuf != MPI_IN_PLACE) {
         mpi_errno = MPIR_Localcopy(sendbuf, count, datatype, recvbuf, count, datatype);
@@ -571,12 +595,44 @@ int MPIDI_PIP_Reduce_recursive_bruck_internode(const void *sendbuf, void *recvbu
                                                    comm->node_comm, errflag);
         MPIR_ERR_CHECK(mpi_errno);
 
-        if (if_send && pofk_1 == 1 && local_rank < new_leader_num) {
-            mpi_errno =
-                MPIR_Reduce_leader_rem_intra_binomial_tree(tmp_buf, rem_buf, count, datatype,
-                                                           new_leader_num, op, new_leader_num - 1,
-                                                           comm->node_comm, errflag);
-            MPIR_ERR_CHECK(mpi_errno);
+        /* recursive reduce */
+        if (pofk_1 == 1) {
+            if (cur_buf_cnt > 0 && local_rem_bufs[cur_buf_cnt - 1].base == pofk_1 &&
+                local_rank < local_rem_bufs[cur_buf_cnt - 1].new_leader_num) {
+                mpi_errno =
+                    MPIR_Reduce_leader_rem_intra_binomial_tree(tmp_buf,
+                                                               local_rem_bufs[cur_buf_cnt -
+                                                                              1].rem_buf, count,
+                                                               datatype,
+                                                               local_rem_bufs[cur_buf_cnt -
+                                                                              1].new_leader_num, op,
+                                                               0, comm->node_comm, errflag);
+                MPIR_ERR_CHECK(mpi_errno);
+                cur_buf_cnt--;
+            }
+        } else {
+            if (cur_buf_cnt > 0 && local_rem_bufs[cur_buf_cnt - 1].base == pofk_1 &&
+                local_rank < local_rem_bufs[cur_buf_cnt - 1].new_leader_num) {
+                if (local_rank == local_rem_bufs[cur_buf_cnt - 1].new_leader_num - 1) {
+                    mpi_errno = MPIC_Sendrecv(root_rem_bufs[cur_buf_cnt].rem_buf, count, datatype,
+                                              dst, MPIR_ALLREDUCE_TAG, tmp_buf, count, datatype,
+                                              src, MPIR_ALLREDUCE_TAG, comm, MPI_STATUS_IGNORE,
+                                              errflag);
+                    MPIR_ERR_CHECK(mpi_errno);
+                }
+
+                mpi_errno =
+                    MPIR_Reduce_leader_rem_intra_binomial_tree(tmp_buf,
+                                                               local_rem_bufs[cur_buf_cnt -
+                                                                              1].rem_buf, count,
+                                                               datatype,
+                                                               local_rem_bufs[cur_buf_cnt -
+                                                                              1].new_leader_num, op,
+                                                               0, comm->node_comm, errflag);
+
+                MPIR_ERR_CHECK(mpi_errno);
+                cur_buf_cnt--;
+            }
         }
 
         pofk_1 *= basek_1;
@@ -604,16 +660,18 @@ int MPIDI_PIP_Reduce_recursive_bruck_internode(const void *sendbuf, void *recvbu
                                       dst, MPIR_ALLREDUCE_TAG, tmp_buf, count, datatype,
                                       src, MPIR_ALLREDUCE_TAG, comm, MPI_STATUS_IGNORE, errflag);
         } else {
-            MPIR_Assert(local_rank == new_leader_num - 1 && rem_buf != NULL);
-            mpi_errno = MPIC_Sendrecv(rem_buf, count, datatype,
+            MPIR_Assert(root_rem_addr != NULL && cur_buf_cnt == 0);
+            mpi_errno = MPIC_Sendrecv(root_rem_bufs[cur_buf_cnt].rem_buf, count, datatype,
                                       dst, MPIR_ALLREDUCE_TAG, tmp_buf, count, datatype,
                                       src, MPIR_ALLREDUCE_TAG, comm, MPI_STATUS_IGNORE, errflag);
+            __sync_fetch_and_add(&root_rem_addr->complete, 1);
         }
         MPIR_ERR_CHECK(mpi_errno);
 
         mpi_errno =
             MPIR_Reduce_leader_intra_binomial_tree(tmp_buf, recvbuf, count, datatype,
-                                                   new_leader_num, op, 0, comm->node_comm, errflag);
+                                                   final_leader_num, op, 0, comm->node_comm,
+                                                   errflag);
         MPIR_ERR_CHECK(mpi_errno);
     }
 
@@ -635,6 +693,12 @@ int MPIDI_PIP_Reduce_recursive_bruck_internode(const void *sendbuf, void *recvbu
     //         __sync_fetch_and_add(&shared_addr->complete, 1);
     //     }
     // }
+    if (local_rem_bufs && local_rank != 0) {
+        for (int i = 0; i < rem_buf_cnt; ++i) {
+            free(local_rem_bufs[i].rem_buf);
+        }
+        free(local_rem_bufs);
+    }
 
   fn_exit:
     MPIR_CHKLMEM_FREEALL();

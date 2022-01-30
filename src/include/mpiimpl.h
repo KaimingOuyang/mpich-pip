@@ -6,6 +6,12 @@
 #ifndef MPIIMPL_H_INCLUDED
 #define MPIIMPL_H_INCLUDED
 
+struct rem_bufs {
+    void *rem_buf;
+    int new_leader_num;
+    int base;
+};
+
 #include "mpichconfconst.h"
 #include "mpichconf.h"
 
